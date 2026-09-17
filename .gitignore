@@ -1,0 +1,8 @@
+.firecrawl/
+bin/
+obj/
+artifacts/
+generated/
+*.user
+*.suo
+*.tmp
