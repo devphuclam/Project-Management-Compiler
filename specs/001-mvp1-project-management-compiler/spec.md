@@ -199,11 +199,16 @@ configuration; assert structured diagnostics and safe behavior.
 - **FR-011**: The canonical model MUST contain project, source, baseline, phase,
   work-package, delivery-card/task, milestone/decision, dependency, estimate,
   logical responsibility, assignment, capacity, calendar, reserve, provenance,
-  and warning information required by MVP1.
+  and warning information required by MVP1, including separate effort and
+  duration fields.
 - **FR-012**: The canonical model MUST preserve Phase → WorkPackage →
   DeliveryCard hierarchy and Phase/WorkPackage → Milestone/Decision relationships.
-- **FR-013**: Work-package and delivery-card effort MUST remain distinct, with an
-  explicit accounting rule that prevents double-counting.
+- **FR-013**: Work-package and delivery-card planned effort MUST remain distinct,
+  with an explicit accounting rule that prevents double-counting.
+- **FR-013A**: Work packages and delivery cards MUST represent planned effort
+  separately from normalized planned working duration and authored baseline
+  start/finish dates. CPM MUST consume duration; capacity/load MUST consume
+  effort.
 - **FR-014**: Important extracted values MUST retain repository, ref/commit,
   source file, section/table/item, extraction rule, authority rank, and
   validation/confidence information where available.
@@ -225,8 +230,10 @@ configuration; assert structured diagnostics and safe behavior.
 - **FR-020**: The system MUST derive overdue display state from date and execution
   state rather than authoring `OVERDUE` as a separate truth.
 - **FR-021**: The system MUST calculate Finish-to-Start dependency CPM when
-  graph and duration data are sufficient, including earliest/latest times,
-  total float, and dependency critical path.
+  graph and normalized duration data are sufficient, including
+  earliest/latest times, total float, and dependency critical path. It MUST NOT
+  derive duration from effort unless the source explicitly makes that equivalence
+  safe.
 - **FR-022**: The system MUST detect dependency cycles and unsafe/missing targets.
 - **FR-023**: The system MUST distinguish dependency critical path from a
   resource or source sequential-schedule constraint.
@@ -274,6 +281,19 @@ configuration; assert structured diagnostics and safe behavior.
   analysis result.
 - **FR-040**: The server MUST bind to loopback by default and MUST NOT expose
   itself to the LAN automatically.
+- **FR-041**: Canonical JSON reopen MUST fail for structural corruption including
+  duplicate IDs, malformed required fields, impossible parent/phase ownership,
+  invalid assignment targets, or unresolved dependency subjects. An unresolved
+  dependency predecessor MAY be retained only when explicitly marked invalid
+  source evidence and excluded from CPM.
+- **FR-042**: Repository files MUST be treated as untrusted data. The system MUST
+  read only allow-listed planning paths, prevent traversal/reparse-point escape,
+  enforce configurable per-file and total-source size limits, and never execute
+  commands, hooks, scripts, binaries, builds, or macros from the input project.
+- **FR-043**: If persisted, `capturedAtUtc` MUST be identified as capture metadata
+  and excluded from semantic-equivalence/digest comparison.
+- **FR-044**: Optional HTTPS capture MUST be capability-gated and MUST NOT block
+  offline MVP1 acceptance or require package/runtime installation.
 
 ## Non-functional requirements
 
@@ -292,6 +312,9 @@ configuration; assert structured diagnostics and safe behavior.
   access is not an implicit deployment mode.
 - **NFR-007 Maintainability**: Source extraction, canonical management logic,
   calculations, UI, and outputs communicate through explicit interfaces.
+- **NFR-008 Input safety**: Recognized source files are bounded to 2 MiB each and
+  8 MiB total by default; the limits are configurable and oversized input fails
+  safely with a diagnostic.
 
 ## Key entities
 
@@ -312,6 +335,20 @@ configuration; assert structured diagnostics and safe behavior.
 - **ImportWarning / Blocker**: structured unsafe or unresolved condition.
 - **ManagementAnalysis**: calculated CPM, variance, health, and forecast results.
 
+## Terminology contract
+
+- **WBS**: the Phase → WorkPackage → DeliveryCard hierarchy.
+- **Dependency Network**: the validated graph used for dependency analysis.
+- **CPM Critical Path**: the path calculated from dependency duration; it is not
+  a resource-constrained schedule.
+- **Resource Constraint**: a source capacity or single-coder scheduling policy.
+- **Capacity**: available planned effort hours.
+- **Reserve**: the separately authored contingency amount.
+- **Baseline**: authored source dates and effort preserved without mutation.
+- **Actual**: explicit execution evidence, never inferred from repository activity.
+- **Forecast**: a calculated future result when evidence is sufficient.
+- **Variance**: a comparison between baseline and calculated or forecast values.
+
 ## Assumptions
 
 - The local repository path is readable by the process and may be a fixture that
@@ -320,6 +357,8 @@ configuration; assert structured diagnostics and safe behavior.
   relative paths and headings used by the fixture.
 - All imported source cards begin `NOT_STARTED`, as required by the source plan.
 - The source provides planning effort but not actual execution evidence.
+- The source does not prove reserve consumption; initial reserve can be known
+  while consumed and remaining reserve remain `NOT-RUN`/`UNKNOWN`.
 - A blank CARIO person/department/priority field is safer than an inferred value.
 - Optional HTTPS source capture is an environment capability, not a test or
   deployment prerequisite.
@@ -346,7 +385,8 @@ configuration; assert structured diagnostics and safe behavior.
 - **SC-002**: F01-A and F01-B remain children of F01; work-package and card
   effort are not double-counted.
 - **SC-003**: All supported dependency edges, cycle failures, milestone gates,
-  and dependency CPM outputs are test-covered.
+  and dependency CPM outputs are test-covered, with CPM consuming normalized
+  duration rather than effort.
 - **SC-004**: Every important fixture-derived value has traceable provenance in
   the canonical JSON.
 - **SC-005**: Missing concrete role and organization mappings remain blank and
@@ -357,3 +397,9 @@ configuration; assert structured diagnostics and safe behavior.
   canonical output and view summaries.
 - **SC-008**: The application runs locally through the documented loopback
   command without external package installation or live-service dependencies.
+- **SC-009**: The fixture proves `512` authoritative work-package effort hours
+  and never reports work-package effort plus child-card effort as project effort.
+- **SC-010**: Reopen rejects structurally corrupt canonical JSON but preserves a
+  marked invalid source dependency as non-CPM evidence.
+- **SC-011**: Input-safety tests prove an unsafe path or oversized recognized
+  source cannot be loaded or executed.

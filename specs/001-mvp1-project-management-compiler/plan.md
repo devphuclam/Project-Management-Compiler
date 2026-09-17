@@ -25,9 +25,9 @@ human-assisted CARIO workbook.
 | XLSX | Narrow Open XML writer using `System.IO.Compression` |
 | UI | Plain HTML/CSS/browser JavaScript served as static files |
 | Tests | Offline dependency-free executable test harness |
-| Source | Local repository path mandatory; optional existing Git HTTPS capture |
+| Source | Local repository path mandatory; optional existing Git HTTPS capture; allow-listed, bounded, non-executing reads |
 | Project type | Local modular-monolith web application/compiler |
-| Primary scope | IDEAEngineering planning conventions only |
+| Primary scope | IDEAEngineering planning conventions only; effort/duration/baseline separation and explicit source-safety boundary |
 
 ## Constitution check
 
@@ -63,10 +63,10 @@ internals.
 ## Implementation sequence
 
 1. Project skeleton, constitution, canonical types, diagnostics, and fixture.
-2. Local repository snapshot and IDEA authority/discovery/extraction.
-3. Normalization, hierarchy, provenance, and canonical JSON export/reopen.
-4. Dependency validation, CPM, baseline variance, capacity, reserve, and health.
-5. CARIO mapping configuration and narrow XLSX writer.
+2. Local repository snapshot, allow-listed safety checks, and IDEA authority/discovery/extraction.
+3. Normalization, hierarchy, separate effort/duration/baseline fields, provenance, and canonical JSON export/reopen.
+4. Dependency validation, duration-based CPM, baseline variance, effort-based capacity, reserve, and health.
+5. CARIO mapping configuration and narrow XLSX writer with package-level verification.
 6. Local browser UI with shared view models and review flow.
 7. End-to-end regression, deterministic comparison, and verification.
 

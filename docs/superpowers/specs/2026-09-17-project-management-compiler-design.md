@@ -56,7 +56,7 @@ current DOC-07 authority and emit a stale-subordinate-reference warning instead
 of silently treating the two versions as equal.
 
 The source baseline is `IE-PLAN-DEC2026-002@0.1`. The baseline records 35 work
-packages, 512 planned work hours, 88 controlled reserve hours, 600 total
+packages, 512 planned effort hours, 88 controlled reserve hours, 600 total
 weekday capacity hours, PH0–PH5, a single-coder policy, and a target Technical
 Pilot date of 2026-12-31. These are source facts, not execution results.
 
@@ -147,6 +147,7 @@ policy indicating whether optional Git-based HTTPS capture is allowed.
 
 - stable repository identity and display name;
 - requested location and resolved ref/commit when known;
+- `capturedAtUtc` as capture metadata;
 - a collection of discovered source documents with repository-relative paths;
 - capture diagnostics and a source-access state;
 - no GitHub issue, milestone, pull-request, or other provider object in the
@@ -157,11 +158,21 @@ repository path, confirms it is readable, and reads only the files needed by the
 discovery strategy. It records the local Git commit when available but remains
 usable for a fixture that is not a Git checkout.
 
+The repository is untrusted input data. The source adapters never execute
+scripts, builds, hooks, binaries, macros, or commands from the captured project.
+They read only allow-listed planning paths, normalize and contain every path
+under the captured root, reject `..` traversal and reparse-point/symlink escape,
+and enforce configurable safety limits of 2 MiB per recognized source file and
+8 MiB total source content. Exceeding a limit returns a diagnostic and does not
+load the unsafe document.
+
 The optional HTTPS adapter uses the existing Git executable to create a temporary
-shallow working copy when approved network access is available. It does not call
-the GitHub API and does not install or download a runtime, package, or tool. If
-Git or network access is unavailable, the application returns an explicit
-source-capture diagnostic and the offline fixture path remains fully usable.
+shallow working copy when approved network access is available. Its Git command
+arguments are application-owned; it never runs a project command. It does not
+call the GitHub API and does not install or download a runtime, package, or tool.
+If Git or network access is unavailable, the application returns an explicit
+capability diagnostic and the offline fixture path remains fully usable. Optional
+HTTPS capture is not an MVP1 completion prerequisite.
 
 ### 4.2 Discovery and extraction boundary
 
@@ -227,7 +238,9 @@ CanonicalProjectDocument
 source-independent metadata.
 
 `ProjectSource` records source kind (`repository`), repository identity, source
-location label, resolved ref/commit, capture time, and discovered documents.
+location label, resolved ref/commit, `capturedAtUtc`, and discovered documents.
+`capturedAtUtc` is retained for audit/context metadata and is excluded from
+semantic-equivalence and canonical-content digest comparisons.
 
 `ProjectBaseline` records the authoritative baseline ID/version, authority state,
 source document references, baseline status, planning window, target date,
@@ -263,12 +276,24 @@ For IDEAEngineering:
 - 7 decision/milestone cards are retained as zero-duration milestone records:
   G-D0 and G-MS0 through G-MS5.
 
-Work-package planned effort comes from Appendix A and is the authoritative
-accounting unit. Delivery-card effort comes from the Kanban detail and is used
-for card-level schedule analysis. The normalizer checks that child delivery-card
-hours sum to the work-package effort; any mismatch is a warning. Parent work
-package hours are never added to child hours in capacity totals. The canonical
-`EffortAccounting` section states which level is used for each calculation.
+Each work package and delivery card stores both authored effort and normalized
+baseline duration:
+
+- `plannedEffortHours` is the amount of work/resources consumed;
+- `plannedDurationWorkingMinutes` is elapsed working time for scheduling;
+- `plannedStart` and `plannedFinish` are the authored baseline dates;
+- `durationState` records whether the duration was safely normalized from the
+  source calendar.
+
+Effort and duration are not interchangeable. Work-package planned effort comes
+from Appendix A and is the authoritative capacity-accounting unit. Delivery-card
+effort comes from the Kanban detail. Duration preferably comes from the authored
+start/finish schedule and working-calendar semantics; it is never derived from
+effort unless the source explicitly establishes that equivalence. The normalizer
+checks that child delivery-card effort sums to the work-package effort; any
+mismatch is a warning. Parent work-package effort is never added to child effort
+in capacity totals. The canonical `EffortAccounting` section states which level
+is used for each calculation.
 
 ### 5.3 Dependencies
 
@@ -295,7 +320,9 @@ calculate.
 
 Each delivery card and work package has an `Estimate` containing:
 
-- planned hours and its source state (`KNOWN` for this baseline);
+- `plannedEffortHours` and its source state (`KNOWN` for this baseline);
+- `plannedDurationWorkingMinutes` and its source/normalization state;
+- authored `plannedStart` and `plannedFinish` baseline dates;
 - actual hours (`UNKNOWN` in MVP1 unless explicit evidence is supplied);
 - remaining estimate (`UNKNOWN` in MVP1 unless explicit evidence is supplied);
 - completion evidence state;
@@ -325,9 +352,11 @@ person/account is optional and is resolved only through configuration.
 
 `ResourceCapacity` represents the source plan’s one-coder policy and 75 weekday
 capacity days at 8 hours per day. It is planning policy data, not a global rule
-for all projects. `Reserve` contains initial, consumed, and remaining amounts,
-with consumption remaining zero/known for the untouched source baseline and no
-inferred execution use.
+for all projects. `Reserve` contains initial, consumed, and remaining amounts
+with independent data states. For the current source, `initialHours` is 88 and
+known; the planning documents do not provide execution evidence proving that
+reserve was consumed, so `consumedHours` and `remainingHours` are null with
+`NOT_RUN`/`UNKNOWN` states rather than fabricated zero values.
 
 `Calendar` records Monday–Friday working days and 8 planned hours per day. A
 future calendar adapter can replace it without changing task semantics.
@@ -371,10 +400,13 @@ baseline schedule and is never rewritten.
 ### Dependency analysis
 
 The CPM module calculates dependency-network results only when supported
-Finish-to-Start edges and planned card/milestone durations are available. It
+Finish-to-Start edges and normalized card/milestone durations are available. It
 calculates earliest start/finish, latest start/finish, total float, and the
-dependency critical path. Duration is taken from the delivery-card planned hours
-and the source working calendar; parent work-package effort is not added.
+dependency critical path. CPM consumes `plannedDurationWorkingMinutes`, not raw
+effort. For IDEAEngineering, date ranges and explicit AM/PM half-day markers are
+normalized through the authored Monday–Friday calendar; effort is used for
+capacity/load only. If the source does not make a duration safe to normalize,
+CPM is unknown rather than deriving a duration from effort.
 
 The algorithm is:
 
@@ -384,8 +416,9 @@ The algorithm is:
 4. set project duration to the maximum earliest finish;
 5. reverse-pass latest times;
 6. compute float and mark zero-float nodes as dependency-critical;
-7. map calculated offsets back to working dates for display;
-8. preserve the source baseline alongside the result.
+7. map calculated offsets back to calculated working dates for display;
+8. compare calculated dates with authored baseline dates;
+9. preserve the source baseline alongside the result.
 
 If a cycle, missing dependency target, unsupported edge, or missing duration
 prevents a safe result, CPM reports `UNKNOWN` and retains the diagnostic.
@@ -403,7 +436,8 @@ analyses.
 
 The analysis reports:
 
-- baseline finish;
+- authored baseline start/finish;
+- calculated CPM earliest/latest start/finish;
 - calculated dependency finish;
 - baseline-vs-calculated variance;
 - forecast finish when actual/remaining evidence is sufficient.
@@ -457,12 +491,12 @@ Dashboard indicators use documented rules:
 
 | Indicator | Rule |
 |---|---|
-| Completion | Count of explicit `COMPLETED` delivery cards divided by delivery cards; source baseline starts at 0/53, not commit activity |
+| Delivery cards completed | Explicit count shown as `0 / 53` for the untouched source baseline; this is a card-completion indicator, not universal project percent complete |
 | In progress | Count of explicit `IN_PROGRESS` cards |
 | Suspended/blocked | Count of suspended cards plus blocking diagnostics |
 | Overdue | Derived from as-of date, deadline, and state |
 | Planned effort | Sum of authoritative work-package effort, 512 h |
-| Reserve | Source initial/consumed/remaining values, 88/0/88 h for the untouched baseline |
+| Reserve | Initial reserve is 88 h known; consumed and remaining are `NOT-RUN`/`UNKNOWN` because source planning does not prove execution consumption |
 | Actual effort | `UNKNOWN` until actual evidence exists |
 | Forecast | `UNKNOWN` until actual/remaining evidence exists |
 | Schedule health | `UNKNOWN` when actual evidence is insufficient; otherwise calculated from documented variance rules |
@@ -509,9 +543,12 @@ The workbook is `<ProjectName>_CARIO.xlsx` with these sheets:
    and source reference.
 
 The XLSX adapter uses only `System.IO.Compression` and Open XML worksheet parts
-needed by these sheets: workbook metadata, worksheets, shared or inline strings,
-dates, numeric values, simple styles, and relationships. It is not a general
-Excel library and does not require Microsoft Excel or Office COM.
+needed by these sheets: `[Content_Types].xml`, `_rels/.rels`,
+`xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, six
+`xl/worksheets/sheet*.xml` parts, and simple styles/inline strings as selected by
+the writer. It is not a general Excel library and does not require Microsoft
+Excel or Office COM. Tests open the ZIP structurally, resolve relationships,
+parse worksheet XML, verify names, dates, numbers, and Vietnamese Unicode.
 
 ## 9. Canonical JSON persistence and reopen
 
@@ -523,10 +560,16 @@ The canonical JSON is a deliberate persisted snapshot. The UI supports:
   export pipeline without running extraction again, when the schema version is
   supported.
 
-Reopen validates the schema version, required IDs, relationships, provenance,
-and diagnostics. It refuses unsupported versions with an explicit error. The
-reopened snapshot retains its original source provenance and baseline; it does
-not masquerade as a newly captured source.
+Reopen validates the schema version, required fields, global/collection ID
+uniqueness, parent and phase ownership, work-package/card hierarchy, assignment
+targets, baseline shape, and canonical field types. These structural invariant
+failures cause reopen to fail. A source-evidence relationship may remain invalid
+only when it is explicitly represented as such: for example, a dependency with
+an unresolved predecessor is retained with `validationState=INVALID_SOURCE_EVIDENCE`
+and `analysisEligible=false`; its subject must still resolve structurally. An
+unmarked missing reference fails reopen. The reopened snapshot retains its
+original source provenance and baseline; it does not masquerade as a newly
+captured source.
 
 ## 10. Browser application
 
@@ -597,13 +640,13 @@ Tests cross the deepest useful interfaces:
 | Effort | Parent work-package hours do not double-count child-card hours; reconciliation is tested |
 | Dependencies | Edges and missing targets are preserved; unsupported types are not fed to CPM |
 | Graph safety | Cycles are detected and CPM becomes unknown |
-| CPM | Earliest/latest times, float, and dependency critical path are correct for a small graph |
+| CPM | Earliest/latest times, float, and dependency critical path consume normalized duration rather than effort; baseline dates remain unchanged |
 | Baseline | Baseline dates remain unchanged when calculated schedule differs |
 | Status | Initial states, completion counts, and derived overdue semantics are correct |
 | Policy | WIP=1 is imported as project policy, not a global constant |
 | CARIO | Role meanings and logical role assignments are preserved; missing concrete mappings warn |
 | JSON | Schema version, deliberate field names, provenance, and deterministic equivalent reruns |
-| XLSX | All six sheets exist, headers/cells are present, UTF-8 Vietnamese text survives, warnings are exported |
+| XLSX | Required ZIP/XML parts and relationships resolve; all six sheets, headers, dates, numbers, UTF-8 Vietnamese text, and warnings are exported |
 | Reopen | Generated canonical JSON reopens without source extraction and produces equivalent views/exports |
 | Regression | Expected fixture summary and canonical snapshot digest remain stable unless the fixture contract changes |
 
@@ -643,7 +686,17 @@ ambiguous terms are resolved explicitly:
   separate planning parent and a milestone is a zero-duration gate.
 - “Critical path” means dependency CPM; single-coder and phase sequencing are
   separately labeled constraints.
+- “WBS” means the Phase → WorkPackage → DeliveryCard hierarchy; “Dependency
+  Network” means the validated graph used for CPM; “CPM Critical Path” means
+  the dependency-derived path, not a resource-constrained schedule.
+- “Resource Constraint” means a source capacity or single-coder scheduling
+  policy; “Capacity” means available planned effort hours; “Reserve” means the
+  separately authored contingency amount.
+- “Baseline” means authored source dates and effort; “Actual” means explicit
+  execution evidence; “Forecast” means a calculated future result; “Variance”
+  means the comparison between baseline and calculated/forecast values.
 - “Forecast” is not baseline and is `UNKNOWN` without actual/remaining evidence.
+- “Effort” is work consumed; “duration” is elapsed working time. CPM uses normalized duration and capacity uses effort.
 - “CARIO export” means a human-assisted workbook, not a claimed native import.
 - “Project name” in the source model is the source project identity, not the
   provisional compiler product name.
