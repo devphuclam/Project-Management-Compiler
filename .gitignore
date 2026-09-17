@@ -1,5 +1,6 @@
 .firecrawl/
 .superpowers/
+.worktrees/
 bin/
 obj/
 artifacts/
