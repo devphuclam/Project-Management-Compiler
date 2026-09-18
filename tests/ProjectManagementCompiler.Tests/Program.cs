@@ -96,6 +96,10 @@ internal static class Program
         ,("ManualUpdateStoresActualEvidenceWithoutChangingPlan", ExecutionOverlayTests.ManualUpdateStoresActualEvidenceWithoutChangingPlan)
         ,("InvalidActualFinishBeforeStartIsRejectedWithoutChangingOverlay", ExecutionOverlayTests.InvalidActualFinishBeforeStartIsRejectedWithoutChangingOverlay)
         ,("InvalidWorkItemAndNegativeEffortAreRejected", ExecutionOverlayTests.InvalidWorkItemAndNegativeEffortAreRejected)
+        ,("CanonicalJsonEmitsExecutionOverlayAndExplicitUnknownFields", CanonicalJsonTests.CanonicalJsonEmitsExecutionOverlayAndExplicitUnknownFields)
+        ,("CanonicalJsonRoundTripsOverlayWithoutChangingBaseline", CanonicalJsonTests.CanonicalJsonRoundTripsOverlayWithoutChangingBaseline)
+        ,("Schema10JsonWithoutOverlayUsesEmptyOverlay", CanonicalJsonTests.Schema10JsonWithoutOverlayUsesEmptyOverlay)
+        ,("SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay", CanonicalJsonTests.SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay)
     ];
 
     public static int Main()
