@@ -22,6 +22,7 @@ internal static class NormalizationTests
             "Effort and duration must remain independent values.");
         TestAssert.Equal(212m, canonical.DeliveryCards.Sum(card => card.PlannedEffortHours ?? 0m), "Card effort should be retained without replacing the authoritative parent roll-up.");
         TestAssert.True(canonical.Warnings.Any(warning => warning.Code == "EFFORT_RECONCILIATION"), "Detail/parent effort differences must be diagnosed.");
+        TestAssert.True(canonical.Warnings.Any(warning => warning.Code == "EFFORT_DURATION_MISMATCH"), "An authored effort/schedule mismatch must be diagnosed without rewriting either value.");
     }
 
     public static void CanonicalNormalizationRetainsPolicyReserveStatesAndDeterministicRelationships()
@@ -54,6 +55,19 @@ internal static class NormalizationTests
 
         TestAssert.Equal(960, duration.WorkingMinutes, "Friday AM through Monday PM should cover two eight-hour working days.");
         TestAssert.Equal(DataState.Known, duration.State, "A complete authored date/marker schedule should be known.");
+    }
+
+    public static void WorkingCalendarAcceptsSourceDefinedOneSidedHalfDayBoundaries()
+    {
+        var calendar = new WorkingCalendarNormalizer();
+        var duration = calendar.Normalize(
+            new DateOnly(2026, 10, 8),
+            "PM",
+            new DateOnly(2026, 10, 9),
+            null);
+
+        TestAssert.Equal(720, duration.WorkingMinutes, "A source range with only a start PM marker should end at the authored finish date boundary.");
+        TestAssert.Equal(DataState.Known, duration.State, "A one-sided source boundary marker should use the documented full-day boundary default.");
     }
 
     private static AuthorityResolution CaptureFixture()

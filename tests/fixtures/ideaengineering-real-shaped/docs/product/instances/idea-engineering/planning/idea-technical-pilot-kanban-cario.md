@@ -15,12 +15,11 @@
 
 Mọi card mới bắt đầu ở trạng thái chưa xác định cho đến khi có bằng chứng thực thi.
 
-### 1.2 Giới hạn WIP
+### 1.2 Giới hạn công việc đang làm
 
-| Chính sách | Giá trị |
-| --- | --- |
-| WIP implementation | 1 |
-| Resource baseline | One coder, weekday-only |
+- `Đang thực hiện`: tối đa **1** card thực hiện vì kế hoạch hiện chỉ cam kết một người viết code.
+- Card mốc có thể mở để thu thập ý kiến nhưng không được dùng để lách giới hạn trên.
+- Chỉ nhận card khi công việc ở cột `Cần trước` đã hoàn thành.
 
 ### 1.3 CARIO
 
@@ -33,7 +32,7 @@ assignment cho cùng một card.
 
 | Card | Tên task nhập Kanban | Giờ | Thời gian | Cần trước | Nội dung ghi trên card |
 | --- | --- | ---: | --- | --- | --- |
-| P01 | Chốt mục tiêu phân tích | 8 | 18/09 | — | Evidence: mục tiêu |
+| `P01` | Chốt mục tiêu phân tích | 8 | 18/09 | — | Evidence: mục tiêu |
 | P02 | Chốt vai trò và thuật ngữ | 8 | 21/09 | — | Evidence: vai trò |
 | P03 | Chốt phạm vi kỹ thuật | 8 | 22/09 | — | Evidence: phạm vi |
 | P04 | Chuẩn bị môi trường minh họa | 12 | 23/09 AM–24/09 AM | P03 | Evidence: môi trường |
@@ -57,7 +56,7 @@ assignment cho cùng một card.
 
 | Card | Tên task nhập Kanban | Giờ | Thời gian | Cần trước | Nội dung ghi trên card |
 | --- | --- | ---: | --- | --- | --- |
-| F01-A | Mô hình nguồn — phần A | 8 | 05/10 | P07 | Evidence: model A |
+| `F01-A` | Mô hình nguồn — phần A | 8 | 05/10 | G-MS0 | Evidence: model A |
 | F01-B | Mô hình nguồn — phần B | 8 | 06/10 | F01-A | Evidence: model B |
 | F02 | Chuẩn hóa định danh | 12 | 07/10 | F01-B | Evidence: identifiers |
 | F03-A | Bộ đọc tài liệu — phần A | 8 | 08/10 | F02 | Evidence: parser A |

@@ -20,6 +20,9 @@ internal static class RealSourceCompatibilityTests
         TestAssert.Equal(512m, project.Baseline.PlannedEffortHours, "DOC-07 must expose authoritative planned work.");
         TestAssert.Equal(88m, project.Baseline.ReserveHours, "DOC-07 must expose controlled reserve.");
         TestAssert.Equal(600m, project.Baseline.CapacityHours, "DOC-07 must expose weekday capacity.");
+        TestAssert.Equal(1, project.Policies.WorkInProgressLimit, "The Kanban source policy must expose WIP=1.");
+        TestAssert.Equal("single primary coder", project.Policies.ResourceConstraint, "Resource capacity must remain distinct from the WIP policy.");
+        TestAssert.Contains("single primary coder", project.Capacity.SourceResourcePolicy ?? string.Empty, "Capacity metadata must retain the authored resource policy separately from WIP.");
     }
 
     public static void RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments()
@@ -46,6 +49,7 @@ internal static class RealSourceCompatibilityTests
         TestAssert.True(project.Milestones.All(milestone => milestone.SourceReferences.Any(reference => reference.RelativeFile.EndsWith("DOC-07-mvp-roadmap-and-delivery-plan.md", StringComparison.Ordinal))), "Milestone authority must be DOC-07, not the Gantt rendition.");
         TestAssert.True(project.Dependencies.Any(dependency => dependency.SubjectId == "G-MS0" && dependency.PredecessorId == "G-D0"), "Gate dependency D0 -> MS0 must remain in the canonical graph.");
         TestAssert.True(project.Dependencies.Any(dependency => dependency.SubjectId == "G-MS0" && dependency.PredecessorId == "P07"), "Milestone gate prerequisites must preserve work-item to gate edges.");
+        TestAssert.True(project.Dependencies.Any(dependency => dependency.SubjectId == "F01-A" && dependency.PredecessorId == "G-MS0" && dependency.PredecessorKind == "Milestone" && dependency.AnalysisEligible), "A delivery card may depend on a known milestone gate and must remain eligible for analysis.");
     }
 
     public static void RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe()

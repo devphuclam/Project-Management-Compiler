@@ -1,0 +1,58 @@
+using ProjectManagementCompiler.Domain;
+using ProjectManagementCompiler.Extraction;
+using ProjectManagementCompiler.Management;
+using ProjectManagementCompiler.Sources;
+
+namespace ProjectManagementCompiler.Tests;
+
+internal static class GanttTests
+{
+    public static void GanttKeepsPlanAndAddsActualAndAlertLanes()
+    {
+        var project = CaptureCanonicalProject();
+        var update = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        {
+            WorkItemId = "P04-A",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 9, 25),
+            LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero)
+        });
+        var analyzed = new ManagementAnalysisOrchestrator().Analyze(update.Project, new DateOnly(2026, 9, 28));
+        var gantt = new GanttProjector().Build(update.Project, analyzed, new DateOnly(2026, 9, 28));
+        var item = gantt.Items.Single(item => item.WorkItemId == "P04-A");
+
+        var plan = item.Lanes.Single(lane => lane.Lane == GanttLane.Plan);
+        var actual = item.Lanes.Single(lane => lane.Lane == GanttLane.Actual);
+        var alert = item.Lanes.Single(lane => lane.Lane == GanttLane.Alert && lane.AlertCode == "OVERDUE");
+
+        TestAssert.Equal(new DateOnly(2026, 9, 25), plan.Start, "PLAN lane must keep the baseline start.");
+        TestAssert.Equal(new DateOnly(2026, 9, 25), plan.Finish, "PLAN lane must keep the baseline finish.");
+        TestAssert.Equal(new DateOnly(2026, 9, 25), actual.Start, "ACTUAL lane must use the recorded actual start.");
+        TestAssert.Equal(new DateOnly(2026, 9, 28), actual.Finish, "In-progress ACTUAL lane must end at explicit as-of date.");
+        TestAssert.Equal("P04-A", alert.WorkItemId, "ALERT lane must retain the canonical work-item ID.");
+        TestAssert.True(item.IsCritical, "Gantt must expose dependency-critical highlighting from shared analysis.");
+    }
+
+    public static void GanttLeavesActualLaneUnknownWithoutExecutionEvidence()
+    {
+        var project = CaptureCanonicalProject();
+        var asOfDate = new DateOnly(2026, 9, 28);
+        var analysis = new ManagementAnalysisOrchestrator().Analyze(project, asOfDate);
+        var item = new GanttProjector().Build(project, analysis, asOfDate).Items.Single(item => item.WorkItemId == "P01-A");
+
+        TestAssert.True(item.Lanes.Any(lane => lane.Lane == GanttLane.Plan), "Every card must have a PLAN lane.");
+        TestAssert.False(item.Lanes.Any(lane => lane.Lane == GanttLane.Actual && lane.Start is not null), "Planning-only input must not fabricate an ACTUAL bar.");
+        TestAssert.False(item.Lanes.Any(lane => lane.Lane == GanttLane.Alert && lane.AlertCode == "OVERDUE"), "A card without execution evidence must not fabricate active overdue actuals.");
+    }
+
+    private static CanonicalProject CaptureCanonicalProject()
+    {
+        var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");
+        var snapshot = new LocalRepositorySourceAdapter()
+            .CaptureAsync(new SourceRequest { Location = root }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        var resolution = AuthorityResolution.Resolve(snapshot);
+        return new CanonicalProjectNormalizer().Normalize(new IdeaEngineeringExtractor().Extract(resolution));
+    }
+}

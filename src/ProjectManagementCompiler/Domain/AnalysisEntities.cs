@@ -13,8 +13,8 @@ public sealed record ManagementAnalysis
     public ScheduleConstraintSummary? ResourceBaselineScheduleConstraint { get; init; }
     public EffortAccountingReconciliation? EffortAccounting { get; init; }
     public ScheduleVariance? ScheduleVariance { get; init; }
-    public CapacityAnalysis? Capacity { get; init; }
-    public ReserveAnalysis? Reserve { get; init; }
+    public CapacityAnalysis Capacity { get; init; } = new();
+    public ReserveAnalysis Reserve { get; init; } = new();
     public ExecutionEffortSummary ExecutionEffort { get; init; } = new();
     public ExecutionStatusCounts ExecutionStatus { get; init; } = new();
     public IReadOnlyList<WorkItemVariance> WorkItemVariances { get; init; } = Array.Empty<WorkItemVariance>();

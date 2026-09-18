@@ -164,7 +164,8 @@ public sealed record AuthorityResolution
 
         if (authority is not null)
         {
-            diagnostics.AddRange(FindSubordinateReferences(authority, documents, baseline.BaselineVersion));
+            var currentControlEnvelopeVersion = FactValue(authorityFacts, "Document Version") ?? baseline.BaselineVersion;
+            diagnostics.AddRange(FindSubordinateReferences(authority, documents, currentControlEnvelopeVersion));
         }
 
         diagnostics.AddRange(conflicts);
@@ -365,7 +366,7 @@ public sealed record AuthorityResolution
         string.Join("\u001f", row.Headers.Select(header => $"{PlanningParserSupport.Normalize(header)}={row.Cells[header].Trim()}"));
 
     private static string? FactValue(IReadOnlyDictionary<string, ExtractedPlanningFact> facts, params string[] keys) =>
-        keys.Select(key => facts.TryGetValue(key, out var fact) ? fact.Value : null)
+        keys.Select(key => facts.TryGetValue(key, out var fact) ? fact.Value.Trim().Trim('`') : null)
             .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     private static DateOnly? DateFact(IReadOnlyDictionary<string, ExtractedPlanningFact> facts, params string[] keys) =>
@@ -382,14 +383,14 @@ public sealed record AuthorityResolution
                 continue;
             }
 
-            var valueText = fact.Value.Trim();
+            var valueText = Regex.Replace(fact.Value.Trim(), @"[*`]", string.Empty);
             if (Regex.IsMatch(valueText, @"^\d+(?:\.\d+)?\s*(?:hours?|h)?$", RegexOptions.IgnoreCase)
                 && decimal.TryParse(Regex.Match(valueText, @"\d+(?:\.\d+)?").Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var value))
             {
                 return value;
             }
 
-            if (key is "Planned phase work" or "Weekday capacity" or "Total allocation")
+            if (key is "Planned phase work" or "Weekday capacity" or "Total allocation" or "Controlled reserve")
             {
                 var match = Regex.Match(fact.Value, @"(?<!\d)(?<value>\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
                 if (match.Success && decimal.TryParse(match.Groups["value"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
@@ -447,12 +448,15 @@ public sealed record AuthorityResolution
         foreach (var row in rows)
         {
             var identity = Cell(row, "ID / target date");
-            if (identity is null || !identity.StartsWith(id + " / ", StringComparison.OrdinalIgnoreCase))
+            var identityMatch = identity is null
+                ? null
+                : Regex.Match(identity, $@"^\s*`?{Regex.Escape(id)}`?\s*/\s*(?<date>.+)$", RegexOptions.IgnoreCase);
+            if (identityMatch?.Success != true)
             {
                 continue;
             }
 
-            var token = identity[(id.Length + 3)..].Trim();
+            var token = identityMatch.Groups["date"].Value.Trim();
             var match = Regex.Match(token, @"(?<day>\d{1,2})\s+(?<month>January|February|March|April|May|June|July|August|September|October|November|December)", RegexOptions.IgnoreCase);
             if (match.Success && DateOnly.TryParseExact($"{match.Groups["day"].Value} {match.Groups["month"].Value} 2026", "d MMMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             {
@@ -586,10 +590,26 @@ public sealed record AuthorityResolution
         var content = document.Source.Format == SourceDocumentFormat.Markdown
             ? MarkdownTableParser.ContentOutsideFences(document.Source.Content)
             : document.Source.Content;
-        return Regex.Matches(content, @"DOC-07@(?<version>[^\s<>""',;)\]}]+)", RegexOptions.IgnoreCase)
-            .Cast<Match>()
-            .Select(match => match.Groups["version"].Value)
+        return content
+            .Split('\n')
+            .Where(line => !IsHistoricalControlEnvelopeRow(line))
+            .SelectMany(line => Regex.Matches(line, @"DOC-07@(?<version>[^\s<>""',;)\]}]+)", RegexOptions.IgnoreCase)
+                .Cast<Match>()
+                .Select(match => match.Groups["version"].Value))
             .ToArray();
+    }
+
+    private static bool IsHistoricalControlEnvelopeRow(string line)
+    {
+        var trimmed = line.Trim();
+        if (!trimmed.StartsWith('|') || !trimmed.EndsWith('|'))
+        {
+            return false;
+        }
+
+        var firstCell = trimmed.Trim('|').Split('|', 2, StringSplitOptions.TrimEntries)[0];
+        var normalized = PlanningParserSupport.Normalize(firstCell);
+        return normalized is "CHANGE RECORD" or "SUPERSEDES / SUPERSEDED BY";
     }
 
     private static ImportWarning ConflictingAuthorityControlEnvelopeDiagnostic(PlanningDocument authority, string current, string conflicting) => new()
@@ -603,7 +623,7 @@ public sealed record AuthorityResolution
 
     private static bool TryNormalizeControlEnvelopeVersion(string raw, out string normalized)
     {
-        normalized = raw.TrimEnd(',', ';', ':', ')', ']', '}');
+        normalized = raw.TrimEnd(',', ';', ':', ')', ']', '}', '`');
         if (TryParseDottedVersion(normalized, out _))
         {
             return true;

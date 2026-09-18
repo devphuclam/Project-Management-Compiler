@@ -446,7 +446,7 @@ internal static class PlanningParserSupport
 
     private static bool TryParseNumeric(string value, bool allowHoursSuffix, out decimal result)
     {
-        var normalized = value.Trim();
+        var normalized = Regex.Replace(value.Trim(), @"[*`]", string.Empty);
         if (allowHoursSuffix)
         {
             normalized = Regex.Replace(normalized, @"\s+(?:hours?|h)$", string.Empty, RegexOptions.IgnoreCase);

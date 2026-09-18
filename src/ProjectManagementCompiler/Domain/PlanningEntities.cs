@@ -133,7 +133,7 @@ public sealed record Assignment
 public sealed record CapacityPlan
 {
     public decimal? CapacityHours { get; init; }
-    public string SourceResourcePolicy { get; init; } = string.Empty;
+    public string? SourceResourcePolicy { get; init; }
     public string? ResourceLogicalRole { get; init; }
     public string EffortAccountingLevel { get; init; } = string.Empty;
     public CalendarDefinition Calendar { get; init; } = new();

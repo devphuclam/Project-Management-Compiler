@@ -90,12 +90,13 @@ public sealed class IdeaEngineeringExtractor
         var dependencies = ExtractDependencies(workPackages, cards, milestones, cardEvidence, resolution, warnings);
         var roles = ExtractRoles(cardEvidence);
         var assignments = ExtractAssignments(cardEvidence);
-        var policies = ExtractPolicies(resolution, warnings);
+        var resourcePolicy = ExtractResourcePolicy(resolution);
+        var policies = ExtractPolicies(resolution, warnings, resourcePolicy.Constraint);
         var capacity = new CapacityPlan
         {
             CapacityHours = baseline.CapacityHours,
-            SourceResourcePolicy = "One coder; weekday-only baseline",
-            ResourceLogicalRole = "single-coder",
+            SourceResourcePolicy = resourcePolicy.Description,
+            ResourceLogicalRole = resourcePolicy.Constraint is null ? null : "single-coder",
             EffortAccountingLevel = "WORK_PACKAGE_APPENDIX_A",
             Calendar = new CalendarDefinition
             {
@@ -250,6 +251,7 @@ public sealed class IdeaEngineeringExtractor
             var schedule = ParseDateRange(row, warnings);
             var effort = ParseDecimal(row, "Effort", warnings) ?? ParseDecimal(row, "Giờ", warnings);
             var duration = SafeDuration(schedule.Start, schedule.StartMarker, schedule.Finish, schedule.FinishMarker, row, warnings);
+            DiagnoseEffortDurationMismatch(id, effort, duration, row, warnings);
             var stateValue = Cell(row, "State", "Trạng thái");
             var state = stateValue is null ? (ExecutionState?)null : ParseExecutionState(stateValue, row, warnings);
             var roleAssignments = new List<ExtractedRoleAssignmentEvidence>();
@@ -409,15 +411,21 @@ public sealed class IdeaEngineeringExtractor
         foreach (var card in cards)
         {
             var predecessorText = evidence.FirstOrDefault(item => item.CardId == card.Id)?.PredecessorId;
-            foreach (var predecessor in SplitIds(predecessorText))
+            foreach (var rawPredecessor in SplitIds(predecessorText))
             {
-                var valid = knownCardIds.Contains(predecessor);
+                var predecessor = rawPredecessor.StartsWith("G-", StringComparison.OrdinalIgnoreCase)
+                    ? NormalizeMilestoneId(rawPredecessor)
+                    : NormalizeId(rawPredecessor);
+                var valid = knownCardIds.Contains(predecessor) || knownMilestoneIds.Contains(predecessor);
+                var predecessorKind = knownMilestoneIds.Contains(predecessor)
+                    ? "Milestone"
+                    : knownCardIds.Contains(predecessor) ? "DeliveryCard" : "Unknown";
                 dependencies.Add(new Dependency
                 {
                     SubjectId = card.Id,
                     SubjectKind = "DeliveryCard",
                     PredecessorId = predecessor,
-                    PredecessorKind = valid ? "DeliveryCard" : "Unknown",
+                    PredecessorKind = predecessorKind,
                     DependencyType = DependencyType.FinishToStart,
                     AnalysisEligible = valid,
                     ValidationState = valid ? ValidationState.Known : ValidationState.InvalidSourceEvidence,
@@ -518,19 +526,36 @@ public sealed class IdeaEngineeringExtractor
             SourceReferences = [assignment.SourceReference]
         })).ToArray();
 
-    private static PolicySet ExtractPolicies(AuthorityResolution resolution, ICollection<ImportWarning> warnings)
+    private static PolicySet ExtractPolicies(AuthorityResolution resolution, ICollection<ImportWarning> warnings, string? resourceConstraint)
     {
-        var wip = ParsePolicyInteger(resolution, "WIP policy", warnings);
+        var wip = ParsePolicyInteger(resolution, "WIP policy", warnings) ?? ParseWipFromKanban(resolution);
         return new PolicySet
         {
             WorkInProgressLimit = wip,
-            ResourceConstraint = "One coder; weekday-only",
+            ResourceConstraint = resourceConstraint,
             Rules = resolution.PolicyFacts
                 .Where(pair => pair.Key is "Calendar" or "Actual progress")
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => $"{pair.Key}={pair.Value.Value}")
                 .ToArray()
         };
+    }
+
+    private static (string? Constraint, string? Description) ExtractResourcePolicy(AuthorityResolution resolution)
+    {
+        var planningContent = string.Join("\n", resolution.Documents
+            .Where(document => PathEquals(document.Source.RelativeFile, Doc07Path) || PathEquals(document.Source.RelativeFile, KanbanPath))
+            .Select(document => document.Source.Content));
+        var normalized = Regex.Replace(planningContent, @"[*`]", string.Empty);
+        if (!Regex.IsMatch(normalized, @"only assumed coder|single[- ]coder|one coder|một người viết code", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return (null, null);
+        }
+
+        var description = Regex.IsMatch(normalized, @"weekday[- ]only|weekday-only|ngày làm việc", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            ? "single primary coder; weekday-only baseline"
+            : "single primary coder";
+        return ("single primary coder", description);
     }
 
     private static void AddAuthorityValueReferences(AuthorityResolution resolution, IReadOnlyList<PlanningTableRow> authorityRows, ICollection<ExtractedValueProvenance> values)
@@ -582,7 +607,7 @@ public sealed class IdeaEngineeringExtractor
             return false;
         }
 
-        var trimmed = value.Trim();
+        var trimmed = value.Trim().Trim('`');
         return trimmed.Length >= 3
             && char.IsLetter(trimmed[0])
             && trimmed.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '-' or '+');
@@ -609,7 +634,7 @@ public sealed class IdeaEngineeringExtractor
 
     private static string NormalizeHeader(string value) => string.Join(' ', value.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
 
-    private static string NormalizeId(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
+    private static string NormalizeId(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().Trim('`').ToUpperInvariant();
 
     private static string? NormalizePhaseId(string? value)
     {
@@ -890,7 +915,29 @@ public sealed class IdeaEngineeringExtractor
         return null;
     }
 
-    private static ExecutionState ParseExecutionState(string? value, PlanningTableRow row, ICollection<ImportWarning> warnings)
+    private static int? ParseWipFromKanban(AuthorityResolution resolution)
+    {
+        var content = resolution.Documents
+            .FirstOrDefault(document => PathEquals(document.Source.RelativeFile, KanbanPath))?
+            .Source.Content;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        var normalized = Regex.Replace(content, @"[*`]", string.Empty);
+        var match = Regex.Match(normalized, @"tối đa\s+(?<limit>\d+)\s+card\s+thực hiện", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success)
+        {
+            match = Regex.Match(normalized, @"(?:maximum|max)\s+(?<limit>\d+)\s+(?:active\s+)?implementation\s+(?:item|card)s?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        return match.Success && int.TryParse(match.Groups["limit"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit)
+            ? limit
+            : null;
+    }
+
+    private static ExecutionState? ParseExecutionState(string? value, PlanningTableRow row, ICollection<ImportWarning> warnings)
     {
         return (value ?? string.Empty).Trim().ToUpperInvariant() switch
         {
@@ -903,10 +950,10 @@ public sealed class IdeaEngineeringExtractor
         };
     }
 
-    private static ExecutionState UnknownState(PlanningTableRow row, ICollection<ImportWarning> warnings)
+    private static ExecutionState? UnknownState(PlanningTableRow row, ICollection<ImportWarning> warnings)
     {
         warnings.Add(MissingValue(row, "UNKNOWN_EXECUTION_STATE", "State"));
-        return ExecutionState.NotStarted;
+        return null;
     }
 
     private static WorkingDuration SafeDuration(DateOnly? start, string? startMarker, DateOnly? finish, string? finishMarker, PlanningTableRow row, ICollection<ImportWarning> warnings)
@@ -927,6 +974,35 @@ public sealed class IdeaEngineeringExtractor
         }
 
         return duration;
+    }
+
+    private static void DiagnoseEffortDurationMismatch(
+        string workItemId,
+        decimal? effortHours,
+        WorkingDuration duration,
+        PlanningTableRow row,
+        ICollection<ImportWarning> warnings)
+    {
+        if (effortHours is null || duration.WorkingMinutes is null || duration.State != DataState.Known)
+        {
+            return;
+        }
+
+        var authoredMinutes = effortHours.Value * 60m;
+        if (authoredMinutes == duration.WorkingMinutes.Value)
+        {
+            return;
+        }
+
+        warnings.Add(new ImportWarning
+        {
+            Id = $"EFFORT_DURATION_MISMATCH:{row.SourceRelativePath}:{row.SourceLine}:{workItemId}",
+            Severity = WarningSeverity.Warning,
+            Code = "EFFORT_DURATION_MISMATCH",
+            Message = $"Delivery card '{workItemId}' authors {effortHours.Value:0.##} effort hours but its authored schedule normalizes to {duration.WorkingMinutes.Value / 60m:0.##} working hours; both values are retained independently.",
+            AffectedIds = [workItemId],
+            SourceReferences = [row.SourceReference]
+        });
     }
 
     private static IReadOnlyDictionary<string, string> BuildGateParents(AuthorityResolution resolution)

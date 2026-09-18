@@ -9,7 +9,6 @@
 | Document Status | Draft |
 | Document Version | 0.14 |
 | Applicable Baseline | IDEA-C1-ANALYSIS-DESIGN-001 |
-| WIP policy | 1 implementation card |
 | Calendar | Weekday-only single-coder baseline |
 
 Mục đích: cả nhóm dùng đúng tài liệu này làm mốc kiểm soát trong fixture.
