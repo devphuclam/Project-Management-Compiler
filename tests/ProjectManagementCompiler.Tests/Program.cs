@@ -109,6 +109,8 @@ internal static class Program
         ,("CancelledIsNotOverdueAndSuspendedIsExplicit", AnalysisTests.CancelledIsNotOverdueAndSuspendedIsExplicit)
         ,("LatePredecessorMarksUnstartedSuccessorAtRiskConservatively", AnalysisTests.LatePredecessorMarksUnstartedSuccessorAtRiskConservatively)
         ,("InvalidDependencyEvidenceCannotFabricateDownstreamRisk", AnalysisTests.InvalidDependencyEvidenceCannotFabricateDownstreamRisk)
+        ,("WbsProjectionBuildsPhasePackageCardAndMilestoneTree", ManagementProjectionTests.WbsProjectionBuildsPhasePackageCardAndMilestoneTree)
+        ,("WbsProjectionDoesNotDoubleCountExecutableCards", ManagementProjectionTests.WbsProjectionDoesNotDoubleCountExecutableCards)
     ];
 
     public static int Main()
