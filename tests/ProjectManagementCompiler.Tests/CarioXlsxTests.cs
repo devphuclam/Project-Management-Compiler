@@ -89,6 +89,16 @@ internal static class CarioXlsxTests
         TestAssert.False(taskRowText.Contains("2026-09-22", StringComparison.Ordinal), "Actual finish must not overwrite the planned CARIO deadline cell.");
     }
 
+    public static void CarioXlsxExportIsDeterministicForTheSameModel()
+    {
+        var project = CaptureCanonicalProject();
+        var model = new CarioMappingProjector().Build(project);
+        var first = new CarioXlsxExporter().Export(model);
+        var second = new CarioXlsxExporter().Export(model);
+
+        TestAssert.True(first.SequenceEqual(second), "The same canonical model must produce deterministic CARIO package bytes.");
+    }
+
     private static string LoadXml(ZipArchive archive, string entryName)
     {
         using var stream = archive.GetEntry(entryName)!.Open();

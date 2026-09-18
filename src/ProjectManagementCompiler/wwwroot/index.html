@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Management Compiler</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">LOCAL MVP1</p>
+      <h1>Project Management Compiler</h1>
+      <p id="connection-status" class="muted">Ready for a local source directory.</p>
+    </div>
+    <div class="header-actions">
+      <button id="refresh-button" class="secondary">Refresh analysis</button>
+      <button id="save-json-button" class="secondary">Save project JSON</button>
+      <button id="export-xlsx-button" class="primary">Export CARIO XLSX</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="panel controls-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">INPUT</p>
+          <h2>Analyze planning source</h2>
+        </div>
+        <span class="local-only">Loopback only</span>
+      </div>
+      <div class="controls-grid">
+        <label class="wide">
+          Source directory
+          <input id="source-path" type="text" autocomplete="off" placeholder="C:\path\to\planning-repository">
+          <small>Only the allow-listed planning documents are captured.</small>
+        </label>
+        <label>
+          As-of date
+          <input id="as-of-date" type="date">
+          <small>Used for late-start, overdue and actual Gantt calculations.</small>
+        </label>
+        <div class="control-submit">
+          <button id="analyze-button" class="primary">Analyze source</button>
+        </div>
+      </div>
+      <p id="error-message" class="error" role="alert" hidden></p>
+    </section>
+
+    <section id="summary-panel" class="summary-grid" aria-live="polite">
+      <div class="empty-state">No project loaded. Analyze a local planning source to begin.</div>
+    </section>
+
+    <section class="panel">
+      <nav id="view-tabs" class="tabs" aria-label="Project views">
+        <button class="tab active" data-view="dashboard">Dashboard</button>
+        <button class="tab" data-view="wbs">WBS</button>
+        <button class="tab" data-view="gantt">Gantt</button>
+        <button class="tab" data-view="kanban">Kanban</button>
+        <button class="tab" data-view="dependencies">Dependencies</button>
+        <button class="tab" data-view="cpm">CPM</button>
+        <button class="tab" data-view="source">Source / Warnings</button>
+      </nav>
+      <div id="view-content" class="view-content">
+        <div class="empty-state">Views will appear here after analysis.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">EXECUTION OVERLAY</p>
+          <h2>Record manual update</h2>
+        </div>
+        <span class="muted">Does not edit the baseline</span>
+      </div>
+      <form id="execution-form" class="execution-grid">
+        <label>Delivery card ID<input id="execution-work-item" required placeholder="P04-A"></label>
+        <label>State
+          <select id="execution-state">
+            <option value="NOT_STARTED">Not started</option>
+            <option value="IN_PROGRESS">In progress</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="SUSPENDED">Suspended</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </label>
+        <label>Actual start<input id="actual-start" type="date"></label>
+        <label>Actual finish<input id="actual-finish" type="date"></label>
+        <label>Actual effort (hours)<input id="actual-effort" type="number" min="0" step="0.25"></label>
+        <label>Remaining effort (hours)<input id="remaining-effort" type="number" min="0" step="0.25"></label>
+        <label class="wide">Note<textarea id="execution-note" rows="2"></textarea></label>
+        <div class="control-submit"><button class="primary" type="submit">Apply update</button></div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

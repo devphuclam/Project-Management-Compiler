@@ -124,6 +124,7 @@ internal static class Program
         ,("CarioMappingConfigurationMapsRoleAndTaskMetadataWithoutChangingBaselineDates", CarioMappingTests.CarioMappingConfigurationMapsRoleAndTaskMetadataWithoutChangingBaselineDates)
         ,("CarioXlsxUsesSixExactSheetsAndBclPackageParts", CarioXlsxTests.CarioXlsxUsesSixExactSheetsAndBclPackageParts)
         ,("CarioXlsxNeverReplacesBaselineDatesWithActualDates", CarioXlsxTests.CarioXlsxNeverReplacesBaselineDatesWithActualDates)
+        ,("CarioXlsxExportIsDeterministicForTheSameModel", CarioXlsxTests.CarioXlsxExportIsDeterministicForTheSameModel)
         ,("CompilerComposesCaptureCanonicalAnalysisViewsAndCarioExport", ApplicationTests.CompilerComposesCaptureCanonicalAnalysisViewsAndCarioExport)
         ,("CompilerExecutionUpdateSaveAndReopenPreserveBaselineAndRecalculateAlerts", ApplicationTests.CompilerExecutionUpdateSaveAndReopenPreserveBaselineAndRecalculateAlerts)
         ,("CompilerRejectsInvalidExecutionUpdateWithoutMutatingResult", ApplicationTests.CompilerRejectsInvalidExecutionUpdateWithoutMutatingResult)
