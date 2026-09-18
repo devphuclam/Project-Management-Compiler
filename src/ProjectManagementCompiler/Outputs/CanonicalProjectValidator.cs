@@ -21,7 +21,7 @@ public static class CanonicalProjectValidator
         var milestoneIds = ValidateMilestones(project, diagnostics, phaseIds, workPackageIds);
 
         ValidateHierarchyBackReferences(project, diagnostics, cardIds, milestoneIds);
-        ValidateRolesAndAssignments(project, diagnostics, cardIds, workPackageIds, milestoneIds);
+        ValidateRolesAndAssignments(project, diagnostics, cardIds);
         ValidateDependencies(project, diagnostics, cardIds, workPackageIds, milestoneIds);
         ValidateSourceReferences(project, diagnostics, sourceIds);
         ValidateOverlay(project, diagnostics, cardIds);
@@ -322,9 +322,7 @@ public static class CanonicalProjectValidator
     private static void ValidateRolesAndAssignments(
         CanonicalProject project,
         ICollection<ImportWarning> diagnostics,
-        ISet<string> cardIds,
-        ISet<string> workPackageIds,
-        ISet<string> milestoneIds)
+        ISet<string> cardIds)
     {
         var roleCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var logicalRoleCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -349,11 +347,9 @@ public static class CanonicalProjectValidator
 
         foreach (var assignment in project.Assignments)
         {
-            if (!cardIds.Contains(assignment.WorkItemId)
-                && !workPackageIds.Contains(assignment.WorkItemId)
-                && !milestoneIds.Contains(assignment.WorkItemId))
+            if (!cardIds.Contains(assignment.WorkItemId))
             {
-                Add(diagnostics, "INVALID_ASSIGNMENT_TARGET", $"Assignment target '{assignment.WorkItemId}' does not resolve to a canonical work item.", assignment.WorkItemId);
+                Add(diagnostics, "INVALID_ASSIGNMENT_TARGET", $"Assignment target '{assignment.WorkItemId}' must resolve to a DeliveryCard.", assignment.WorkItemId);
             }
 
             if (string.IsNullOrWhiteSpace(assignment.LogicalRoleCode)
@@ -373,42 +369,36 @@ public static class CanonicalProjectValidator
         ISet<string> workPackageIds,
         ISet<string> milestoneIds)
     {
-        var knownKinds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var id in cardIds) knownKinds[id] = "DeliveryCard";
-        foreach (var id in workPackageIds) knownKinds[id] = "WorkPackage";
-        foreach (var id in milestoneIds) knownKinds[id] = "Milestone";
+        var knownItems = new HashSet<CanonicalWorkItemKey>();
+        foreach (var id in cardIds) knownItems.Add(CanonicalWorkItemKey.DeliveryCard(id));
+        foreach (var id in workPackageIds) knownItems.Add(CanonicalWorkItemKey.WorkPackage(id));
+        foreach (var id in milestoneIds) knownItems.Add(CanonicalWorkItemKey.Milestone(id));
 
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<DependencyIdentity>();
         foreach (var dependency in project.Dependencies)
         {
-            var edgeKey = string.Join("|", dependency.SubjectId, dependency.PredecessorId, dependency.DependencyType);
+            var subjectKey = new CanonicalWorkItemKey(dependency.SubjectKind, dependency.SubjectId);
+            var predecessorKey = new CanonicalWorkItemKey(dependency.PredecessorKind, dependency.PredecessorId);
+            var edgeKey = new DependencyIdentity(subjectKey, predecessorKey, dependency.DependencyType);
             if (!seen.Add(edgeKey))
             {
                 Add(diagnostics, "DUPLICATE_DEPENDENCY", $"Dependency '{dependency.SubjectId}' -> '{dependency.PredecessorId}' is duplicated.", dependency.SubjectId);
             }
 
-            if (!knownKinds.TryGetValue(dependency.SubjectId, out var subjectKind))
+            if (!knownItems.Contains(subjectKey))
             {
                 Add(diagnostics, "INVALID_DEPENDENCY_SUBJECT", $"Dependency subject '{dependency.SubjectId}' does not resolve to a canonical work item.", dependency.SubjectId);
             }
-            else if (!string.Equals(subjectKind, dependency.SubjectKind, StringComparison.OrdinalIgnoreCase))
-            {
-                Add(diagnostics, "INVALID_DEPENDENCY_SUBJECT_KIND", $"Dependency subject '{dependency.SubjectId}' has kind '{dependency.SubjectKind}' but resolves as '{subjectKind}'.", dependency.SubjectId);
-            }
 
-            var predecessorExists = knownKinds.TryGetValue(dependency.PredecessorId, out var predecessorKind);
-            if (string.Equals(dependency.SubjectId, dependency.PredecessorId, StringComparison.OrdinalIgnoreCase))
+            var predecessorExists = !string.Equals(CanonicalWorkItemKey.NormalizeKind(dependency.PredecessorKind), "Unknown", StringComparison.OrdinalIgnoreCase)
+                && knownItems.Contains(predecessorKey);
+            if (subjectKey == predecessorKey)
             {
                 Add(diagnostics, "INVALID_DEPENDENCY_SELF", $"Dependency '{dependency.SubjectId}' cannot depend on itself.", dependency.SubjectId);
             }
 
             if (predecessorExists)
             {
-                if (!string.Equals(predecessorKind, dependency.PredecessorKind, StringComparison.OrdinalIgnoreCase))
-                {
-                    Add(diagnostics, "INVALID_DEPENDENCY_PREDECESSOR_KIND", $"Dependency predecessor '{dependency.PredecessorId}' has kind '{dependency.PredecessorKind}' but resolves as '{predecessorKind}'.", dependency.SubjectId);
-                }
-
                 if (dependency.ValidationState == ValidationState.InvalidSourceEvidence)
                 {
                     Add(diagnostics, "INVALID_DEPENDENCY_SOURCE_STATE", $"Known predecessor '{dependency.PredecessorId}' cannot be marked as invalid source evidence.", dependency.SubjectId);
@@ -448,6 +438,11 @@ public static class CanonicalProjectValidator
             }
         }
     }
+
+    private readonly record struct DependencyIdentity(
+        CanonicalWorkItemKey Subject,
+        CanonicalWorkItemKey Predecessor,
+        DependencyType DependencyType);
 
     private static void ValidateSourceReferences(
         CanonicalProject project,

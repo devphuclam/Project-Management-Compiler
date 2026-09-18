@@ -191,10 +191,12 @@ public sealed class CarioXlsxExporter
 
     private static void WriteDependencies(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Task / Milestone ID", "Depends On", "Dependency Type", "Analysis Eligibility", "Validation State", "Source Reference"],
+        WriteWorksheet(writer, ["Subject Kind", "Subject ID", "Predecessor Kind", "Predecessor ID", "Dependency Type", "Analysis Eligibility", "Validation State", "Source Reference"],
             model.Dependencies.Select(dependency => new[]
             {
+                Cell.Text(dependency.SubjectKind),
                 Cell.Text(dependency.SubjectId),
+                Cell.Text(dependency.PredecessorKind),
                 Cell.Text(dependency.PredecessorId),
                 Cell.Text(FormatEnum(dependency.DependencyType)),
                 Cell.Text(dependency.AnalysisEligible ? "TRUE" : "FALSE"),

@@ -51,6 +51,37 @@ public sealed class WorkingCalendar
         return date;
     }
 
+    /// <summary>
+    /// Returns the working date on which a start offset occurs. An offset at
+    /// an exact day boundary is the start of the next working date.
+    /// </summary>
+    public DateOnly DateForStartOffset(DateOnly anchor, int workingMinutes)
+    {
+        if (workingMinutes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(workingMinutes), "Start offsets cannot be negative.");
+        }
+
+        var normalizedAnchor = NormalizeWorkingDate(anchor, 1);
+        var workingDays = workingMinutes / minutesPerWorkingDay;
+        return AdvanceWorkingDays(normalizedAnchor, workingDays);
+    }
+
+    /// <summary>
+    /// Returns the inclusive working date containing a non-negative finish
+    /// offset. Thus a 480-minute task anchored on Monday finishes on Monday,
+    /// while a 480-minute start offset begins on Tuesday.
+    /// </summary>
+    public DateOnly DateForFinishOffset(DateOnly anchor, int workingMinutes)
+    {
+        if (workingMinutes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(workingMinutes), "Finish offsets cannot be negative.");
+        }
+
+        return DateForStartOffset(anchor, workingMinutes == 0 ? 0 : workingMinutes - 1);
+    }
+
     private int CountForward(DateOnly from, DateOnly to)
     {
         var workingDays = 0;
@@ -70,6 +101,16 @@ public sealed class WorkingCalendar
         while (!workingWeekdays.Contains(date.DayOfWeek))
         {
             date = date.AddDays(direction);
+        }
+
+        return date;
+    }
+
+    private DateOnly AdvanceWorkingDays(DateOnly date, int workingDays)
+    {
+        for (var index = 0; index < workingDays; index++)
+        {
+            date = NormalizeWorkingDate(date.AddDays(1), 1);
         }
 
         return date;

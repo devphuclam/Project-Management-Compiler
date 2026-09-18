@@ -81,6 +81,7 @@ public sealed record EffortAccountingReconciliation
 public sealed record CpmNodeMetric
 {
     public string NodeId { get; init; } = string.Empty;
+    public string NodeKind { get; init; } = string.Empty;
     public int? EarliestStartWorkingMinutes { get; init; }
     public int? EarliestFinishWorkingMinutes { get; init; }
     public int? LatestStartWorkingMinutes { get; init; }

@@ -63,7 +63,15 @@ public sealed class GanttProjector
         var alertsByWorkItem = analysis.Alerts
             .GroupBy(alert => alert.WorkItemId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(alert => alert.AlertCode, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
-        var dependenciesBySubject = project.Dependencies
+        var cardDependenciesBySubject = project.Dependencies
+            .Where(dependency => string.Equals(CanonicalWorkItemKey.NormalizeKind(dependency.SubjectKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(dependency => dependency.SubjectId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(dependency => dependency.PredecessorId).OrderBy(id => id, StringComparer.Ordinal).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+        var milestoneDependenciesBySubject = project.Dependencies
+            .Where(dependency => string.Equals(CanonicalWorkItemKey.NormalizeKind(dependency.SubjectKind), "Milestone", StringComparison.OrdinalIgnoreCase))
             .GroupBy(dependency => dependency.SubjectId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 group => group.Key,
@@ -137,7 +145,7 @@ public sealed class GanttProjector
                     ? logicalRoles
                     : Array.Empty<string>(),
                 IsCritical = criticalPathIds.Contains(card.Id),
-                DependencyIds = dependenciesBySubject.TryGetValue(card.Id, out var dependencyIds)
+                DependencyIds = cardDependenciesBySubject.TryGetValue(card.Id, out var dependencyIds)
                     ? dependencyIds
                     : Array.Empty<string>(),
                 Lanes = lanes
@@ -155,7 +163,7 @@ public sealed class GanttProjector
                 ParentId = milestone.ParentId,
                 PlannedDate = ValidDate(milestone.PlannedDate) ? milestone.PlannedDate : null,
                 IsCritical = criticalPathIds.Contains(milestone.Id),
-                DependencyIds = dependenciesBySubject.TryGetValue(milestone.Id, out var dependencyIds)
+                DependencyIds = milestoneDependenciesBySubject.TryGetValue(milestone.Id, out var dependencyIds)
                     ? dependencyIds
                     : Array.Empty<string>(),
                 State = ValidDate(milestone.PlannedDate) ? DataState.Known : DataState.Unknown

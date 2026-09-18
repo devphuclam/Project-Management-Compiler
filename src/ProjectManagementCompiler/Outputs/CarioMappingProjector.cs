@@ -81,7 +81,9 @@ public sealed record CarioChildMilestoneRow
 
 public sealed record CarioDependencyRow
 {
+    public string SubjectKind { get; init; } = string.Empty;
     public string SubjectId { get; init; } = string.Empty;
+    public string PredecessorKind { get; init; } = string.Empty;
     public string PredecessorId { get; init; } = string.Empty;
     public DependencyType DependencyType { get; init; }
     public ValidationState ValidationState { get; init; }
@@ -108,7 +110,7 @@ public sealed class CarioMappingProjector
         configuration ??= new CarioMappingConfiguration();
 
         var warnings = project.Warnings.ToList();
-        var warningIdsByTask = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var warningIdsByTask = new Dictionary<CanonicalWorkItemKey, List<string>>();
         var assignments = new List<CarioAssignmentRow>();
         foreach (var (assignment, index) in project.Assignments
                      .OrderBy(assignment => assignment.WorkItemId, StringComparer.Ordinal)
@@ -126,7 +128,7 @@ public sealed class CarioMappingProjector
                     $"CARIO role code '{carioCode}' is not supported; the exported role cell is left blank.",
                     assignment.SourceReferences);
                 warnings.Add(invalidCodeWarning);
-                AddTaskWarning(warningIdsByTask, assignment.WorkItemId, invalidCodeWarning.Id);
+                AddTaskWarning(warningIdsByTask, CanonicalWorkItemKey.DeliveryCard(assignment.WorkItemId), invalidCodeWarning.Id);
                 carioCode = null;
             }
 
@@ -143,7 +145,7 @@ public sealed class CarioMappingProjector
                     $"No concrete CARIO identity is configured for logical role '{assignment.LogicalRoleCode}'; the identity cell remains blank.",
                     assignment.SourceReferences);
                 warnings.Add(unresolvedWarning);
-                AddTaskWarning(warningIdsByTask, assignment.WorkItemId, unresolvedWarning.Id);
+                AddTaskWarning(warningIdsByTask, CanonicalWorkItemKey.DeliveryCard(assignment.WorkItemId), unresolvedWarning.Id);
             }
 
             assignments.Add(new CarioAssignmentRow
@@ -162,6 +164,7 @@ public sealed class CarioMappingProjector
             .Select(card =>
             {
                 configuration.TaskMappings.TryGetValue(card.Id, out var taskMapping);
+                AddTaskMappingWarnings(warnings, warningIdsByTask, CanonicalWorkItemKey.DeliveryCard(card.Id), card.Id, taskMapping, card.SourceReferences);
                 return new CarioTaskRow
                 {
                     WorkItemType = "DeliveryCard",
@@ -182,7 +185,7 @@ public sealed class CarioMappingProjector
                     Team = taskMapping?.Team,
                     Notes = taskMapping?.Notes,
                     SourceReference = FormatSourceReferences(card.SourceReferences),
-                    MappingWarningIds = warningIdsByTask.TryGetValue(card.Id, out var ids)
+                    MappingWarningIds = warningIdsByTask.TryGetValue(CanonicalWorkItemKey.DeliveryCard(card.Id), out var ids)
                         ? ids.OrderBy(id => id, StringComparer.Ordinal).ToArray()
                         : Array.Empty<string>()
                 };
@@ -194,6 +197,7 @@ public sealed class CarioMappingProjector
             .Select(milestone =>
             {
                 configuration.TaskMappings.TryGetValue(milestone.Id, out var taskMapping);
+                AddTaskMappingWarnings(warnings, warningIdsByTask, CanonicalWorkItemKey.Milestone(milestone.Id), milestone.Id, taskMapping, milestone.SourceReferences);
                 var phaseId = ResolveMilestonePhaseId(project, milestone.ParentId);
                 return new CarioTaskRow
                 {
@@ -212,7 +216,7 @@ public sealed class CarioMappingProjector
                     Team = taskMapping?.Team,
                     Notes = taskMapping?.Notes,
                     SourceReference = FormatSourceReferences(milestone.SourceReferences),
-                    MappingWarningIds = warningIdsByTask.TryGetValue(milestone.Id, out var ids)
+                    MappingWarningIds = warningIdsByTask.TryGetValue(CanonicalWorkItemKey.Milestone(milestone.Id), out var ids)
                         ? ids.OrderBy(id => id, StringComparer.Ordinal).ToArray()
                         : Array.Empty<string>()
                 };
@@ -255,11 +259,15 @@ public sealed class CarioMappingProjector
             .ToArray();
 
         var dependencies = project.Dependencies
-            .OrderBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+            .OrderBy(dependency => dependency.SubjectKind, StringComparer.Ordinal)
+            .ThenBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+            .ThenBy(dependency => dependency.PredecessorKind, StringComparer.Ordinal)
             .ThenBy(dependency => dependency.PredecessorId, StringComparer.Ordinal)
             .Select(dependency => new CarioDependencyRow
             {
+                SubjectKind = dependency.SubjectKind,
                 SubjectId = dependency.SubjectId,
+                PredecessorKind = dependency.PredecessorKind,
                 PredecessorId = dependency.PredecessorId,
                 DependencyType = dependency.DependencyType,
                 ValidationState = dependency.ValidationState,
@@ -355,15 +363,43 @@ public sealed class CarioMappingProjector
             ? parentId
             : null;
 
-    private static void AddTaskWarning(IDictionary<string, List<string>> warningIdsByTask, string taskId, string warningId)
+    private static void AddTaskWarning(IDictionary<CanonicalWorkItemKey, List<string>> warningIdsByTask, CanonicalWorkItemKey taskKey, string warningId)
     {
-        if (!warningIdsByTask.TryGetValue(taskId, out var warningIds))
+        if (!warningIdsByTask.TryGetValue(taskKey, out var warningIds))
         {
             warningIds = [];
-            warningIdsByTask[taskId] = warningIds;
+            warningIdsByTask[taskKey] = warningIds;
         }
 
         warningIds.Add(warningId);
+    }
+
+    private static void AddTaskMappingWarnings(
+        ICollection<ImportWarning> warnings,
+        IDictionary<CanonicalWorkItemKey, List<string>> warningIdsByTask,
+        CanonicalWorkItemKey taskKey,
+        string taskId,
+        CarioTaskMapping? taskMapping,
+        IReadOnlyList<SourceReference> sourceReferences)
+    {
+        var missingFields = new (string Code, string Label, string? Value)[]
+        {
+            ("CARIO_MAPPING_PRIORITY_UNRESOLVED", "priority", taskMapping?.Priority),
+            ("CARIO_MAPPING_DEPARTMENT_UNRESOLVED", "department", taskMapping?.Department),
+            ("CARIO_MAPPING_TEAM_UNRESOLVED", "team", taskMapping?.Team)
+        };
+
+        foreach (var (code, label, value) in missingFields.Where(field => string.IsNullOrWhiteSpace(field.Value)))
+        {
+            var warning = NewWarning(
+                $"{code}:{taskKey}",
+                code,
+                taskId,
+                $"No CARIO {label} mapping is configured; the exported cell remains intentionally blank.",
+                sourceReferences);
+            warnings.Add(warning);
+            AddTaskWarning(warningIdsByTask, taskKey, warning.Id);
+        }
     }
 
     private static ImportWarning NewWarning(

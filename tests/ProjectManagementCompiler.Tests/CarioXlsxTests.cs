@@ -30,7 +30,7 @@ internal static class CarioXlsxTests
             string.Join('|', ReadHeader(archive, "xl/worksheets/sheet3.xml")),
             "03_CHILDREN_MILESTONES must use the approved CARIO contract headers.");
         TestAssert.Equal(
-            "Task / Milestone ID|Depends On|Dependency Type|Analysis Eligibility|Validation State|Source Reference",
+            "Subject Kind|Subject ID|Predecessor Kind|Predecessor ID|Dependency Type|Analysis Eligibility|Validation State|Source Reference",
             string.Join('|', ReadHeader(archive, "xl/worksheets/sheet4.xml")),
             "04_DEPENDENCIES must use the approved CARIO contract headers.");
         TestAssert.Equal(

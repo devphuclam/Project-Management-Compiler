@@ -48,6 +48,7 @@ public sealed record DependencyNetworkProjection
 
 public sealed record DependencyNetworkNode
 {
+    public string Key { get; init; } = string.Empty;
     public string Id { get; init; } = string.Empty;
     public string Kind { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
@@ -57,8 +58,12 @@ public sealed record DependencyNetworkNode
 
 public sealed record DependencyNetworkEdge
 {
+    public string SubjectKind { get; init; } = string.Empty;
     public string SubjectId { get; init; } = string.Empty;
+    public string PredecessorKind { get; init; } = string.Empty;
     public string PredecessorId { get; init; } = string.Empty;
+    public string SubjectKey { get; init; } = string.Empty;
+    public string PredecessorKey { get; init; } = string.Empty;
     public DependencyType DependencyType { get; init; }
     public ValidationState ValidationState { get; init; }
     public bool IncludedInAnalysis { get; init; }
@@ -75,6 +80,7 @@ public sealed record CpmProjection
 
 public sealed record CpmProjectionRow
 {
+    public string NodeKind { get; init; } = string.Empty;
     public string NodeId { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
     public bool IsMilestone { get; init; }
@@ -100,8 +106,6 @@ public sealed record DashboardProjection
     public int Overdue { get; init; }
     public int CompletedLate { get; init; }
     public int AtRisk { get; init; }
-    public decimal? CompletionPercentage { get; init; }
-    public DataState CompletionState { get; init; } = DataState.Unknown;
     public DateOnly? BaselineFinish { get; init; }
     public DateOnly? CpmFinish { get; init; }
     public DateOnly? ForecastFinish { get; init; }
@@ -200,11 +204,13 @@ public sealed class ManagementViewProjector
 
     private static DependencyNetworkProjection BuildDependencyNetwork(CanonicalProject project)
     {
-        var nodeMap = new Dictionary<string, DependencyNetworkNode>(StringComparer.OrdinalIgnoreCase);
+        var nodeMap = new Dictionary<CanonicalWorkItemKey, DependencyNetworkNode>();
         foreach (var workPackage in project.WorkPackages)
         {
-            nodeMap.TryAdd(workPackage.Id, new DependencyNetworkNode
+            var key = CanonicalWorkItemKey.WorkPackage(workPackage.Id);
+            nodeMap.TryAdd(key, new DependencyNetworkNode
             {
+                Key = key.ToString(),
                 Id = workPackage.Id,
                 Kind = "WorkPackage",
                 Name = workPackage.Name
@@ -213,8 +219,10 @@ public sealed class ManagementViewProjector
 
         foreach (var card in project.DeliveryCards)
         {
-            nodeMap.TryAdd(card.Id, new DependencyNetworkNode
+            var key = CanonicalWorkItemKey.DeliveryCard(card.Id);
+            nodeMap.TryAdd(key, new DependencyNetworkNode
             {
+                Key = key.ToString(),
                 Id = card.Id,
                 Kind = "DeliveryCard",
                 Name = card.Name,
@@ -224,8 +232,10 @@ public sealed class ManagementViewProjector
 
         foreach (var milestone in project.Milestones)
         {
-            nodeMap.TryAdd(milestone.Id, new DependencyNetworkNode
+            var key = CanonicalWorkItemKey.Milestone(milestone.Id);
+            nodeMap.TryAdd(key, new DependencyNetworkNode
             {
+                Key = key.ToString(),
                 Id = milestone.Id,
                 Kind = "Milestone",
                 Name = milestone.Name,
@@ -235,14 +245,21 @@ public sealed class ManagementViewProjector
         }
 
         var edges = project.Dependencies
-            .OrderBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+            .OrderBy(dependency => dependency.SubjectKind, StringComparer.Ordinal)
+            .ThenBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+            .ThenBy(dependency => dependency.PredecessorKind, StringComparer.Ordinal)
             .ThenBy(dependency => dependency.PredecessorId, StringComparer.Ordinal)
             .Select(dependency =>
             {
-                var subjectExists = nodeMap.ContainsKey(dependency.SubjectId);
-                var predecessorExists = nodeMap.ContainsKey(dependency.PredecessorId);
+                var subjectKey = new CanonicalWorkItemKey(dependency.SubjectKind, dependency.SubjectId);
+                var predecessorKey = new CanonicalWorkItemKey(dependency.PredecessorKind, dependency.PredecessorId);
+                var subjectExists = nodeMap.ContainsKey(subjectKey);
+                var predecessorExists = nodeMap.ContainsKey(predecessorKey);
+                var workPackageTraceability = string.Equals(subjectKey.Kind, "WorkPackage", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(predecessorKey.Kind, "WorkPackage", StringComparison.OrdinalIgnoreCase);
                 var included = subjectExists
                     && predecessorExists
+                    && !workPackageTraceability
                     && dependency.AnalysisEligible
                     && dependency.ValidationState != ValidationState.InvalidSourceEvidence
                     && dependency.DependencyType == DependencyType.FinishToStart;
@@ -250,6 +267,8 @@ public sealed class ManagementViewProjector
                     ? dependency.ValidationState == ValidationState.InvalidSourceEvidence ? "INVALID_SOURCE_EVIDENCE" : "MISSING_NODE"
                     : dependency.ValidationState == ValidationState.InvalidSourceEvidence
                         ? "INVALID_SOURCE_EVIDENCE"
+                        : workPackageTraceability
+                            ? "WORK_PACKAGE_TRACEABILITY"
                         : !dependency.AnalysisEligible
                             ? "NOT_ANALYSIS_ELIGIBLE"
                             : dependency.DependencyType != DependencyType.FinishToStart
@@ -257,8 +276,12 @@ public sealed class ManagementViewProjector
                                 : "INCLUDED";
                 return new DependencyNetworkEdge
                 {
+                    SubjectKind = dependency.SubjectKind,
                     SubjectId = dependency.SubjectId,
+                    PredecessorKind = dependency.PredecessorKind,
                     PredecessorId = dependency.PredecessorId,
+                    SubjectKey = subjectKey.ToString(),
+                    PredecessorKey = predecessorKey.ToString(),
                     DependencyType = dependency.DependencyType,
                     ValidationState = dependency.ValidationState,
                     IncludedInAnalysis = included,
@@ -269,7 +292,10 @@ public sealed class ManagementViewProjector
 
         return new DependencyNetworkProjection
         {
-            Nodes = nodeMap.Values.OrderBy(node => node.Id, StringComparer.Ordinal).ToArray(),
+            Nodes = nodeMap.Values
+                .OrderBy(node => node.Kind, StringComparer.Ordinal)
+                .ThenBy(node => node.Id, StringComparer.Ordinal)
+                .ToArray(),
             Edges = edges
         };
     }
@@ -291,6 +317,7 @@ public sealed class ManagementViewProjector
                 .OrderBy(node => node.NodeId, StringComparer.Ordinal)
                 .Select(node => new CpmProjectionRow
                 {
+                    NodeKind = node.NodeKind,
                     NodeId = node.NodeId,
                     Name = names.TryGetValue(node.NodeId, out var name) ? name.Name : node.NodeId,
                     IsMilestone = names.TryGetValue(node.NodeId, out name) && name.IsMilestone,
@@ -310,16 +337,6 @@ public sealed class ManagementViewProjector
     private static DashboardProjection BuildDashboard(CanonicalProject project, ManagementAnalysis analysis)
     {
         var counts = analysis.ExecutionStatus;
-        var hasExecutionEvidence = project.ExecutionOverlay.Records.Any(record =>
-            record.LastUpdatedAt is not null
-            && (record.ActualStart is not null
-                || record.ActualFinish is not null
-                || record.ActualEffortHours is not null
-                || record.RemainingEffortHours is not null
-                || record.ExecutionState != ExecutionState.NotStarted));
-        decimal? completionPercentage = hasExecutionEvidence && counts.Total > 0
-            ? decimal.Round(counts.Completed * 100m / counts.Total, 2)
-            : null;
 
         return new DashboardProjection
         {
@@ -333,8 +350,6 @@ public sealed class ManagementViewProjector
             Overdue = counts.Overdue,
             CompletedLate = counts.CompletedLate,
             AtRisk = counts.AtRisk,
-            CompletionPercentage = completionPercentage,
-            CompletionState = completionPercentage is null ? DataState.Unknown : DataState.Calculated,
             BaselineFinish = analysis.BaselineFinish,
             CpmFinish = analysis.CalculatedFinish,
             ForecastFinish = analysis.ForecastFinish,

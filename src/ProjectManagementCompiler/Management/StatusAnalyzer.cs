@@ -163,10 +163,16 @@ public sealed class StatusAnalyzer
         }
 
         var atRisk = 0;
+        var delayedPredecessorsBySuccessor = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var dependency in project.Dependencies
                      .Where(dependency => dependency.AnalysisEligible
-                         && dependency.DependencyType == DependencyType.FinishToStart)
-                     .OrderBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+                         && dependency.DependencyType == DependencyType.FinishToStart
+                         && dependency.ValidationState != ValidationState.InvalidSourceEvidence
+                         && string.Equals(CanonicalWorkItemKey.NormalizeKind(dependency.SubjectKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase)
+                         && string.Equals(CanonicalWorkItemKey.NormalizeKind(dependency.PredecessorKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(dependency => dependency.SubjectKind, StringComparer.Ordinal)
+                     .ThenBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+                     .ThenBy(dependency => dependency.PredecessorKind, StringComparer.Ordinal)
                      .ThenBy(dependency => dependency.PredecessorId, StringComparer.Ordinal))
         {
             if (!cards.TryGetValue(dependency.SubjectId, out var successor))
@@ -192,14 +198,26 @@ public sealed class StatusAnalyzer
                 continue;
             }
 
+            if (!delayedPredecessorsBySuccessor.TryGetValue(successor.Id, out var delayedPredecessors))
+            {
+                delayedPredecessors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                delayedPredecessorsBySuccessor[successor.Id] = delayedPredecessors;
+            }
+
+            delayedPredecessors.Add(dependency.PredecessorId);
+        }
+
+        foreach (var (successorId, delayedPredecessors) in delayedPredecessorsBySuccessor.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var reasons = delayedPredecessors.OrderBy(id => id, StringComparer.Ordinal).ToArray();
             atRisk++;
             alerts.Add(new Alert
             {
-                WorkItemId = successor.Id,
+                WorkItemId = successorId,
                 AlertCode = "AT_RISK",
                 Severity = WarningSeverity.Warning,
-                Message = $"Work item '{successor.Id}' may be at risk because predecessor '{dependency.PredecessorId}' is late.",
-                ReasonWorkItemIds = [dependency.PredecessorId],
+                Message = $"Work item '{successorId}' may be at risk because predecessor(s) '{string.Join("', '", reasons)}' are late.",
+                ReasonWorkItemIds = reasons,
                 DerivedAt = asOfDate
             });
         }

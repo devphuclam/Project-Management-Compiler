@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const state = { project: null, views: null, warnings: [], activeView: "dashboard" };
+  const state = { project: null, sources: [], views: null, warnings: [], activeView: "dashboard" };
   const byId = (id) => document.getElementById(id);
 
   function node(tag, text, className) {
@@ -224,15 +224,15 @@
   }
 
   function renderDependencies(view) {
-    return renderTable(["Subject", "Predecessor", "Type", "Validation", "Included", "Reason"], (view.edges || []).map(edge => [
-      edge.subjectId, edge.predecessorId, edge.dependencyType, edge.validationState,
+    return renderTable(["Subject kind", "Subject", "Predecessor kind", "Predecessor", "Type", "Validation", "Included", "Reason"], (view.edges || []).map(edge => [
+      edge.subjectKind, edge.subjectId, edge.predecessorKind, edge.predecessorId, edge.dependencyType, edge.validationState,
       edge.includedInAnalysis ? "YES" : "NO", edge.reason
     ]));
   }
 
   function renderCpm(view) {
-    return renderTable(["Node", "Name", "ES", "EF", "LS", "LF", "Float", "Critical", "Calculated finish"], (view.rows || []).map(row => [
-      row.nodeId, row.name, row.earliestStartWorkingMinutes, row.earliestFinishWorkingMinutes,
+    return renderTable(["Node kind", "Node", "Name", "ES", "EF", "LS", "LF", "Float", "Critical", "Calculated finish"], (view.rows || []).map(row => [
+      row.nodeKind, row.nodeId, row.name, row.earliestStartWorkingMinutes, row.earliestFinishWorkingMinutes,
       row.latestStartWorkingMinutes, row.latestFinishWorkingMinutes, row.floatWorkingMinutes,
       row.isCritical ? "YES" : "NO", row.calculatedFinish || "UNKNOWN"
     ]));
@@ -263,6 +263,25 @@
       ["Planning window", (project.baseline.planningStart || "UNKNOWN") + " → " + (project.baseline.planningFinish || "UNKNOWN")],
       ["Target date", project.baseline.targetDate || "UNKNOWN"], ["Sources", (project.project.sourceIds || []).join(", ")]
     ]));
+    section.appendChild(node("h3", "Captured source metadata"));
+    const sourceRows = state.sources.flatMap(source => (source.documents || []).map(document => [
+      source.sourceId,
+      source.repository || "UNKNOWN",
+      source.resolvedRef || "UNKNOWN",
+      source.captureState || "UNKNOWN",
+      source.capturedAtUtc || "UNKNOWN",
+      document.documentId,
+      document.relativeFile,
+      document.format,
+      document.sizeBytes,
+      document.provenance && document.provenance.extractionRule
+        ? document.provenance.extractionRule
+        : "UNKNOWN"
+    ]));
+    section.appendChild(renderTable(
+      ["Source ID", "Repository", "Resolved ref", "Capture state", "Captured at", "Document ID", "Relative file", "Format", "Size (bytes)", "Provenance"],
+      sourceRows.length ? sourceRows : [["UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"]]
+    ));
     section.appendChild(node("h3", "Warnings"));
     section.appendChild(renderWarnings(state.warnings));
     return section;
@@ -287,6 +306,7 @@
 
   function applySummary(summary) {
     state.project = { project: summary.project, baseline: summary.baseline, analysis: summary.analysis };
+    state.sources = summary.sources || [];
     state.views = summary.views;
     state.warnings = summary.warnings || [];
     renderSummary(summary);
@@ -315,6 +335,7 @@
       const warnings = await request("/api/warnings");
       state.views = views;
       state.project = project;
+      state.sources = project.sources || [];
       state.warnings = warnings;
       renderActiveView();
       setStatus("Analysis refreshed.");
@@ -385,4 +406,7 @@
   byId("execution-form").addEventListener("submit", applyExecution);
   byId("save-json-button").addEventListener("click", () => { window.location.href = "/api/exports/project.json"; });
   byId("export-xlsx-button").addEventListener("click", () => { window.location.href = "/api/exports/cario.xlsx"; });
+  if (!byId("as-of-date").value) {
+    byId("as-of-date").value = new Date().toISOString().slice(0, 10);
+  }
 })();

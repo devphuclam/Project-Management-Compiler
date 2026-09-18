@@ -57,6 +57,8 @@ public sealed class ProjectCompiler : IProjectCompiler
                 }]);
         }
 
+        var asOfDate = RequireAsOfDate(request.AsOfDate, "compile-request");
+
         var snapshot = await sourceAdapter.CaptureAsync(new SourceRequest
         {
             Location = request.SourcePath,
@@ -67,7 +69,7 @@ public sealed class ProjectCompiler : IProjectCompiler
         var resolution = AuthorityResolution.Resolve(snapshot);
         var extracted = extractor.Extract(resolution);
         var project = normalizer.Normalize(extracted);
-        return BuildResult(project, request.AsOfDate ?? TodayUtc(), request.Mapping);
+        return BuildResult(project, asOfDate, request.Mapping);
     }
 
     public CompilationResult Reopen(string json, DateOnly? asOfDate = null, CarioMappingConfiguration? mapping = null)
@@ -85,10 +87,12 @@ public sealed class ProjectCompiler : IProjectCompiler
                 }]);
         }
 
+        var requiredAsOfDate = RequireAsOfDate(asOfDate, "reopen");
+
         try
         {
             var project = jsonSerializer.Deserialize(json);
-            return BuildResult(project, asOfDate ?? TodayUtc(), mapping ?? new CarioMappingConfiguration());
+            return BuildResult(project, requiredAsOfDate, mapping ?? new CarioMappingConfiguration());
         }
         catch (ProjectCompilationException)
         {
@@ -124,10 +128,24 @@ public sealed class ProjectCompiler : IProjectCompiler
             };
         }
 
+        var requiredAsOfDate = asOfDate ?? current.Analysis.AsOfDate;
+        if (requiredAsOfDate is null)
+        {
+            throw new ProjectCompilationException(
+                "execution",
+                [new ImportWarning
+                {
+                    Id = "MISSING_AS_OF_DATE",
+                    Severity = WarningSeverity.Error,
+                    Code = "MISSING_AS_OF_DATE",
+                    Message = "An explicit as-of date is required to recalculate execution analysis."
+                }]);
+        }
+
         return new ExecutionApplicationResult
         {
             Accepted = true,
-            Result = BuildResult(updateResult.Project, asOfDate ?? current.Analysis.AsOfDate ?? TodayUtc(), current.Mapping),
+            Result = BuildResult(updateResult.Project, requiredAsOfDate.Value, current.Mapping),
             Diagnostics = updateResult.Diagnostics
         };
     }
@@ -178,5 +196,21 @@ public sealed class ProjectCompiler : IProjectCompiler
         };
     }
 
-    private static DateOnly TodayUtc() => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly RequireAsOfDate(DateOnly? asOfDate, string phase)
+    {
+        if (asOfDate is not null)
+        {
+            return asOfDate.Value;
+        }
+
+        throw new ProjectCompilationException(
+            phase,
+            [new ImportWarning
+            {
+                Id = "MISSING_AS_OF_DATE",
+                Severity = WarningSeverity.Error,
+                Code = "MISSING_AS_OF_DATE",
+                Message = "An explicit as-of date is required; the compiler never derives one from the system clock."
+            }]);
+    }
 }

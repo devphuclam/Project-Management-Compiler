@@ -16,6 +16,8 @@ internal static class CarioMappingTests
         TestAssert.Equal(project.Assignments.Count, result.Assignments.Count, "CARIO mapping must preserve every assignment row.");
         TestAssert.True(result.Assignments.All(assignment => string.IsNullOrEmpty(assignment.ConcreteIdentity)), "Default mapping must not fabricate concrete employees.");
         TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_UNRESOLVED"), "Unresolved identity mapping must emit a structured warning.");
+        TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_PRIORITY_UNRESOLVED"), "Missing task priority mapping must remain an explicit warning.");
+        TestAssert.True(result.Tasks.All(task => task.Priority is null), "Missing priority mappings must remain blank rather than guessed.");
         TestAssert.True(result.Assignments.Select(assignment => assignment.CarioRoleCode).Where(code => code is not null).All(code => new[] { "A", "R+", "R", "C", "I", "O" }.Contains(code!)), "All emitted CARIO role codes must be contract-valid.");
     }
 
@@ -53,6 +55,9 @@ internal static class CarioMappingTests
         TestAssert.Equal(new DateOnly(2026, 9, 18), task.PlannedStart, "CARIO planned start must come from the immutable baseline.");
         TestAssert.Equal(new DateOnly(2026, 9, 18), task.PlannedDeadline, "CARIO planned deadline must come from the immutable baseline.");
         TestAssert.Equal("HIGH", task.Priority, "Configured task priority must be projected.");
+        TestAssert.False(task.MappingWarningIds.Any(id => id.Contains("CARIO_MAPPING_PRIORITY_UNRESOLVED", StringComparison.Ordinal)), "Configured priority must clear the priority warning for that task.");
+        TestAssert.False(task.MappingWarningIds.Any(id => id.Contains("CARIO_MAPPING_DEPARTMENT_UNRESOLVED", StringComparison.Ordinal)), "Configured department must clear the department warning for that task.");
+        TestAssert.False(task.MappingWarningIds.Any(id => id.Contains("CARIO_MAPPING_TEAM_UNRESOLVED", StringComparison.Ordinal)), "Configured team must clear the team warning for that task.");
         TestAssert.Equal("configured-identity", result.Assignments.First(assignment => assignment.TaskId == "P01-A").ConcreteIdentity, "Configured role identity must be projected.");
         TestAssert.False(result.Tasks.Any(task => task.TaskId == "P01-A" && task.PlannedStart == new DateOnly(2026, 9, 21)), "Actual start must never overwrite the CARIO planned start.");
     }

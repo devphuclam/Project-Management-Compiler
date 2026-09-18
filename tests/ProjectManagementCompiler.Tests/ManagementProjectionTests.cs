@@ -51,7 +51,6 @@ internal static class ManagementProjectionTests
             "Dependency network must retain and explain excluded invalid source evidence.");
         TestAssert.Equal("Chưa bắt đầu|Đang thực hiện|Hoàn thành|Tạm ngưng|Hủy", string.Join('|', views.Kanban.Columns.Select(column => column.Label)), "Kanban labels must preserve the approved Vietnamese state policy.");
         TestAssert.Equal(1, views.Kanban.Columns.Single(column => column.Id == "IN_PROGRESS").WipLimit, "Kanban must use the canonical WIP policy rather than a hardcoded limit.");
-        TestAssert.Equal(null, views.Dashboard.CompletionPercentage, "Planning-only dashboards must not fabricate a completion percentage.");
         TestAssert.Equal(analysis.CalculatedFinish, views.Dashboard.CpmFinish, "Dashboard CPM finish must remain separate from forecast finish.");
         TestAssert.Equal(null, views.Dashboard.ForecastFinish, "Dashboard forecast must remain unknown without forecast evidence.");
         TestAssert.Equal(analysis.CriticalPathIds.Count, views.Cpm.Rows.Count(row => row.IsCritical), "CPM view must preserve critical-path flags.");

@@ -203,7 +203,10 @@ app.MapGet("/api/exports/project.json", (IProjectCompiler compiler, CompilerAppl
     var current = state.Current;
     return current is null
         ? Results.NotFound(new ApiErrorResponse { Code = "NO_PROJECT", Message = "No compiled project is loaded.", Phase = "export" })
-        : Results.File(System.Text.Encoding.UTF8.GetBytes(compiler.SaveJson(current)), "application/json", "project.json");
+        : Results.File(
+            System.Text.Encoding.UTF8.GetBytes(compiler.SaveJson(current)),
+            "application/json",
+            $"{SanitizeFileName(current.Project.Project.Name)}_project.json");
 });
 
 app.MapGet("/api/exports/cario.xlsx", (IProjectCompiler compiler, CompilerApplicationState state) =>
@@ -225,11 +228,55 @@ static object ToApplicationSummary(CompilationResult result) => new
 {
     project = result.Project.Project,
     baseline = result.Project.Baseline,
+    sources = result.Project.Sources.Select(source => new
+    {
+        sourceId = source.Id,
+        kind = source.Kind,
+        repository = SafeRepositoryIdentity(source),
+        resolvedRef = source.ResolvedRef,
+        captureState = source.CaptureState,
+        capturedAtUtc = source.CapturedAtUtc,
+        documents = source.Documents.Select(document => new
+        {
+            documentId = document.Id,
+            relativeFile = document.RelativeFile,
+            format = document.Format,
+            sizeBytes = document.SizeBytes,
+            provenance = new
+            {
+                sourceId = document.SourceReference.SourceId,
+                repository = SafeRepositoryIdentity(source),
+                resolvedRef = document.SourceReference.ResolvedRef,
+                relativeFile = document.SourceReference.RelativeFile,
+                extractionRule = document.SourceReference.ExtractionRule,
+                section = document.SourceReference.Section,
+                table = document.SourceReference.Table,
+                item = document.SourceReference.Item,
+                confidenceState = document.SourceReference.ConfidenceState,
+                validationState = document.SourceReference.ValidationState
+            }
+        }).ToArray()
+    }).ToArray(),
     analysis = result.Analysis,
     views = result.Views,
     warnings = result.Warnings,
     semanticDigest = result.SemanticDigest
 };
+
+static string SafeRepositoryIdentity(ProjectSource source)
+{
+    var repository = source.Repository?.Trim() ?? string.Empty;
+    if (repository.Length == 0
+        || Path.IsPathRooted(repository)
+        || repository.Contains('\\')
+        || repository.Contains(':')
+        || (Uri.TryCreate(repository, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.UserInfo)))
+    {
+        return source.Id;
+    }
+
+    return repository;
+}
 
 static ApiErrorResponse ToError(ProjectCompilationException exception) => new()
 {
@@ -242,7 +289,26 @@ static ApiErrorResponse ToError(ProjectCompilationException exception) => new()
 static string SanitizeFileName(string value)
 {
     var invalid = Path.GetInvalidFileNameChars();
-    var safe = new string(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim();
+    var builder = new System.Text.StringBuilder();
+    var separatorPending = false;
+    foreach (var character in value.Trim())
+    {
+        if (char.IsWhiteSpace(character) || invalid.Contains(character))
+        {
+            separatorPending = builder.Length > 0;
+            continue;
+        }
+
+        if (separatorPending)
+        {
+            builder.Append('_');
+            separatorPending = false;
+        }
+
+        builder.Append(character);
+    }
+
+    var safe = builder.ToString().Trim('_');
     return string.IsNullOrWhiteSpace(safe) ? "Project" : safe;
 }
 

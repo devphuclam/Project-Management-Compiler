@@ -19,13 +19,13 @@ public sealed class DependencyNetworkAnalyzer
         var diagnostics = new List<ImportWarning>();
         var nodeDefinitions = project.DeliveryCards
             .Select(card => new NodeDefinition(
-                card.Id,
+                CanonicalWorkItemKey.DeliveryCard(card.Id),
                 card.PlannedDurationWorkingMinutes,
                 card.DurationState,
                 card.PlannedStart,
                 card.PlannedFinish))
             .Concat(project.Milestones.Select(milestone => new NodeDefinition(
-                milestone.Id,
+                CanonicalWorkItemKey.Milestone(milestone.Id),
                 milestone.PlannedDurationWorkingMinutes,
                 milestone.PlannedDurationWorkingMinutes is null ? DataState.Unknown : DataState.Known,
                 milestone.PlannedDate,
@@ -33,14 +33,15 @@ public sealed class DependencyNetworkAnalyzer
             .ToArray();
 
         var duplicateNodeIds = nodeDefinitions
-            .GroupBy(node => node.Id, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(node => node.Key)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
-            .OrderBy(id => id, StringComparer.Ordinal)
+            .OrderBy(key => key.Kind, StringComparer.Ordinal)
+            .ThenBy(key => key.Id, StringComparer.Ordinal)
             .ToArray();
         foreach (var duplicateNodeId in duplicateNodeIds)
         {
-            AddDiagnostic(diagnostics, "DUPLICATE_DEPENDENCY_NODE", WarningSeverity.Error, $"Dependency graph contains duplicate node '{duplicateNodeId}'.", duplicateNodeId);
+            AddDiagnostic(diagnostics, "DUPLICATE_DEPENDENCY_NODE", WarningSeverity.Error, $"Dependency graph contains duplicate node '{duplicateNodeId}'.", duplicateNodeId.Id);
         }
 
         if (duplicateNodeIds.Length > 0)
@@ -48,20 +49,25 @@ public sealed class DependencyNetworkAnalyzer
             return Unknown(diagnostics);
         }
 
-        var nodes = nodeDefinitions.ToDictionary(node => node.Id, StringComparer.OrdinalIgnoreCase);
+        var nodes = nodeDefinitions.ToDictionary(node => node.Key);
         foreach (var node in nodeDefinitions)
         {
             if (node.Duration is null || node.Duration < 0 || node.DurationState != DataState.Known)
             {
-                AddDiagnostic(diagnostics, "MISSING_DEPENDENCY_DURATION", WarningSeverity.Error, $"Dependency node '{node.Id}' does not have a safe normalized duration.", node.Id);
+                AddDiagnostic(diagnostics, "MISSING_DEPENDENCY_DURATION", WarningSeverity.Error, $"Dependency node '{node.Key}' does not have a safe normalized duration.", node.Key.Id);
             }
         }
 
         var edges = new List<GraphEdge>();
         foreach (var dependency in project.Dependencies
-                     .OrderBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+                     .OrderBy(dependency => dependency.SubjectKind, StringComparer.Ordinal)
+                     .ThenBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+                     .ThenBy(dependency => dependency.PredecessorKind, StringComparer.Ordinal)
                      .ThenBy(dependency => dependency.PredecessorId, StringComparer.Ordinal))
         {
+            var subjectKey = new CanonicalWorkItemKey(dependency.SubjectKind, dependency.SubjectId);
+            var predecessorKey = new CanonicalWorkItemKey(dependency.PredecessorKind, dependency.PredecessorId);
+
             if (!dependency.AnalysisEligible)
             {
                 if (dependency.ValidationState == ValidationState.InvalidSourceEvidence)
@@ -77,6 +83,14 @@ public sealed class DependencyNetworkAnalyzer
                 continue;
             }
 
+            // Work-package dependencies remain traceability edges. CPM is only
+            // calculated over executable cards and milestone/decision nodes.
+            if (string.Equals(subjectKey.Kind, "WorkPackage", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(predecessorKey.Kind, "WorkPackage", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (dependency.DependencyType != DependencyType.FinishToStart)
             {
                 AddDiagnostic(
@@ -88,25 +102,25 @@ public sealed class DependencyNetworkAnalyzer
                 continue;
             }
 
-            if (string.Equals(dependency.SubjectId, dependency.PredecessorId, StringComparison.OrdinalIgnoreCase))
+            if (subjectKey == predecessorKey)
             {
                 AddDiagnostic(diagnostics, "SELF_DEPENDENCY", WarningSeverity.Error, $"Dependency node '{dependency.SubjectId}' cannot depend on itself.", dependency.SubjectId);
                 continue;
             }
 
-            if (!nodes.ContainsKey(dependency.SubjectId))
+            if (!nodes.ContainsKey(subjectKey))
             {
                 AddDiagnostic(diagnostics, "MISSING_DEPENDENCY_SUBJECT", WarningSeverity.Error, $"Dependency subject '{dependency.SubjectId}' is missing from the CPM graph.", dependency.SubjectId);
                 continue;
             }
 
-            if (!nodes.ContainsKey(dependency.PredecessorId))
+            if (!nodes.ContainsKey(predecessorKey))
             {
                 AddDiagnostic(diagnostics, "MISSING_DEPENDENCY_PREDECESSOR", WarningSeverity.Error, $"Dependency predecessor '{dependency.PredecessorId}' is missing from the CPM graph.", dependency.PredecessorId);
                 continue;
             }
 
-            edges.Add(new GraphEdge(dependency.PredecessorId, dependency.SubjectId));
+            edges.Add(new GraphEdge(predecessorKey, subjectKey));
         }
 
         if (diagnostics.Any(diagnostic => diagnostic.Severity == WarningSeverity.Error))
@@ -114,25 +128,25 @@ public sealed class DependencyNetworkAnalyzer
             return Unknown(diagnostics);
         }
 
-        var predecessors = nodes.Keys.ToDictionary(id => id, _ => new List<string>(), StringComparer.OrdinalIgnoreCase);
-        var successors = nodes.Keys.ToDictionary(id => id, _ => new List<string>(), StringComparer.OrdinalIgnoreCase);
+        var predecessors = nodes.Keys.ToDictionary(key => key, _ => new List<CanonicalWorkItemKey>());
+        var successors = nodes.Keys.ToDictionary(key => key, _ => new List<CanonicalWorkItemKey>());
         foreach (var edge in edges.Distinct())
         {
-            predecessors[edge.SubjectId].Add(edge.PredecessorId);
-            successors[edge.PredecessorId].Add(edge.SubjectId);
+            predecessors[edge.Subject].Add(edge.Predecessor);
+            successors[edge.Predecessor].Add(edge.Subject);
         }
 
-        var indegree = nodes.Keys.ToDictionary(id => id, id => predecessors[id].Count, StringComparer.OrdinalIgnoreCase);
-        var ready = new SortedSet<string>(
+        var indegree = nodes.Keys.ToDictionary(key => key, key => predecessors[key].Count);
+        var ready = new SortedSet<CanonicalWorkItemKey>(
             indegree.Where(pair => pair.Value == 0).Select(pair => pair.Key),
-            StringComparer.Ordinal);
-        var topologicalOrder = new List<string>(nodes.Count);
+            WorkItemKeyComparer.Instance);
+        var topologicalOrder = new List<CanonicalWorkItemKey>(nodes.Count);
         while (ready.Count > 0)
         {
             var current = ready.Min!;
             ready.Remove(current);
             topologicalOrder.Add(current);
-            foreach (var successor in successors[current].OrderBy(id => id, StringComparer.Ordinal))
+            foreach (var successor in successors[current].OrderBy(key => key.Kind, StringComparer.Ordinal).ThenBy(key => key.Id, StringComparer.Ordinal))
             {
                 indegree[successor]--;
                 if (indegree[successor] == 0)
@@ -148,32 +162,34 @@ public sealed class DependencyNetworkAnalyzer
             return Unknown(diagnostics);
         }
 
-        var earliestStart = nodes.Keys.ToDictionary(id => id, _ => 0, StringComparer.OrdinalIgnoreCase);
-        var earliestFinish = nodes.Keys.ToDictionary(id => id, _ => 0, StringComparer.OrdinalIgnoreCase);
-        foreach (var nodeId in topologicalOrder)
+        var earliestStart = nodes.Keys.ToDictionary(key => key, _ => 0);
+        var earliestFinish = nodes.Keys.ToDictionary(key => key, _ => 0);
+        foreach (var nodeKey in topologicalOrder)
         {
-            earliestStart[nodeId] = predecessors[nodeId].Count == 0
+            earliestStart[nodeKey] = predecessors[nodeKey].Count == 0
                 ? 0
-                : predecessors[nodeId].Max(predecessorId => earliestFinish[predecessorId]);
-            earliestFinish[nodeId] = earliestStart[nodeId] + nodes[nodeId].Duration!.Value;
+                : predecessors[nodeKey].Max(predecessorKey => earliestFinish[predecessorKey]);
+            earliestFinish[nodeKey] = earliestStart[nodeKey] + nodes[nodeKey].Duration!.Value;
         }
 
         var projectDuration = earliestFinish.Values.DefaultIfEmpty(0).Max();
-        var latestFinish = nodes.Keys.ToDictionary(id => id, _ => projectDuration, StringComparer.OrdinalIgnoreCase);
-        var latestStart = nodes.Keys.ToDictionary(id => id, _ => 0, StringComparer.OrdinalIgnoreCase);
-        foreach (var nodeId in topologicalOrder.AsEnumerable().Reverse())
+        var latestFinish = nodes.Keys.ToDictionary(key => key, _ => projectDuration);
+        var latestStart = nodes.Keys.ToDictionary(key => key, _ => 0);
+        foreach (var nodeKey in topologicalOrder.AsEnumerable().Reverse())
         {
-            if (successors[nodeId].Count > 0)
+            if (successors[nodeKey].Count > 0)
             {
-                latestFinish[nodeId] = successors[nodeId].Min(successorId => latestStart[successorId]);
+                latestFinish[nodeKey] = successors[nodeKey].Min(successorKey => latestStart[successorKey]);
             }
 
-            latestStart[nodeId] = latestFinish[nodeId] - nodes[nodeId].Duration!.Value;
+            latestStart[nodeKey] = latestFinish[nodeKey] - nodes[nodeKey].Duration!.Value;
         }
 
         var criticalPathIds = nodes.Keys
-            .Where(id => latestStart[id] - earliestStart[id] == 0)
-            .OrderBy(id => id, StringComparer.Ordinal)
+            .Where(key => latestStart[key] - earliestStart[key] == 0)
+            .OrderBy(key => key.Kind, StringComparer.Ordinal)
+            .ThenBy(key => key.Id, StringComparer.Ordinal)
+            .Select(key => key.Id)
             .ToArray();
         var calendar = new WorkingCalendar(project.Capacity.Calendar);
         var anchor = ValidDate(project.Baseline.PlanningStart)
@@ -186,18 +202,20 @@ public sealed class DependencyNetworkAnalyzer
             : null;
         var scheduleVariance = BuildScheduleVariance(project.Baseline.PlanningFinish, calculatedFinish, calendar);
         var metrics = nodeDefinitions
-            .OrderBy(node => node.Id, StringComparer.Ordinal)
+            .OrderBy(node => node.Key.Kind, StringComparer.Ordinal)
+            .ThenBy(node => node.Key.Id, StringComparer.Ordinal)
             .Select(node => new CpmNodeMetric
             {
-                NodeId = node.Id,
-                EarliestStartWorkingMinutes = earliestStart[node.Id],
-                EarliestFinishWorkingMinutes = earliestFinish[node.Id],
-                LatestStartWorkingMinutes = latestStart[node.Id],
-                LatestFinishWorkingMinutes = latestFinish[node.Id],
-                FloatWorkingMinutes = latestStart[node.Id] - earliestStart[node.Id],
-                IsCritical = latestStart[node.Id] - earliestStart[node.Id] == 0,
-                CalculatedStart = hasAnchor ? calendar.AddWorkingMinutes(anchorDate, earliestStart[node.Id]) : null,
-                CalculatedFinish = hasAnchor ? calendar.AddWorkingMinutes(anchorDate, Math.Max(0, earliestFinish[node.Id] - 1)) : null
+                NodeId = node.Key.Id,
+                NodeKind = node.Key.Kind,
+                EarliestStartWorkingMinutes = earliestStart[node.Key],
+                EarliestFinishWorkingMinutes = earliestFinish[node.Key],
+                LatestStartWorkingMinutes = latestStart[node.Key],
+                LatestFinishWorkingMinutes = latestFinish[node.Key],
+                FloatWorkingMinutes = latestStart[node.Key] - earliestStart[node.Key],
+                IsCritical = latestStart[node.Key] - earliestStart[node.Key] == 0,
+                CalculatedStart = hasAnchor ? calendar.DateForStartOffset(anchorDate, earliestStart[node.Key]) : null,
+                CalculatedFinish = hasAnchor ? calendar.DateForFinishOffset(anchorDate, earliestFinish[node.Key]) : null
             })
             .ToArray();
 
@@ -244,11 +262,24 @@ public sealed class DependencyNetworkAnalyzer
     private static bool ValidDate(DateOnly? date) => date is not null && date != DateOnly.MinValue;
 
     private sealed record NodeDefinition(
-        string Id,
+        CanonicalWorkItemKey Key,
         int? Duration,
         DataState DurationState,
         DateOnly? PlannedStart,
         DateOnly? PlannedFinish);
 
-    private readonly record struct GraphEdge(string PredecessorId, string SubjectId);
+    private readonly record struct GraphEdge(CanonicalWorkItemKey Predecessor, CanonicalWorkItemKey Subject);
+
+    private sealed class WorkItemKeyComparer : IComparer<CanonicalWorkItemKey>
+    {
+        public static WorkItemKeyComparer Instance { get; } = new();
+
+        public int Compare(CanonicalWorkItemKey left, CanonicalWorkItemKey right)
+        {
+            var kindComparison = StringComparer.Ordinal.Compare(left.Kind, right.Kind);
+            return kindComparison != 0
+                ? kindComparison
+                : StringComparer.Ordinal.Compare(left.Id, right.Id);
+        }
+    }
 }
