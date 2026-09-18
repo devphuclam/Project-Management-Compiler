@@ -36,6 +36,13 @@ internal static class Program
         ("FixtureCaptureWorksAgainstRealFileSystem", SourceCaptureTests.FixtureCaptureWorksAgainstRealFileSystem),
         ("DisabledHttpsRequestReturnsCapabilityDiagnosticWithoutDocuments", HttpsCapabilityTests.DisabledHttpsRequestReturnsCapabilityDiagnosticWithoutDocuments),
         ("LocalFixtureCaptureRemainsAvailableThroughAdapter", HttpsCapabilityTests.LocalFixtureCaptureRemainsAvailableThroughAdapter)
+        ,("MarkdownParserPreservesVietnameseAndStableSourceMetadata", ExtractionParserTests.MarkdownParserPreservesVietnameseAndStableSourceMetadata)
+        ,("HtmlParserReadsTablesAndDataAttributesInStableOrder", ExtractionParserTests.HtmlParserReadsTablesAndDataAttributesInStableOrder)
+        ,("ParsersDiagnoseMissingHeadingsAndMalformedCells", ExtractionParserTests.ParsersDiagnoseMissingHeadingsAndMalformedCells)
+        ,("DiscoveryIgnoresUnrecognizedCapturedDocuments", ExtractionParserTests.DiscoveryIgnoresUnrecognizedCapturedDocuments)
+        ,("Doc07WinsPrecedenceAndResolvesTypedPlanningFacts", AuthorityResolutionTests.Doc07WinsPrecedenceAndResolvesTypedPlanningFacts)
+        ,("StaleAppendixControlEnvelopeReferenceIsWarning", AuthorityResolutionTests.StaleAppendixControlEnvelopeReferenceIsWarning)
+        ,("ControlledFixtureResolvesBaselinePhasesAndPolicyFacts", AuthorityResolutionTests.ControlledFixtureResolvesBaselinePhasesAndPolicyFacts)
     ];
 
     public static int Main()
