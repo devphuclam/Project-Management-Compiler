@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using ProjectManagementCompiler.Domain;
@@ -161,6 +162,28 @@ internal static class SourceCaptureTests
         TestAssert.Equal(0, fileSystem.LegacyLengthReadPaths.Count, "Capture must not perform a separate length check.");
         TestAssert.Equal(0, fileSystem.LegacyTextReadPaths.Count, "Capture must not perform a separate text read.");
         TestAssert.Equal(5, snapshot.Documents.Count, "Validated reads should still capture the fixture.");
+    }
+
+    public static void CapturePassesNormalizedAllowedRootToValidatedReadBoundary()
+    {
+        var fileSystem = FixtureFileSystem();
+        var snapshot = Capture(fileSystem, new SourceRequest { Location = Root + Path.DirectorySeparatorChar });
+
+        TestAssert.Equal(5, snapshot.Documents.Count, "A normalized-root capture should still read the fixture.");
+        TestAssert.Equal(5, fileSystem.ValidatedReadRoots.Count, "Every validated read should receive the allowed root.");
+        TestAssert.True(fileSystem.ValidatedReadRoots.All(path => path == Root), "Validated reads must receive the normalized allowed root, not the source file path or raw request path.");
+    }
+
+    public static void Win32ReadFailureProducesBlockedCaptureDiagnostic()
+    {
+        var fileSystem = FixtureFileSystem();
+        fileSystem.ExceptionAtValidatedRead = new Win32Exception(5);
+        var snapshot = Capture(fileSystem);
+
+        var diagnostic = snapshot.Diagnostics.Single(diagnostic => diagnostic.SourceReferences.Any(reference => reference.RelativeFile == Readme));
+        TestAssert.Equal(CaptureState.Blocked, snapshot.CaptureState, "A Win32 read failure must block source capture.");
+        TestAssert.Equal("SOURCE_CAPTURE_FAILED", diagnostic.Code, "A Win32 read failure must be mapped to the stable capture failure diagnostic.");
+        TestAssert.False(fileSystem.ReadPaths.Contains(Path.GetFullPath(Path.Combine(Root, Readme))), "A failed Win32 read must not produce a captured document.");
     }
 
     public static void OversizedFilesAreRejectedBeforeRead()

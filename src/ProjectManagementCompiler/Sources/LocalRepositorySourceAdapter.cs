@@ -93,6 +93,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             try
             {
                 read = fileSystem.ReadFile(
+                    root,
                     fullPath,
                     new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true),
                     request.MaxDocumentBytes,
@@ -113,6 +114,12 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             catch (FileNotFoundException)
             {
                 diagnostics.Add(Diagnostic("SOURCE_FILE_MISSING", relativePath, "A recognized source file is missing.", request.Ref));
+                continue;
+            }
+            catch (Win32Exception)
+            {
+                blocked = true;
+                diagnostics.Add(Diagnostic("SOURCE_CAPTURE_FAILED", relativePath, "The selected source file could not be read.", request.Ref));
                 continue;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException)
@@ -211,7 +218,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             }
         }
 
-        public RepositoryFileReadResult ReadFile(string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes)
+        public RepositoryFileReadResult ReadFile(string allowedRoot, string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes)
         {
             if (maxFileBytes < 0 || remainingTotalBytes < 0)
             {
@@ -224,6 +231,11 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             }
 
             using var stream = OpenReadStream(path);
+
+            if (OperatingSystem.IsWindows() && !IsHandleContainedUnderRoot(allowedRoot, stream.SafeFileHandle))
+            {
+                throw new RepositoryFileReadException(RepositoryFileReadFailure.ReparsePoint, "The opened source file is outside the allowed root.");
+            }
 
             if (stream.Length > maxFileBytes)
             {
@@ -270,6 +282,53 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             return new RepositoryFileReadResult(
                 encoding.GetString(content.GetBuffer(), 0, checked((int)bytesRead)),
                 bytesRead);
+        }
+
+        private static bool IsHandleContainedUnderRoot(string allowedRoot, SafeFileHandle handle)
+        {
+            var normalizedRoot = SourcePathPolicy.NormalizeRoot(allowedRoot);
+            var handlePath = NormalizeHandlePath(GetFinalPathName(handle));
+            var relative = Path.GetRelativePath(normalizedRoot, handlePath);
+
+            return !Path.IsPathRooted(relative)
+                && relative != ".."
+                && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeHandlePath(string path)
+        {
+            var normalized = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+            if (normalized.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = @"\\" + normalized[8..];
+            }
+            else if (normalized.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = normalized[4..];
+            }
+
+            return SourcePathPolicy.NormalizeRoot(normalized);
+        }
+
+        private static string GetFinalPathName(SafeFileHandle handle)
+        {
+            var capacity = 256;
+            while (true)
+            {
+                var buffer = new StringBuilder(capacity);
+                var length = GetFinalPathNameByHandle(handle, buffer, (uint)capacity, 0);
+                if (length == 0)
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+
+                if (length < capacity)
+                {
+                    return buffer.ToString();
+                }
+
+                capacity = checked((int)length + 1);
+            }
         }
 
         private bool IsReparsePoint(string path, SafeFileHandle handle)
@@ -338,6 +397,13 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         private static extern bool GetFileInformationByHandle(
             SafeFileHandle handle,
             out ByHandleFileInformation information);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetFinalPathNameByHandleW", SetLastError = true)]
+        private static extern uint GetFinalPathNameByHandle(
+            SafeFileHandle handle,
+            StringBuilder filePath,
+            uint filePathLength,
+            uint flags);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct ByHandleFileInformation

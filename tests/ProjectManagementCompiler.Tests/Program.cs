@@ -24,6 +24,8 @@ internal static class Program
         ("ReparsePointEscapeProducesDiagnosticWithoutReading", SourceCaptureTests.ReparsePointEscapeProducesDiagnosticWithoutReading),
         ("FileLevelReparsePointIsRejectedWithoutReading", SourceCaptureTests.FileLevelReparsePointIsRejectedWithoutReading),
         ("CaptureUsesValidatedReadBoundaryInsteadOfLegacyChecks", SourceCaptureTests.CaptureUsesValidatedReadBoundaryInsteadOfLegacyChecks),
+        ("CapturePassesNormalizedAllowedRootToValidatedReadBoundary", SourceCaptureTests.CapturePassesNormalizedAllowedRootToValidatedReadBoundary),
+        ("Win32ReadFailureProducesBlockedCaptureDiagnostic", SourceCaptureTests.Win32ReadFailureProducesBlockedCaptureDiagnostic),
         ("OversizedFilesAreRejectedBeforeRead", SourceCaptureTests.OversizedFilesAreRejectedBeforeRead),
         ("ValidatedReadRejectsBoundaryReparseWithoutReading", SourceCaptureTests.ValidatedReadRejectsBoundaryReparseWithoutReading),
         ("ValidatedReadRejectsBoundaryOversizeWithoutPartialRead", SourceCaptureTests.ValidatedReadRejectsBoundaryOversizeWithoutPartialRead),

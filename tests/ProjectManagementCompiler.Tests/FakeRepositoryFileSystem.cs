@@ -8,11 +8,13 @@ internal sealed class FakeRepositoryFileSystem : ProjectManagementCompiler.Sourc
 
     public List<string> ReadPaths { get; } = [];
     public List<string> ValidatedReadPaths { get; } = [];
+    public List<string> ValidatedReadRoots { get; } = [];
     public List<string> LegacyLengthReadPaths { get; } = [];
     public List<string> LegacyTextReadPaths { get; } = [];
     public HashSet<string> ReparseAtValidatedRead { get; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> OversizeAtValidatedRead { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool ThrowOnLegacyRead { get; set; }
+    public Exception? ExceptionAtValidatedRead { get; set; }
     public long TotalBytesRead { get; private set; }
 
     public void AddDirectory(string path, bool reparsePoint = false) =>
@@ -61,10 +63,16 @@ internal sealed class FakeRepositoryFileSystem : ProjectManagementCompiler.Sourc
         return encoding.GetString(entries[normalized].Bytes);
     }
 
-    public ProjectManagementCompiler.Sources.RepositoryFileReadResult ReadFile(string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes)
+    public ProjectManagementCompiler.Sources.RepositoryFileReadResult ReadFile(string allowedRoot, string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes)
     {
+        ValidatedReadRoots.Add(Normalize(allowedRoot));
         var normalized = Normalize(path);
         ValidatedReadPaths.Add(normalized);
+        if (ExceptionAtValidatedRead is not null)
+        {
+            throw ExceptionAtValidatedRead;
+        }
+
         var entry = entries[normalized];
         var actualLength = Math.Max(entry.Length, entry.Bytes.LongLength);
         if (entry.IsReparsePoint || ReparseAtValidatedRead.Contains(normalized))
