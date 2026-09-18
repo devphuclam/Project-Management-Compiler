@@ -31,8 +31,41 @@ hours, 88 reserve hours, 600 capacity hours, and 231 CARIO assignments. The
 reference run has no errors; its retained diagnostics are six ordinary source
 row conflicts and one authored effort/duration mismatch. The source identity is
 safe and hashed, the resolved reference is retained, and captured source text
-is excluded from canonical JSON. The gate is locally verified; the branch has
-not yet been pushed at this checkpoint.
+is excluded from canonical JSON. The gate is locally verified on the current
+implementation worktree; the continuation branch has not yet been pushed at
+this checkpoint.
+
+## Continuation rebaseline — 2026-09-18
+
+The following status is based on focused implementation tests, the dependency-
+free test harness, the solution build, and the loopback verification workflow.
+`COMPLETE` means the implementation and focused acceptance evidence exist;
+`PARTIAL` means the implementation exists but the final gate is still open.
+
+| Task | Classification | Evidence / remaining gate |
+|---|---|---|
+| T014 | COMPLETE | Schema 1.0 JSON writer emits additive `executionOverlay`; round-trip tests pass. |
+| T015 | COMPLETE | Structural validator and reopen rejection tests cover canonical/overlay invariants. |
+| T016 | COMPLETE | Fixture digest and overlay round-trip regression tests pass. |
+| T017 | COMPLETE | Shared WBS projection preserves phase, work-package, card, and milestone hierarchy. |
+| T018 | COMPLETE | Dependency validation, invalid-source retention, self-edge, duplicate, and cycle tests pass. |
+| T019 | COMPLETE | Duration-based Finish-to-Start CPM and milestone nodes are covered by tests. |
+| T020 | COMPLETE | Working-calendar variance and explicit as-of date are covered by tests. |
+| T021 | COMPLETE | Manual overlay update validates evidence and preserves the baseline. |
+| T022 | COMPLETE | Status, alert, capacity, reserve, health, and unknown-state behavior are covered. |
+| T022A | COMPLETE | Dependency critical path, resource constraint, and WIP policy are separated in views/tests. |
+| T023 | COMPLETE | Configuration-driven logical-role and task metadata mappings exist. |
+| T024 | COMPLETE | Unresolved/invalid CARIO mappings remain blank and emit structured warnings. |
+| T025 | COMPLETE | BCL-only deterministic six-sheet XLSX writer exists and follows the workbook contract. |
+| T026 | COMPLETE | ZIP/XML, Unicode, numeric, warning, hierarchy, dependency, and baseline-date tests pass. |
+| T027 | COMPLETE | Loopback API exposes compile, reopen, execution, views, warnings, and exports. |
+| T028 | COMPLETE | Source and warning review is available through the browser UI. |
+| T029 | COMPLETE | Shared WBS/Gantt/Kanban/dependency/CPM/dashboard projections are rendered. |
+| T030 | COMPLETE | UI JSON reopen uses `/api/reopen` and recalculates from an explicit as-of date. |
+| T031 | COMPLETE | Fixture E2E script covers analyze/update/alert/reopen/XLSX and UI labels `Delivery cards completed X/53`. |
+| T032 | COMPLETE | `scripts/verify.ps1` runs build, tests, web/API, JSON, security, Gantt, and XLSX checks. |
+| T033 | NOT STARTED | Final two-axis code/spec review is the next gate; actionable High/Medium findings must be fixed. |
+| T034 | PARTIAL | Runbook exists; final clean verification, status/security scan, and push report remain. |
 
 ## Foundation
 
@@ -55,37 +88,37 @@ not yet been pushed at this checkpoint.
 - [x] T011 Normalize phases, 35 work packages, 53 delivery cards, and 7 milestones/decisions.
 - [x] T012 Preserve parent-child relationships, keep `plannedEffortHours` separate from authored working duration and baseline dates, and distinguish parent/card effort accounting.
 - [x] T013 Normalize provenance, roles, assignments, policies, capacity, reserve, and warnings.
-- [ ] T014 Implement deliberate schema-versioned canonical JSON export with an additive schema-1.0 `executionOverlay` containing manual execution records.
-- [ ] T015 Implement canonical JSON structural validation and reopen; validate overlay targets, states, dates, and effort without mutating baseline, while retaining only explicitly invalid source dependency evidence.
-- [ ] T016 Add deterministic regression comparison against the IDEAEngineering fixture, including execution-overlay round-trip and baseline semantic equivalence.
+- [x] T014 Implement deliberate schema-versioned canonical JSON export with an additive schema-1.0 `executionOverlay` containing manual execution records.
+- [x] T015 Implement canonical JSON structural validation and reopen; validate overlay targets, states, dates, and effort without mutating baseline, while retaining only explicitly invalid source dependency evidence.
+- [x] T016 Add deterministic regression comparison against the IDEAEngineering fixture, including execution-overlay round-trip and baseline semantic equivalence.
 
 ## Management analysis
 
-- [ ] T017 Implement hierarchy/WBS projections from canonical IDs.
-- [ ] T018 Implement dependency target validation and cycle detection.
-- [ ] T019 Implement Finish-to-Start CPM and dependency critical-path metrics from normalized planned duration, never raw effort.
-- [ ] T020 Implement baseline-vs-calculated variance without baseline mutation, including working-calendar start/finish variance and explicit as-of date.
-- [ ] T021 Implement the manual execution-update seam and overlay validation: actual dates, actual/remaining effort states, state consistency, and no plan mutation.
-- [ ] T022 Implement status/alert analysis: start delay, active overdue, completed on time/late, suspended, cancelled, conservative dependency `AT_RISK`, effort-based capacity/load, reserve semantics, health, and unknown-state rules.
-- [ ] T022A Add tests that separate dependency critical path from single-coder baseline constraints and prove invalid dependencies cannot fabricate risk.
+- [x] T017 Implement hierarchy/WBS projections from canonical IDs.
+- [x] T018 Implement dependency target validation and cycle detection.
+- [x] T019 Implement Finish-to-Start CPM and dependency critical-path metrics from normalized planned duration, never raw effort.
+- [x] T020 Implement baseline-vs-calculated variance without baseline mutation, including working-calendar start/finish variance and explicit as-of date.
+- [x] T021 Implement the manual execution-update seam and overlay validation: actual dates, actual/remaining effort states, state consistency, and no plan mutation.
+- [x] T022 Implement status/alert analysis: start delay, active overdue, completed on time/late, suspended, cancelled, conservative dependency `AT_RISK`, effort-based capacity/load, reserve semantics, health, and unknown-state rules.
+- [x] T022A Add tests that separate dependency critical path from single-coder baseline constraints and prove invalid dependencies cannot fabricate risk.
 
 ## CARIO output
 
-- [ ] T023 Define mapping configuration for logical roles and concrete identities.
-- [ ] T024 Implement unresolved mapping and organization warning generation.
-- [ ] T025 Implement the narrow Open XML workbook writer with six required sheets and explicit package relationships; keep planned dates separate from overlay actuals.
-- [ ] T026 Add ZIP-part, relationship/XML, Unicode, dates, numeric cells, six-sheet, warnings, hierarchy, dependency, no-fabrication, and plan-date-preservation tests without Excel.
+- [x] T023 Define mapping configuration for logical roles and concrete identities.
+- [x] T024 Implement unresolved mapping and organization warning generation.
+- [x] T025 Implement the narrow Open XML workbook writer with six required sheets and explicit package relationships; keep planned dates separate from overlay actuals.
+- [x] T026 Add ZIP-part, relationship/XML, Unicode, dates, numeric cells, six-sheet, warnings, hierarchy, dependency, no-fabrication, and plan-date-preservation tests without Excel.
 
 ## Browser application
 
-- [ ] T027 Implement the loopback-only ASP.NET Core host and compilation endpoints, including manual execution update and JSON snapshot routes.
-- [ ] T028 Implement source review and warning presentation using generic “Source” language.
-- [ ] T029 Implement WBS, three-lane PLAN/ACTUAL/ALERT Gantt, Kanban, critical-path, dashboard, and export views from shared view models.
-- [ ] T030 Implement canonical JSON reopen in the UI and recalculate derived alerts from an explicit as-of date.
-- [ ] T031 Add an end-to-end fixture smoke test for analyze → update execution → review lanes/alerts → views → JSON/XLSX export, including `Delivery cards completed 0/53` labeling.
+- [x] T027 Implement the loopback-only ASP.NET Core host and compilation endpoints, including manual execution update and JSON snapshot routes.
+- [x] T028 Implement source review and warning presentation using generic “Source” language.
+- [x] T029 Implement WBS, three-lane PLAN/ACTUAL/ALERT Gantt, Kanban, critical-path, dashboard, and export views from shared view models.
+- [x] T030 Implement canonical JSON reopen in the UI and recalculate derived alerts from an explicit as-of date.
+- [x] T031 Add an end-to-end fixture smoke test for analyze → update execution → review lanes/alerts → views → JSON/XLSX export, including `Delivery cards completed 0/53` labeling.
 
 ## Verification and handoff
 
-- [ ] T032 Run offline tests, build, deterministic rerun, execution-overlay round-trip, source safety fixture tests, Gantt lane tests, and workbook XML/package verification.
+- [x] T032 Run offline tests, build, deterministic rerun, execution-overlay round-trip, source safety fixture tests, Gantt lane tests, and workbook XML/package verification.
 - [ ] T033 Review the diff against the approved design/specification for baseline mutation, actual/duration conflation, alert overclaiming, JSON compatibility, and CARIO planned-date regression; remediate findings.
 - [ ] T034 Run final verification-before-completion checks and document exact application/export commands.

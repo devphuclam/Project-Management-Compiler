@@ -77,7 +77,11 @@ An authored state such as `NOT_STARTED`, `IN_PROGRESS`, `COMPLETED`, `SUSPENDED`
 _Avoid_: overdue state
 
 **Overdue**:
-A derived display condition: the current date is after the deadline and the execution state is neither completed nor cancelled.
+A derived display condition for an active `IN_PROGRESS` item whose as-of date is
+after the planned deadline. A `NOT_STARTED` item past its planned start (or
+finish) is reported as `START_DELAY`, not double-counted as active overdue;
+completed items use `COMPLETED_LATE` or `COMPLETED_ON_TIME`, while cancelled
+items have no active overdue condition.
 _Avoid_: authored workflow state
 
 ## Execution overlay amendment

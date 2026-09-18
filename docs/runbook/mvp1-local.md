@@ -1,0 +1,84 @@
+# Run the local MVP1
+
+Project Management Compiler is a dependency-free .NET 10 local application.
+It reads only the allow-listed planning documents from an IDEAEngineering-shaped
+source directory. The source is treated as untrusted data; the compiler does
+not execute scripts, hooks, builds, binaries, or macros from it.
+
+## Prerequisites
+
+- Installed .NET 10 SDK/runtime.
+- No database, Docker, package installation, browser driver, Office, or network
+  service is required.
+
+## Verify and run
+
+From the repository root:
+
+```powershell
+dotnet restore .\ProjectManagementCompiler.sln
+dotnet build .\ProjectManagementCompiler.sln --no-restore
+dotnet run --project .\tests\ProjectManagementCompiler.Tests\ProjectManagementCompiler.Tests.csproj --no-restore
+.\scripts\verify.ps1
+dotnet run --project .\src\ProjectManagementCompiler\ProjectManagementCompiler.csproj --no-restore
+```
+
+Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The server is loopback
+only by default and is not a LAN service.
+
+For a safe demo, enter the repository-relative fixture path:
+
+```text
+tests\fixtures\ideaengineering
+```
+
+Choose an explicit as-of date such as `2026-09-28`, then select **Analyze
+source**. The controlled fixture should show 6 phases, 35 work packages, 53
+delivery cards, 7 milestones, 512 authoritative work-package hours, 88 reserve
+hours, 600 capacity hours, and unresolved CARIO identities as warnings.
+
+## Browser workflow
+
+1. Review the project summary and **Source / Warnings** tab.
+2. Inspect WBS, the three Gantt lanes (**PLAN**, **ACTUAL**, **ALERT**), Kanban,
+   Dependencies, CPM, and Dashboard.
+3. Confirm the dashboard uses `Delivery cards completed 0/53` before execution
+   evidence is entered. CPM finish and forecast finish remain separate; forecast
+   is `UNKNOWN` when evidence is insufficient.
+4. Enter a delivery-card ID such as `P04-A`, choose `In progress`, provide an
+   actual start such as `2026-09-25`, and apply the update. The baseline PLAN
+   dates remain unchanged; the ACTUAL and ALERT lanes are recalculated.
+5. Use **Save project JSON** to download `project.json`. Use the **Reopen
+   saved canonical JSON** control to validate and recalculate that snapshot
+   without re-reading the source directory.
+6. Use **Export CARIO XLSX** to download
+   `<ProjectName>_CARIO.xlsx`. It is a human-assisted fill file, not a claimed
+   native CARIO import.
+
+## API and output names
+
+- `GET /api/health`
+- `POST /api/compile`
+- `POST /api/reopen`
+- `POST /api/execution`
+- `GET /api/project`
+- `GET /api/views` and `GET /api/views/{dashboard|wbs|gantt|kanban|dependencies|cpm}`
+- `GET /api/warnings`
+- `GET /api/exports/project.json`
+- `GET /api/exports/cario.xlsx`
+
+The persisted JSON contains safe source metadata, provenance, the immutable
+baseline, and the execution overlay, but not captured source text or absolute
+local paths. The workbook contains exactly these sheets:
+
+`01_TASKS`, `02_ASSIGNMENTS`, `03_CHILDREN_MILESTONES`, `04_DEPENDENCIES`,
+`05_PROJECT_INFO`, and `06_IMPORT_WARNINGS`.
+
+Generated JSON/XLSX files, `bin/`, `obj/`, and temporary verification files are
+not repository inputs and must not be committed.
+
+## MVP1 boundaries
+
+MVP1 intentionally excludes databases, authentication, multi-user hosting,
+CARIO API/browser automation, provider integrations, AI extraction, advanced
+forecasting, resource leveling, WebSockets, SaaS deployment, and Docker.

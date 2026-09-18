@@ -184,7 +184,7 @@ src/ProjectManagementCompiler/
   Management/
   Outputs/
   Sources/
-  Web/
+  Program.cs
   wwwroot/
 tests/ProjectManagementCompiler.Tests/
 tests/fixtures/ideaengineering/

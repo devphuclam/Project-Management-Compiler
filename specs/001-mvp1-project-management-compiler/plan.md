@@ -48,7 +48,7 @@ src/ProjectManagementCompiler/
   Management/
   Outputs/
   Application/
-  Web/
+  Program.cs
 tests/ProjectManagementCompiler.Tests/
 tests/fixtures/ideaengineering/
 specs/001-mvp1-project-management-compiler/
@@ -57,8 +57,8 @@ docs/superpowers/plans/
 ```
 
 The domain and management modules have no dependency on ASP.NET Core or workbook
-formatting. Web code depends on the application interface, not on source parser
-internals.
+formatting. `Program.cs` owns the thin local host and serves `wwwroot`; it
+depends on the application interface, not on source parser internals.
 
 ## Implementation sequence
 
