@@ -7,12 +7,32 @@ public sealed record ManagementAnalysis
     public IReadOnlyList<string> CriticalPathIds { get; init; } = Array.Empty<string>();
     public DateOnly? BaselineFinish { get; init; }
     public DateOnly? CalculatedFinish { get; init; }
+    public DataState ForecastState { get; init; } = DataState.Unknown;
+    public DateOnly? ForecastFinish { get; init; }
+    public ScheduleConstraintSummary? ResourceBaselineScheduleConstraint { get; init; }
+    public EffortAccountingReconciliation? EffortAccounting { get; init; }
     public ScheduleVariance? ScheduleVariance { get; init; }
     public CapacityAnalysis? Capacity { get; init; }
     public ReserveAnalysis? Reserve { get; init; }
     public IReadOnlyList<HealthIndicator> HealthIndicators { get; init; } = Array.Empty<HealthIndicator>();
     public IReadOnlyList<ViewSummary> ViewSummaries { get; init; } = Array.Empty<ViewSummary>();
     public IReadOnlyList<ImportWarning> Diagnostics { get; init; } = Array.Empty<ImportWarning>();
+}
+
+public sealed record ScheduleConstraintSummary
+{
+    public string? ResourceConstraint { get; init; }
+    public string? BaselineConstraint { get; init; }
+}
+
+public sealed record EffortAccountingReconciliation
+{
+    public string AccountingLevel { get; init; } = string.Empty;
+    public decimal? AuthoritativeEffortHours { get; init; }
+    public decimal? DetailedEffortHours { get; init; }
+    public decimal? DifferenceHours { get; init; }
+    public DataState State { get; init; } = DataState.Unknown;
+    public IReadOnlyList<string> ReconciliationWarnings { get; init; } = Array.Empty<string>();
 }
 
 public sealed record CpmNodeMetric
@@ -69,4 +89,3 @@ public sealed record ViewSummary
     public string Value { get; init; } = string.Empty;
     public DataState State { get; init; } = DataState.Unknown;
 }
-

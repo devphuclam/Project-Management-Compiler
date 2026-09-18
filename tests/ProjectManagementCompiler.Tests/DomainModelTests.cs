@@ -4,6 +4,54 @@ namespace ProjectManagementCompiler.Tests;
 
 internal static class DomainModelTests
 {
+    public static void DataStateIncludesCanonicalDerivedAndResolutionStates()
+    {
+        TestAssert.True(Enum.IsDefined(DataState.Calculated), "Calculated must be a canonical data state.");
+        TestAssert.True(Enum.IsDefined(DataState.Estimated), "Estimated must be a canonical data state.");
+        TestAssert.True(Enum.IsDefined(DataState.Unresolved), "Unresolved must be a canonical data state.");
+    }
+
+    public static void PlannedEntityPreservesPlannedEffortState()
+    {
+        var workPackage = new WorkPackage
+        {
+            PlannedEffortHours = 4.5m,
+            PlannedEffortState = DataState.Estimated
+        };
+
+        TestAssert.Equal(4.5m, workPackage.PlannedEffortHours, "Planned effort must remain nullable and preserved.");
+        TestAssert.Equal(DataState.Estimated, workPackage.PlannedEffortState, "Planned effort state must describe the effort value.");
+    }
+
+    public static void ManagementAnalysisPreservesForecastConstraintAndEffortAccounting()
+    {
+        var analysis = new ManagementAnalysis
+        {
+            ForecastState = DataState.Unknown,
+            ForecastFinish = null,
+            ResourceBaselineScheduleConstraint = new ScheduleConstraintSummary
+            {
+                ResourceConstraint = "One coder",
+                BaselineConstraint = "Sequential phases"
+            },
+            EffortAccounting = new EffortAccountingReconciliation
+            {
+                AccountingLevel = "WorkPackage",
+                AuthoritativeEffortHours = 512m,
+                DetailedEffortHours = 512m,
+                DifferenceHours = 0m,
+                State = DataState.Calculated
+            }
+        };
+
+        TestAssert.Equal(DataState.Unknown, analysis.ForecastState, "Forecast state must be explicit.");
+        TestAssert.Equal(null, analysis.ForecastFinish, "Forecast finish must remain nullable when evidence is unavailable.");
+        TestAssert.Equal("One coder", analysis.ResourceBaselineScheduleConstraint!.ResourceConstraint, "Resource constraint must be retained.");
+        TestAssert.Equal("Sequential phases", analysis.ResourceBaselineScheduleConstraint.BaselineConstraint, "Baseline constraint must be retained.");
+        TestAssert.Equal("WorkPackage", analysis.EffortAccounting!.AccountingLevel, "Effort accounting level must be retained.");
+        TestAssert.Equal(0m, analysis.EffortAccounting.DifferenceHours, "Effort reconciliation must retain its difference.");
+    }
+
     public static void CanonicalProjectPreservesIndependentBaselineValues()
     {
         var sourceReference = new SourceReference

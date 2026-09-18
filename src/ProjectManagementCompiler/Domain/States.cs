@@ -3,10 +3,13 @@ namespace ProjectManagementCompiler.Domain;
 public enum DataState
 {
     Known,
+    Calculated,
+    Estimated,
     Unknown,
     NotRun,
     Invalid,
-    Blocked
+    Blocked,
+    Unresolved
 }
 
 public enum ValidationState
@@ -61,4 +64,3 @@ public enum MilestoneKind
     Decision,
     Milestone
 }
-

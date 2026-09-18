@@ -9,4 +9,3 @@ public sealed record ImportWarning
     public IReadOnlyList<string> AffectedIds { get; init; } = Array.Empty<string>();
     public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
 }
-

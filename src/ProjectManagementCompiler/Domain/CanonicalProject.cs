@@ -20,4 +20,3 @@ public sealed record CanonicalProject
     public IReadOnlyList<ImportWarning> Warnings { get; init; } = Array.Empty<ImportWarning>();
     public ManagementAnalysis? Analysis { get; init; }
 }
-

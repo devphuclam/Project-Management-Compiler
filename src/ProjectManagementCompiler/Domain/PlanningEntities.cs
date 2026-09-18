@@ -44,6 +44,7 @@ public abstract record PlannedEntity
     public DateOnly PlannedStart { get; init; }
     public DateOnly PlannedFinish { get; init; }
     public decimal? PlannedEffortHours { get; init; }
+    public DataState PlannedEffortState { get; init; } = DataState.Unknown;
     public int? PlannedDurationWorkingMinutes { get; init; }
     public DataState DurationState { get; init; } = DataState.Unknown;
     public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
@@ -160,4 +161,3 @@ public sealed record PolicySet
     public string? ResourceConstraint { get; init; }
     public IReadOnlyList<string> Rules { get; init; } = Array.Empty<string>();
 }
-

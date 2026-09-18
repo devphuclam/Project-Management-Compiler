@@ -22,4 +22,3 @@ public sealed record SourceReference
     public DataState ConfidenceState { get; init; } = DataState.Unknown;
     public ValidationState ValidationState { get; init; } = ValidationState.Unknown;
 }
-
