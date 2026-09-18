@@ -92,6 +92,10 @@ internal static class Program
         ,("CanonicalNormalizationPreservesIndependentEffortAndDuration", NormalizationTests.CanonicalNormalizationPreservesIndependentEffortAndDuration)
         ,("CanonicalNormalizationRetainsPolicyReserveStatesAndDeterministicRelationships", NormalizationTests.CanonicalNormalizationRetainsPolicyReserveStatesAndDeterministicRelationships)
         ,("WorkingCalendarNormalizesAuthoredHalfDaysWithoutUsingEffort", NormalizationTests.WorkingCalendarNormalizesAuthoredHalfDaysWithoutUsingEffort)
+        ,("PlanningOnlyCanonicalProjectStartsWithEmptyExecutionOverlay", ExecutionOverlayTests.PlanningOnlyCanonicalProjectStartsWithEmptyExecutionOverlay)
+        ,("ManualUpdateStoresActualEvidenceWithoutChangingPlan", ExecutionOverlayTests.ManualUpdateStoresActualEvidenceWithoutChangingPlan)
+        ,("InvalidActualFinishBeforeStartIsRejectedWithoutChangingOverlay", ExecutionOverlayTests.InvalidActualFinishBeforeStartIsRejectedWithoutChangingOverlay)
+        ,("InvalidWorkItemAndNegativeEffortAreRejected", ExecutionOverlayTests.InvalidWorkItemAndNegativeEffortAreRejected)
     ];
 
     public static int Main()
