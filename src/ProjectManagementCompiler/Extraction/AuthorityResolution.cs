@@ -98,8 +98,7 @@ public sealed record AuthorityResolution
 
                 var signature = RowSignature(row);
                 if (rowIdentities.TryGetValue(identity, out var existingRow)
-                    && !string.Equals(existingRow.Signature, signature, StringComparison.Ordinal)
-                    && !string.Equals(existingRow.Row.SourceRelativePath, row.SourceRelativePath, StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(existingRow.Signature, signature, StringComparison.Ordinal))
                 {
                     conflicts.Add(new ImportWarning
                     {
@@ -116,11 +115,6 @@ public sealed record AuthorityResolution
                     rowIdentities[identity] = (row, signature);
                 }
             }
-        }
-
-        if (authority is not null)
-        {
-            diagnostics.AddRange(FindSubordinateReferences(authority, documents));
         }
 
         var authorityRows = authority is not null && parsed.TryGetValue(authority, out var authorityResult)
@@ -162,6 +156,11 @@ public sealed record AuthorityResolution
             ReserveHours = DecimalFact(authorityFacts, "Initial reserve"),
             CapacityHours = DecimalFact(authorityFacts, "Capacity")
         };
+
+        if (authority is not null)
+        {
+            diagnostics.AddRange(FindSubordinateReferences(authority, documents, baseline.BaselineVersion));
+        }
 
         diagnostics.AddRange(conflicts);
         var requiredBaselineDiagnostics = RequiredBaselineDiagnostics(authority, appendix, baseline, authorityRows, parsed);
@@ -350,23 +349,29 @@ public sealed record AuthorityResolution
             return null;
         }
 
-        return document.Source.Content
+        var content = document.Source.Format == SourceDocumentFormat.Markdown
+            ? MarkdownTableParser.ContentOutsideFences(document.Source.Content)
+            : document.Source.Content;
+        return content
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Split('\n')
             .Select(PlanningParserSupport.MarkdownHeading)
             .FirstOrDefault(heading => !string.IsNullOrWhiteSpace(heading));
     }
 
-    private static IReadOnlyList<ImportWarning> FindSubordinateReferences(PlanningDocument authority, IReadOnlyList<PlanningDocument> documents)
+    private static IReadOnlyList<ImportWarning> FindSubordinateReferences(
+        PlanningDocument authority,
+        IReadOnlyList<PlanningDocument> documents,
+        string? baselineVersion)
     {
         var warnings = new List<ImportWarning>();
         var authorityReferences = ControlEnvelopeReferences(authority);
-        string? current = null;
+        var current = baselineVersion;
         foreach (var reference in authorityReferences)
         {
             if (TryNormalizeControlEnvelopeVersion(reference, out var normalized))
             {
-                if (current is null)
+                if (string.IsNullOrEmpty(current))
                 {
                     current = normalized;
                 }
@@ -457,7 +462,7 @@ public sealed record AuthorityResolution
         Id = $"CONFLICTING_AUTHORITY_CONTROL_ENVELOPE:{authority.Source.RelativeFile}:{conflicting}",
         Severity = WarningSeverity.Error,
         Code = "CONFLICTING_AUTHORITY_CONTROL_ENVELOPE",
-        Message = $"'{authority.Source.RelativeFile}' contains semantically different valid DOC-07 control-envelope versions: DOC-07@{current} and DOC-07@{conflicting}. The first normalized version remains current.",
+        Message = $"'{authority.Source.RelativeFile}' contains semantically different valid DOC-07 control-envelope versions: DOC-07@{current} and DOC-07@{conflicting}. The selected baseline version remains current.",
         SourceReferences = [authority.Source.SourceReference]
     };
 

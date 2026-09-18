@@ -180,6 +180,24 @@ internal static class AuthorityResolutionTests
         TestAssert.Contains("ROW-1", conflict.Message, "Ordinary row conflicts must identify the logical row.");
     }
 
+    public static void OrdinaryRowConflictsAreDetectedWithinOneSourceDocument()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\n## First rendition\n\n| ID | Name |\n|---|---|\n| ROW-1 | First value |\n\n## Second rendition\n\n| ID | Name |\n|---|---|\n| ROW-1 | Different value |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        var conflict = resolution.Conflicts.Single(diagnostic => diagnostic.Code == "CONFLICTING_ROW");
+        TestAssert.Contains("ROW-1", conflict.Message, "Same-document ordinary row conflicts must identify the logical row.");
+        TestAssert.Equal(2, conflict.SourceReferences.Count, "Same-document row conflicts must retain both source references.");
+        TestAssert.Equal(2, resolution.Rows.Count(row => row.Cells.TryGetValue("ID", out var id) && id == "ROW-1"), "Both differing same-document rows must be retained.");
+    }
+
     public static void StaleAppendixControlEnvelopeReferenceIsWarning()
     {
         var snapshot = new RepositorySnapshot
@@ -197,6 +215,40 @@ internal static class AuthorityResolutionTests
         TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "STALE_SUBORDINATE_REFERENCE"), "A stale Appendix control-envelope reference must be visible.");
         TestAssert.Equal("0.14", resolution.BaselineVersion, "The current DOC-07 authority must be retained.");
         TestAssert.True(resolution.HasCanonicalBaseline, "A warning-only stale subordinate reference must preserve canonical baseline status.");
+    }
+
+    public static void BaselineVersionControlsSubordinateEnvelopeReferencesWithoutLiteralAuthorityMarker()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\nDOC-07@0.13\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.Equal("0.14", resolution.BaselineVersion, "The extracted DOC-07 baseline version must be authoritative without a literal marker.");
+        TestAssert.True(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "STALE_SUBORDINATE_REFERENCE"), "A subordinate marker must be compared with the extracted DOC-07 baseline version.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "A warning-only stale subordinate reference must preserve canonical status.");
+    }
+
+    public static void LiteralAuthorityEnvelopeMustMatchExtractedBaselineVersion()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.15"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.Equal("0.14", resolution.BaselineVersion, "The extracted baseline version must remain deterministic when a literal marker conflicts.");
+        TestAssert.True(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "CONFLICTING_AUTHORITY_CONTROL_ENVELOPE" && diagnostic.Severity == WarningSeverity.Error), "A valid literal authority marker that differs from the baseline fact must be an Error.");
+        TestAssert.False(resolution.HasCanonicalBaseline, "Conflicting authority-envelope evidence must fail the global Error gate.");
     }
 
     public static void FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison()
@@ -296,6 +348,38 @@ internal static class AuthorityResolutionTests
 
         TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "UNTERMINATED_MARKDOWN_FENCE" && d.Severity == WarningSeverity.Error), "An unterminated Markdown fence must be an explicit Error diagnostic.");
         TestAssert.False(resolution.HasCanonicalBaseline, "An unterminated Markdown fence must fail canonical status through the complete error rule.");
+    }
+
+    public static void ProjectNameFallbackIgnoresHeadingsInsideMarkdownFences()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "```markdown\n# Fake fenced project\n```\n\n# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.Equal("Source plan", resolution.ProjectName, "Project-name fallback must use visible Markdown headings only.");
+    }
+
+    public static void UnmatchedHtmlClosingTagsDisableCanonicalBaseline()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |"),
+                Document("docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html", "<h1>Gantt</h1></table><table><tr><th>ID</th></tr><tr><td>A01</td></tr></table>")
+            ]
+        });
+
+        TestAssert.True(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "UNMATCHED_HTML_CLOSING_TAG" && diagnostic.Severity == WarningSeverity.Error), "Malformed HTML must remain an explicit Error in authority resolution.");
+        TestAssert.False(resolution.HasCanonicalBaseline, "Malformed HTML in any recognized source must fail the global authority gate.");
     }
 
     public static void ControlledFixtureResolvesBaselinePhasesAndPolicyFacts()

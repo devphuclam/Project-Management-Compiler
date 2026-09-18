@@ -14,7 +14,8 @@ public static class HtmlTableParser
     private static readonly Regex CellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</\k<kind>>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex AnyCellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</(?<close>th|td)>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex CellTagPattern = new(@"<(?<closing>/)?(?<kind>th|td)\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-    private static readonly Regex DataAttributePattern = new(@"(?<name>data-[A-Za-z0-9_-]+)\s*=\s*(?:(?<quote>[""'])(?<quotedValue>.*?)\k<quote>|(?<unquotedValue>[^\s""'`=<>]+))", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex AttributePattern = new(@"(?<!\S)(?<name>[A-Za-z_:][A-Za-z0-9:._-]*)\s*=\s*(?:(?<quote>[""'])(?<quotedValue>.*?)\k<quote>|(?<unquotedValue>[^\s""'`=<>]+))", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex StructuralTagPattern = new(@"<(?<closing>/)?(?<kind>table|tr|th|td)\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled | RegexOptions.Singleline);
 
     public static PlanningParseResult Parse(PlanningDocument document)
@@ -44,6 +45,7 @@ public static class HtmlTableParser
         var diagnostics = new List<ImportWarning>();
         var tableIndex = 0;
 
+        diagnostics.AddRange(UnmatchedClosingTagDiagnostics(document, content));
         diagnostics.AddRange(UnclosedTableDiagnostics(document, content));
 
         foreach (Match tableMatch in TablePattern.Matches(content))
@@ -144,8 +146,9 @@ public static class HtmlTableParser
                     continue;
                 }
 
-                var dataAttributes = DataAttributePattern.Matches(rowMatch.Groups["attributes"].Value)
+                var dataAttributes = AttributePattern.Matches(rowMatch.Groups["attributes"].Value)
                     .Cast<Match>()
+                    .Where(match => match.Groups["name"].Value.StartsWith("data-", StringComparison.OrdinalIgnoreCase))
                     .ToArray();
                 var duplicateAttributes = dataAttributes
                     .GroupBy(match => match.Groups["name"].Value, StringComparer.OrdinalIgnoreCase)
@@ -271,6 +274,45 @@ public static class HtmlTableParser
                 }]
             })
             .ToArray();
+    }
+
+    private static IReadOnlyList<ImportWarning> UnmatchedClosingTagDiagnostics(PlanningDocument document, string content)
+    {
+        var openTags = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var diagnostics = new List<ImportWarning>();
+        foreach (Match tag in StructuralTagPattern.Matches(content))
+        {
+            var kind = tag.Groups["kind"].Value;
+            if (!tag.Groups["closing"].Success)
+            {
+                openTags[kind] = openTags.TryGetValue(kind, out var count) ? count + 1 : 1;
+                continue;
+            }
+
+            if (!openTags.TryGetValue(kind, out var openCount) || openCount == 0)
+            {
+                var line = content[..tag.Index].Count(character => character == '\n') + 1;
+                diagnostics.Add(new ImportWarning
+                {
+                    Id = $"UNMATCHED_HTML_CLOSING_TAG:{document.Source.RelativeFile}:{line}:{kind}",
+                    Severity = WarningSeverity.Error,
+                    Code = "UNMATCHED_HTML_CLOSING_TAG",
+                    Message = $"HTML document '{document.Source.RelativeFile}' contains unmatched closing tag '{tag.Value}'.",
+                    AffectedIds = [kind],
+                    SourceReferences = [document.Source.SourceReference with
+                    {
+                        RelativeFile = document.Source.RelativeFile,
+                        Item = $"line-{line:D4}",
+                        ExtractionRule = "idea-planning-html-structure"
+                    }]
+                });
+                continue;
+            }
+
+            openTags[kind] = openCount - 1;
+        }
+
+        return diagnostics;
     }
 
     private static IReadOnlyList<ImportWarning> UnclosedTableDiagnostics(PlanningDocument document, string content)

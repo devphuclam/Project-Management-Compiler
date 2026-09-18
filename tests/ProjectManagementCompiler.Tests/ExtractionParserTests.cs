@@ -81,6 +81,22 @@ internal static class ExtractionParserTests
         TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Unquoted duplicate data-* attributes must remain an Error diagnostic.");
     }
 
+    public static void HtmlParserIgnoresDataAttributeTextInsideOtherAttributeValues()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr aria-label=\"data-phase=b\" title=\"contains data-gate=c\" data-phase=a data-owner='Team Alpha'><td>A01</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "Text resembling data-* attributes inside other attributes must not invalidate the row.");
+        TestAssert.Equal("a", result.Rows[0].DataAttributes["data-phase"], "Only an actual data-phase attribute token should be parsed.");
+        TestAssert.Equal("Team Alpha", result.Rows[0].DataAttributes["data-owner"], "Quoted data attributes must remain supported.");
+        TestAssert.Equal(2, result.Rows[0].DataAttributes.Count, "Attribute-like text inside quoted values must not be parsed as data attributes.");
+        TestAssert.False(result.Diagnostics.Any(diagnostic => diagnostic.Code == "DUPLICATE_DATA_ATTRIBUTE"), "Attribute-like text inside quoted values must not create duplicate diagnostics.");
+    }
+
     public static void HtmlParserRejectsMismatchedCellTagsWithoutGuessingRows()
     {
         var document = Document(
@@ -200,6 +216,25 @@ internal static class ExtractionParserTests
         TestAssert.False(result.Diagnostics.Any(d => d.Code == "TABLE_CELL_COUNT_MISMATCH"), "A valid adjacent table must not create shape diagnostics.");
     }
 
+    public static void MarkdownParserStopsAtHeadingsContainingPipes()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n## Source identity\n\n"
+            + "| Field | Value |\n|---|---|\n| Project ID | project |\n"
+            + "## Next | section\n\nThis prose | has a pipe.\n\n"
+            + "| ID | Name |\n|---|---|\n| A01 | Next table |\n\n"
+            + "## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Real phase |");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.Equal(3, result.Rows.Count, "A heading or prose line containing a pipe must not be absorbed as a table row.");
+        TestAssert.False(result.Rows.Any(row => row.Cells.Values.Any(value => value.Contains("Next | section", StringComparison.Ordinal))), "A Markdown heading containing a pipe must not become data.");
+        var nextTableRow = result.Rows.Single(row => row.Cells.TryGetValue("ID", out var id) && id == "A01");
+        TestAssert.Equal(2, nextTableRow.TableIndex, "A valid table after a pipe-containing heading must remain a separate table.");
+        TestAssert.False(result.Diagnostics.Any(diagnostic => diagnostic.Code == "TABLE_CELL_COUNT_MISMATCH"), "Valid adjacent tables must retain their shape.");
+    }
+
     public static void MarkdownParserUsesBackslashParityForEscapedPipes()
     {
         var document = Document(
@@ -283,6 +318,23 @@ internal static class ExtractionParserTests
         TestAssert.Equal(2, diagnostics.Length, "Each unclosed row inside a matched table must be diagnosed.");
         TestAssert.True(diagnostics.All(diagnostic => diagnostic.Severity == WarningSeverity.Error), "Unclosed HTML rows must be explicit Error diagnostics.");
         TestAssert.False(result.Diagnostics.Any(diagnostic => diagnostic.Code == "UNCLOSED_HTML_ROW" && diagnostic.SourceReferences.Any(reference => reference.Table == "table-02")), "A valid table must remain free of unclosed-row diagnostics.");
+    }
+
+    public static void HtmlParserDiagnosesUnmatchedClosingTagsAndPreservesValidTables()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1></table></tr></th></td>"
+            + "<table><tr><th>ID</th><th>Name</th></tr><tr><td>A01</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "Unmatched closing tags must not prevent a valid table from being parsed.");
+        var diagnostics = result.Diagnostics.Where(diagnostic => diagnostic.Code == "UNMATCHED_HTML_CLOSING_TAG").ToArray();
+        TestAssert.Equal(4, diagnostics.Length, "Each unmatched closing table, row, header-cell, and data-cell tag must be diagnosed.");
+        TestAssert.True(diagnostics.All(diagnostic => diagnostic.Severity == WarningSeverity.Error), "Unmatched HTML closing tags must be structured Error diagnostics.");
+        TestAssert.True(diagnostics.Any(diagnostic => diagnostic.Message.Contains("</table>", StringComparison.OrdinalIgnoreCase)), "The table closing token must be identified in its diagnostic.");
+        TestAssert.True(diagnostics.All(diagnostic => diagnostic.SourceReferences.Count == 1), "Unmatched-tag diagnostics must retain one source reference each.");
     }
 
     public static void DiscoveryIgnoresUnrecognizedCapturedDocuments()

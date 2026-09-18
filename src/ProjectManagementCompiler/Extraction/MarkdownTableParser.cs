@@ -60,7 +60,7 @@ public static class MarkdownTableParser
                 continue;
             }
 
-            if (!lines[lineIndex].Contains('|') || lineIndex + 1 >= lines.Length || !PlanningParserSupport.IsSeparator(lines[lineIndex + 1]))
+            if (!IsPipeTableRow(lines[lineIndex]) || lineIndex + 1 >= lines.Length || !PlanningParserSupport.IsSeparator(lines[lineIndex + 1]))
             {
                 continue;
             }
@@ -70,7 +70,7 @@ public static class MarkdownTableParser
             diagnostics.AddRange(PlanningParserSupport.ValidateTableShape(document, tableIndex, 0, lineIndex + 1, headers, headers));
             var rowIndex = 0;
             lineIndex += 2;
-            for (; lineIndex < lines.Length && lines[lineIndex].Contains('|'); lineIndex++)
+            for (; lineIndex < lines.Length && IsPipeTableRow(lines[lineIndex]); lineIndex++)
             {
                 if (lineIndex + 1 < lines.Length && PlanningParserSupport.IsSeparator(lines[lineIndex + 1]))
                 {
@@ -125,6 +125,9 @@ public static class MarkdownTableParser
         diagnostics.InsertRange(0, PlanningParserSupport.MissingHeadings(document, headings));
         return new PlanningParseResult { Rows = rows, Diagnostics = diagnostics };
     }
+
+    private static bool IsPipeTableRow(string line) =>
+        line.TrimStart().StartsWith('|');
 
     internal static string ContentOutsideFences(string content)
     {
