@@ -61,6 +61,35 @@
     byId("connection-status").textContent = message;
   }
 
+  function setSourceIntakeCollapsed(collapsed) {
+    const panel = byId("source-intake-panel");
+    const body = byId("source-intake-body");
+    const toggle = byId("source-intake-toggle");
+    if (!panel || !body || !toggle) return;
+    panel.classList.toggle("is-collapsed", collapsed);
+    body.hidden = collapsed;
+    toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    toggle.textContent = collapsed ? "Show setup" : "Hide setup";
+  }
+
+  function hasExecutionEvidence(summary) {
+    const overallHealth = (summary && summary.analysis && summary.analysis.healthIndicators || []).find(indicator => indicator.id === "health.overall");
+    if (overallHealth) return String(overallHealth.status || "").toUpperCase() === "KNOWN";
+    return Boolean(summary && summary.views && summary.views.gantt && (summary.views.gantt.items || []).some(item =>
+      (item.lanes || []).some(lane => String(lane.lane || "").toUpperCase() === "ACTUAL" && (lane.start || lane.finish || lane.effortHours !== null && lane.effortHours !== undefined))
+    ));
+  }
+
+  function executionValue(summary, value) {
+    return hasExecutionEvidence(summary) ? value : "—";
+  }
+
+  function displaySummaryLabel(label) {
+    if (label === "Delivery cards completed") return "Recorded completion";
+    if (label === "CPM calculated finish") return "CPM (dependency-only)";
+    return label;
+  }
+
   function currentSummary() {
     if (!state.project || !state.views) return null;
     return {
@@ -193,11 +222,12 @@
     const atRisk = Number(dashboard.atRisk || 0);
     const lateToStart = Number(dashboard.lateToStart || 0);
     const attentionCount = overdue + atRisk + lateToStart;
-    const healthLabel = overdue ? "Intervention needed" : attentionCount ? "Watch closely" : "On track";
+    const healthLabel = overdue ? "Intervention needed" : attentionCount ? "Watch closely" : "No active alerts";
     const healthClass = overdue ? "danger" : attentionCount ? "warning" : "success";
     const completed = Number(dashboard.completed || 0);
     const totalCards = Number(dashboard.totalCards || 0);
-    const progress = totalCards ? Math.round((completed / totalCards) * 100) : 0;
+    const progressKnown = hasExecutionEvidence(summary);
+    const progress = progressKnown && totalCards ? Math.round((completed / totalCards) * 100) : null;
     const milestones = (summary.views.gantt && summary.views.gantt.milestones || []).filter(item => parseDate(item.plannedDate) !== null).sort((left, right) => parseDate(left.plannedDate) - parseDate(right.plannedDate));
     const asOfTimestamp = parseDate(summary.analysis && summary.analysis.asOfDate);
     const nextMilestone = milestones.find(item => asOfTimestamp === null || parseDate(item.plannedDate) >= asOfTimestamp) || milestones[0] || null;
@@ -210,7 +240,7 @@
     hero.appendChild(heroCopy);
     const heroMeta = node("div", null, "summary-hero-meta");
     heroMeta.appendChild(node("span", healthLabel, "summary-status " + healthClass));
-    heroMeta.appendChild(node("span", attentionCount ? attentionCount + " attention signals" : "No active signals", "summary-signal-count"));
+    heroMeta.appendChild(node("span", attentionCount ? attentionCount + " attention alerts" : "No active alerts", "summary-signal-count"));
     hero.appendChild(heroMeta);
     panel.appendChild(hero);
 
@@ -218,17 +248,22 @@
     const progressCard = node("section", null, "summary-progress-card");
     const progressHeading = node("div", null, "summary-card-heading");
     progressHeading.appendChild(node("span", "DELIVERY PROGRESS", "eyebrow"));
-    progressHeading.appendChild(node("strong", progress + "%", "summary-progress-value"));
+    progressHeading.appendChild(node("strong", progressKnown ? progress + "%" : "—", "summary-progress-value"));
     progressCard.appendChild(progressHeading);
     const progressTrack = node("div", null, "summary-progress-track");
+    if (!progressKnown) progressTrack.classList.add("is-unknown");
     const progressFill = node("span");
-    progressFill.style.width = progress + "%";
+    progressFill.style.width = progressKnown ? progress + "%" : "0%";
     progressTrack.appendChild(progressFill);
     progressCard.appendChild(progressTrack);
-    progressCard.appendChild(node("p", completed + " of " + totalCards + " delivery cards completed."));
+    progressCard.appendChild(node("p", progressKnown ? completed + " of " + totalCards + " delivery cards completed." : "Execution data unavailable · planning evidence only."));
     const progressStats = node("div", null, "summary-inline-stats");
-    progressStats.appendChild(node("span", String(dashboard.inProgress || 0) + " in progress"));
-    progressStats.appendChild(node("span", String(dashboard.notStarted || 0) + " not started"));
+    if (progressKnown) {
+      progressStats.appendChild(node("span", String(dashboard.inProgress || 0) + " in progress"));
+      progressStats.appendChild(node("span", String(dashboard.notStarted || 0) + " not started"));
+    } else {
+      progressStats.appendChild(node("span", "No execution overlay recorded"));
+    }
     progressCard.appendChild(progressStats);
     mainGrid.appendChild(progressCard);
 
@@ -249,7 +284,7 @@
     panel.appendChild(mainGrid);
 
     const metrics = node("div", null, "summary-metric-grid");
-    [["Cards", dashboard.totalCards, ""], ["Completed", dashboard.completed, "success"], ["In progress", dashboard.inProgress, "accent"], ["Overdue", dashboard.overdue, "danger"], ["At risk", dashboard.atRisk, "warning"], ["Late to start", dashboard.lateToStart, "warning"]].forEach(([label, value, tone]) => {
+    [["Cards", dashboard.totalCards, ""], ["Recorded completed", executionValue(summary, dashboard.completed), "success"], ["Recorded in progress", executionValue(summary, dashboard.inProgress), "accent"], ["Overdue alerts", dashboard.overdue, "danger"], ["At-risk alerts", dashboard.atRisk, "warning"], ["Late starts", dashboard.lateToStart, "warning"]].forEach(([label, value, tone]) => {
       const card = node("div", null, "summary-card " + tone);
       card.appendChild(node("span", label, "label"));
       card.appendChild(node("strong", value, "value"));
@@ -295,9 +330,9 @@
     heading.appendChild(node("p", "A compact read on progress, schedule pressure, and the decisions that need a human next.", "muted"));
     fragment.appendChild(heading);
     const metrics = [
-      ["Completed", view.completed, "success"], ["In progress", view.inProgress, "accent"], ["Not started", view.notStarted, ""],
+      ["Recorded completed", executionValue(summary, view.completed), "success"], ["Recorded in progress", executionValue(summary, view.inProgress), "accent"], ["Recorded not started", executionValue(summary, view.notStarted), ""],
       ["Late to start", view.lateToStart, "warning"], ["Overdue", view.overdue, "danger"], ["At risk", view.atRisk, "warning"],
-      ["Completed late", view.completedLate, "danger"], ["Delivery cards completed", view.completed + "/" + view.totalCards, "accent"]
+      ["Completed late", executionValue(summary, view.completedLate), "danger"], ["Recorded completion", hasExecutionEvidence(summary) ? view.completed + "/" + view.totalCards : "—", "accent"]
     ];
     const grid = node("div", null, "metric-grid");
     metrics.forEach(([label, value, tone]) => {
@@ -311,7 +346,7 @@
     const schedule = node("section", null, "dashboard-card");
     schedule.appendChild(node("p", "SCHEDULE READOUT", "eyebrow"));
     schedule.appendChild(node("h3", "Three dates to keep visible"));
-    [["Baseline finish", view.baselineFinish], ["CPM finish", view.cpmFinish], ["Forecast finish", view.forecastFinish]].forEach(([label, value]) => {
+    [["Baseline finish", view.baselineFinish], ["CPM (dependency-only)", view.cpmFinish], ["Forecast finish", view.forecastFinish]].forEach(([label, value]) => {
       const row = node("div", null, "readout-row");
       row.appendChild(node("span", label, "muted"));
       row.appendChild(node("strong", value || "UNKNOWN"));
@@ -321,7 +356,13 @@
     if (summary) dashboardGrid.appendChild(renderAttentionQueue(summary, true));
     fragment.appendChild(dashboardGrid);
     fragment.appendChild(node("h3", "Analysis summaries"));
-    fragment.appendChild(renderTable(["View", "Value", "State"], (view.summaries || []).map(item => [item.label, item.value, item.state])));
+    const summaryRows = (view.summaries || []).map(item => {
+      if (item.label === "Delivery cards completed" && !hasExecutionEvidence(summary)) {
+        return ["Recorded completion", "UNKNOWN", "UNKNOWN"];
+      }
+      return [displaySummaryLabel(item.label), item.value, item.state];
+    });
+    fragment.appendChild(renderTable(["View", "Value", "State"], summaryRows));
     return fragment;
   }
 
@@ -841,6 +882,8 @@
       const button = node("button", label, "secondary gantt-action");
       button.type = "button";
       button.dataset.ganttAction = action;
+      if (action === "zoom-out") button.setAttribute("aria-label", "Zoom out");
+      if (action === "zoom-in") button.setAttribute("aria-label", "Zoom in");
       if (pressed !== undefined) button.setAttribute("aria-pressed", pressed ? "true" : "false");
       actions.appendChild(button);
     };
@@ -901,7 +944,12 @@
     });
     zoom.value = state.gantt.zoom;
     filters.appendChild(zoom);
-    toolbar.appendChild(filters);
+
+    const advancedFilters = node("details", null, "gantt-filter-disclosure");
+    advancedFilters.open = state.gantt.phaseFilter !== "ALL" || state.gantt.executionFilter !== "ALL" || state.gantt.criticalOnly || state.gantt.overdueOnly || state.gantt.atRiskOnly || state.gantt.lateStartOnly;
+    advancedFilters.appendChild(node("summary", "Advanced filters", "gantt-filter-summary"));
+    advancedFilters.appendChild(filters);
+    toolbar.appendChild(advancedFilters);
 
     const status = node("p", "Timeline " + formatDate(range.timelineStart) + " → " + formatDate(range.timelineEnd) + " · as-of " + formatDate(analysis && analysis.asOfDate) + " · " + rows.length + " rows", "gantt-toolbar-status muted");
     toolbar.appendChild(status);
@@ -1051,8 +1099,12 @@
     contentGrid.appendChild(timeline);
     canvas.appendChild(contentGrid);
     scroll.appendChild(canvas);
-    shell.appendChild(scroll);
-    shell.appendChild(renderGanttDetail(selectedRow, analysis || {}, dependencyView));
+    const workspace = node("div", null, "gantt-workspace");
+    workspace.appendChild(scroll);
+    const inspectorColumn = node("div", null, "gantt-inspector-column");
+    inspectorColumn.appendChild(renderGanttDetail(selectedRow, analysis || {}, dependencyView));
+    workspace.appendChild(inspectorColumn);
+    shell.appendChild(workspace);
 
     shell.addEventListener("click", event => {
       const actionTarget = event.target.closest("[data-gantt-action]");
@@ -1088,6 +1140,8 @@
           if (input) {
             input.value = actionTarget.dataset.ganttKey || "";
             const form = byId("execution-form");
+            const executionPanel = byId("execution-panel");
+            if (executionPanel) executionPanel.classList.add("is-targeted");
             if (form) form.scrollIntoView({ behavior: "smooth", block: "start" });
             input.focus();
           }
@@ -1237,6 +1291,7 @@
     state.sources = summary.sources || [];
     state.views = summary.views;
     state.warnings = summary.warnings || [];
+    setSourceIntakeCollapsed(true);
     renderSummary(summary);
     renderActiveView();
   }
@@ -1258,6 +1313,7 @@
     } catch (error) {
       showError(error);
       setStatus("Analysis failed.");
+      setSourceIntakeCollapsed(false);
     }
   }
 
@@ -1304,6 +1360,7 @@
     } catch (error) {
       showError(error);
       setStatus("Reopen failed.");
+      setSourceIntakeCollapsed(false);
     }
   }
 
@@ -1333,6 +1390,10 @@
   }
 
   document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => activateView(tab.dataset.view)));
+  byId("source-intake-toggle").addEventListener("click", () => {
+    const panel = byId("source-intake-panel");
+    setSourceIntakeCollapsed(!panel.classList.contains("is-collapsed"));
+  });
   byId("analyze-button").addEventListener("click", analyze);
   byId("refresh-button").addEventListener("click", refresh);
   byId("reopen-button").addEventListener("click", reopenJson);

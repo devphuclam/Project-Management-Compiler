@@ -22,36 +22,41 @@
   </header>
 
   <main class="page">
-    <section class="panel controls-panel">
+    <section id="source-intake-panel" class="panel controls-panel source-intake-panel" aria-labelledby="source-intake-heading">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">SOURCE INTAKE</p>
-          <h2>Start with the planning evidence</h2>
+          <h2 id="source-intake-heading">Start with the planning evidence</h2>
           <p class="panel-subtitle">Choose a local source, set the reporting date, then move from signal to action.</p>
         </div>
-        <span class="local-only">Loopback only</span>
-      </div>
-      <div class="controls-grid">
-        <label class="wide">
-          Source directory
-          <input id="source-path" type="text" autocomplete="off" placeholder="C:\path\to\planning-repository">
-          <small>Only the allow-listed planning documents are captured.</small>
-        </label>
-        <label>
-          As-of date
-          <input id="as-of-date" type="date" required>
-          <small>Used for late-start, overdue and actual Gantt calculations.</small>
-        </label>
-        <div class="control-submit">
-          <button id="analyze-button" class="primary">Analyze source</button>
+        <div class="panel-heading-actions">
+          <span class="local-only">Loopback only</span>
+          <button id="source-intake-toggle" class="secondary compact-action" type="button" aria-expanded="true" aria-controls="source-intake-body">Hide setup</button>
         </div>
-        <label class="wide">
-          Reopen saved canonical JSON
-          <input id="reopen-json" type="file" accept="application/json,.json">
-          <small>Loads a previously saved project.json and recalculates derived views locally.</small>
-        </label>
-        <div class="control-submit">
-          <button id="reopen-button" class="secondary" type="button">Reopen JSON</button>
+      </div>
+      <div id="source-intake-body" class="source-intake-body">
+        <div class="controls-grid">
+          <label class="wide">
+            Source directory
+            <input id="source-path" type="text" autocomplete="off" placeholder="C:\path\to\planning-repository">
+            <small>Only the allow-listed planning documents are captured.</small>
+          </label>
+          <label>
+            As-of date
+            <input id="as-of-date" type="date" required>
+            <small>Used for late-start, overdue and actual Gantt calculations.</small>
+          </label>
+          <div class="control-submit">
+            <button id="analyze-button" class="primary">Analyze source</button>
+          </div>
+          <label class="wide">
+            Reopen saved canonical JSON
+            <input id="reopen-json" type="file" accept="application/json,.json">
+            <small>Loads a previously saved project.json and recalculates derived views locally.</small>
+          </label>
+          <div class="control-submit">
+            <button id="reopen-button" class="secondary" type="button">Reopen JSON</button>
+          </div>
         </div>
       </div>
       <p id="error-message" class="error" role="alert" hidden></p>
@@ -63,20 +68,35 @@
 
     <section class="panel views-panel">
       <nav id="view-tabs" class="tabs" aria-label="Project views">
-        <button class="tab active" data-view="dashboard">Dashboard</button>
-        <button class="tab" data-view="wbs">WBS</button>
-        <button class="tab" data-view="gantt">Gantt</button>
-        <button class="tab" data-view="kanban">Kanban</button>
-        <button class="tab" data-view="dependencies">Dependencies</button>
-        <button class="tab" data-view="cpm">CPM</button>
-        <button class="tab" data-view="source">Source / Warnings</button>
+        <div class="tab-group">
+          <span class="tab-group-label">Overview</span>
+          <button class="tab active" data-view="dashboard" data-nav-group="overview">Dashboard</button>
+        </div>
+        <div class="tab-group">
+          <span class="tab-group-label">Plan</span>
+          <button class="tab" data-view="wbs" data-nav-group="plan">WBS</button>
+          <button class="tab" data-view="gantt" data-nav-group="plan">Gantt</button>
+        </div>
+        <div class="tab-group">
+          <span class="tab-group-label">Execution</span>
+          <button class="tab" data-view="kanban" data-nav-group="execution">Kanban</button>
+        </div>
+        <div class="tab-group">
+          <span class="tab-group-label">Analysis</span>
+          <button class="tab" data-view="dependencies" data-nav-group="analysis">Dependencies</button>
+          <button class="tab" data-view="cpm" data-nav-group="analysis">CPM</button>
+        </div>
+        <div class="tab-group">
+          <span class="tab-group-label">Evidence</span>
+          <button class="tab" data-view="source" data-nav-group="evidence">Source / Warnings</button>
+        </div>
       </nav>
       <div id="view-content" class="view-content">
         <div class="empty-state">Views will appear here after analysis.</div>
       </div>
     </section>
 
-    <section class="panel execution-panel">
+    <section id="execution-panel" class="panel execution-panel">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">EXECUTION OVERLAY</p>

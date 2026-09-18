@@ -117,6 +117,17 @@ try {
     Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $_.finish -eq '2026-09-28' }).Count -eq 1) 'In-progress ACTUAL evidence must end at the explicit as-of date.'
     Assert-Condition (@($execution.analysis.alerts | Where-Object { $_.workItemId -eq 'P04' -and $_.alertCode -eq 'OVERDUE' }).Count -eq 1) 'API execution update did not produce the P04 OVERDUE alert.'
 
+    $completedFinishOnly = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
+        workItemId = 'P05'
+        executionState = 'COMPLETED'
+        actualFinish = '2026-09-28'
+        lastUpdatedAt = '2026-09-28T10:00:30Z'
+    }
+    Assert-Condition ($completedFinishOnly.analysis.executionStatus.completed -eq 1) 'Completed execution with finish-only evidence must count as completed.'
+    $completedP05 = @($completedFinishOnly.views.gantt.items | Where-Object { $_.workItemId -eq 'P05' })[0]
+    Assert-Condition (@($completedP05.lanes | Where-Object { $_.lane -eq 'ACTUAL' }).Count -eq 0) 'Finish-only completion may legitimately have no ACTUAL bar start.'
+    Assert-Condition (@($completedFinishOnly.analysis.healthIndicators | Where-Object { $_.id -eq 'health.overall' -and $_.status -eq 'KNOWN' }).Count -eq 1) 'Finish-only execution evidence must make canonical health known.'
+
     $atRisk = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
         workItemId = 'P06'
         executionState = 'NOT_STARTED'
@@ -259,7 +270,7 @@ try {
     Assert-Condition ($ganttStart -ge 0 -and $ganttEnd -gt $ganttStart) 'Gantt renderer source boundary must be discoverable.'
     $ganttSource = $appJs.Substring($ganttStart, $ganttEnd - $ganttStart)
     Assert-Condition (-not $ganttSource.Contains('FORECAST', [StringComparison]::OrdinalIgnoreCase)) 'Gantt must not fabricate forecast presentation.'
-    Assert-Condition ($appJs.Contains('Delivery cards completed', [StringComparison]::Ordinal)) 'Browser UI must label completion as Delivery cards completed X/53.'
+    Assert-Condition ($appJs.Contains('Recorded completion', [StringComparison]::Ordinal)) 'Browser UI must label completion as recorded execution evidence.'
     Assert-Condition ($appJs.Contains('getFullYear', [StringComparison]::Ordinal) -and $appJs.Contains('getMonth', [StringComparison]::Ordinal) -and $appJs.Contains('getDate', [StringComparison]::Ordinal)) 'Browser as-of default must use the browser-local calendar date.'
     Assert-Condition ($indexHtml.Contains('id="as-of-date" type="date" required', [StringComparison]::Ordinal)) 'Browser as-of date must be visibly required.'
     Assert-Condition ($appJs.Contains('/api/reopen', [StringComparison]::Ordinal)) 'Browser UI must expose canonical JSON reopen.'
@@ -274,6 +285,18 @@ try {
     Assert-Condition ($appJs.Contains('Select a row to inspect', [StringComparison]::Ordinal)) 'Gantt detail flow must explain how to inspect a row.'
     Assert-Condition ($indexHtml.Contains('Project control center', [StringComparison]::OrdinalIgnoreCase)) 'Browser shell must label the project control center.'
     Assert-Condition ($stylesCss.Contains('.summary-hero', [StringComparison]::Ordinal) -and $stylesCss.Contains('.attention-queue', [StringComparison]::Ordinal)) 'Browser UI must style the control center and attention queue.'
+    Assert-Condition ($indexHtml.Contains('id="source-intake-panel"', [StringComparison]::Ordinal)) 'Loaded projects must have a collapsible source-intake panel.'
+    Assert-Condition ($indexHtml.Contains('id="source-intake-toggle"', [StringComparison]::Ordinal)) 'Source-intake collapse control must be keyboard-addressable.'
+    Assert-Condition ($indexHtml.Contains('data-nav-group="plan"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="execution"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="analysis"', [StringComparison]::Ordinal)) 'Primary navigation must group plan, execution, and analysis views.'
+    Assert-Condition ($appJs.Contains('No active alerts', [StringComparison]::Ordinal)) 'Project health must distinguish no active alerts from an unknown execution health.'
+    Assert-Condition ($appJs.Contains('Execution data unavailable', [StringComparison]::Ordinal)) 'Planning-only projects must not present missing execution evidence as zero completion.'
+    Assert-Condition ($appJs.Contains('health.overall', [StringComparison]::Ordinal)) 'Execution evidence display must use the canonical health indicator rather than a Gantt-lane heuristic.'
+    Assert-Condition ($appJs.Contains('CPM (dependency-only)', [StringComparison]::Ordinal)) 'CPM finish must be labeled as a dependency-only calculation in the overview.'
+    Assert-Condition ($appJs.Contains('gantt-inspector-column', [StringComparison]::Ordinal)) 'Gantt inspector must have a dedicated adjacent layout column.'
+    Assert-Condition ($appJs.Contains('Advanced filters', [StringComparison]::Ordinal)) 'Gantt advanced filters must be progressively disclosed.'
+    Assert-Condition ($stylesCss.Contains('.page > * { min-width: 0;', [StringComparison]::Ordinal)) 'Page children must be allowed to shrink without causing document-level horizontal overflow.'
+    Assert-Condition ($stylesCss.Contains('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)', [StringComparison]::Ordinal)) 'Summary grids must use shrinkable columns at responsive widths.'
+    Assert-Condition ($stylesCss.Contains('.gantt-workspace', [StringComparison]::Ordinal) -and $stylesCss.Contains('.gantt-inspector-column', [StringComparison]::Ordinal)) 'Gantt layout must reserve a responsive inspector column.'
     $program = Get-Content -LiteralPath $programPath -Raw
     Assert-Condition ($program.Contains('http://127.0.0.1:5050', [StringComparison]::Ordinal)) 'Program must bind to the loopback address.'
     Assert-Condition (-not $program.Contains('0.0.0.0', [StringComparison]::Ordinal)) 'Program must not bind to all interfaces.'
