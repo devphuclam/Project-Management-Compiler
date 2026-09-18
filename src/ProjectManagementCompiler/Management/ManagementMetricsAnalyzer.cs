@@ -64,9 +64,10 @@ public sealed class ManagementMetricsAnalyzer
         var executionEffort = AnalyzeExecutionEffort(project.ExecutionOverlay);
         var hasExecutionEvidence = project.ExecutionOverlay.Records.Any(record =>
             record.ActualEffortHours is not null || record.RemainingEffortHours is not null || record.ActualStart is not null || record.ActualFinish is not null);
-        var forecastState = hasExecutionEvidence && dependency.CalculatedFinish is not null
-            ? DataState.Calculated
-            : DataState.Unknown;
+        // MVP1 deliberately does not convert a CPM result into a forecast. A
+        // forecast needs an explicit remaining-work/resource rule; actual start
+        // evidence alone is not enough. Keep this distinct from CalculatedFinish.
+        var forecastState = DataState.Unknown;
         var health = new HealthIndicator
         {
             Id = "health.overall",
@@ -100,6 +101,27 @@ public sealed class ManagementMetricsAnalyzer
                 Label = "Overall delivery health",
                 Value = health.Status,
                 State = health.Status == "UNKNOWN" ? DataState.Unknown : DataState.Calculated
+            },
+            new()
+            {
+                ViewId = "dashboard.baseline-finish",
+                Label = "Baseline finish",
+                Value = FormatDate(project.Baseline.PlanningFinish),
+                State = project.Baseline.PlanningFinish is null ? DataState.Unknown : DataState.Known
+            },
+            new()
+            {
+                ViewId = "dashboard.cpm-finish",
+                Label = "CPM calculated finish",
+                Value = FormatDate(dependency.CalculatedFinish),
+                State = dependency.CalculatedFinish is null ? DataState.Unknown : DataState.Calculated
+            },
+            new()
+            {
+                ViewId = "dashboard.forecast-finish",
+                Label = "Execution forecast finish",
+                Value = FormatDate(null),
+                State = forecastState
             }
         };
 
@@ -124,7 +146,7 @@ public sealed class ManagementMetricsAnalyzer
             EffortAccounting = effortAccounting,
             ExecutionEffort = executionEffort,
             ForecastState = forecastState,
-            ForecastFinish = forecastState == DataState.Calculated ? dependency.CalculatedFinish : null,
+            ForecastFinish = null,
             HealthIndicators = [health],
             ViewSummaries = views,
             Diagnostics = diagnostics
@@ -144,4 +166,6 @@ public sealed class ManagementMetricsAnalyzer
             RemainingState = remainingValues.Length == 0 ? DataState.Unknown : DataState.Calculated
         };
     }
+
+    private static string FormatDate(DateOnly? value) => value?.ToString("yyyy-MM-dd") ?? "UNKNOWN";
 }

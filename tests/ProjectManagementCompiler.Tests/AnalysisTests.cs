@@ -92,6 +92,15 @@ internal static class AnalysisTests
         TestAssert.True(suspendedAnalysis.Alerts.Any(alert => alert.WorkItemId == "P04-B" && alert.AlertCode == "SUSPENDED"), "Suspension must remain visible as an explicit condition.");
     }
 
+    public static void UnstartedPastFinishIsLateToStartButNotActiveOverdue()
+    {
+        var analysis = new ManagementAnalysisOrchestrator().Analyze(CaptureCanonicalProject(), new DateOnly(2026, 9, 28));
+
+        TestAssert.True(analysis.Alerts.Any(alert => alert.WorkItemId == "P04-A" && alert.AlertCode == "START_DELAY"), "An unstarted item after its planned finish must remain visibly late to start.");
+        TestAssert.False(analysis.Alerts.Any(alert => alert.WorkItemId == "P04-A" && alert.AlertCode == "OVERDUE"), "MVP1 treats OVERDUE as active in-progress work beyond finish, not unstarted work.");
+        TestAssert.Equal(0, analysis.ExecutionStatus.Overdue, "Unstarted work must not inflate the active-overdue count.");
+    }
+
     public static void LatePredecessorMarksUnstartedSuccessorAtRiskConservatively()
     {
         var project = Apply(CaptureCanonicalProject(), new ExecutionUpdate

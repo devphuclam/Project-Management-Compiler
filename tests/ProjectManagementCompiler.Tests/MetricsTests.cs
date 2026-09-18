@@ -32,6 +32,30 @@ internal static class MetricsTests
         TestAssert.True(analysis.HealthIndicators.Any(indicator => indicator.Status == "UNKNOWN"), "Insufficient actual evidence must produce an explicit UNKNOWN health indicator.");
     }
 
+    public static void ActualStartAloneDoesNotFabricateForecastFromCpmFinish()
+    {
+        var project = CaptureCanonicalProject();
+        var updated = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        {
+            WorkItemId = "P01-A",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 9, 18),
+            LastUpdatedAt = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero)
+        });
+        TestAssert.True(updated.Accepted, "An actual start should be accepted for forecast semantics testing.");
+
+        var analysis = Analyze(updated.Project);
+
+        TestAssert.Equal(DataState.Calculated, analysis.CpmState, "The fixture should still produce a calculated CPM finish.");
+        TestAssert.True(analysis.CalculatedFinish is not null, "The fixture should expose an independent CPM calculated finish.");
+        TestAssert.Equal(DataState.Unknown, analysis.ForecastState, "Actual start alone is insufficient evidence for a forecast.");
+        TestAssert.Equal(null, analysis.ForecastFinish, "An unknown forecast must not reuse the CPM calculated finish.");
+        TestAssert.True(
+            analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.cpm-finish")
+            && analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.forecast-finish"),
+            "Dashboard summaries must expose CPM and forecast as separate concepts.");
+    }
+
     private static ManagementAnalysis Analyze(CanonicalProject project) =>
         new ManagementAnalysisOrchestrator().Analyze(project, new DateOnly(2026, 9, 28));
 
