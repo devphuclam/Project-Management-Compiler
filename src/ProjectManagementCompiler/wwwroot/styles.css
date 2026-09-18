@@ -593,6 +593,7 @@ th, td { border-bottom-color: var(--line); }
 .summary-control-copy { display: grid; min-width: 0; gap: 4px; }
 .summary-control-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .summary-control-copy span { font-size: 11px; }
+.summary-control-copy .summary-semantic-note { font-size: 10px; line-height: 1.35; }
 .summary-control-kicker { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .summary-control-card .text-action { flex: 0 0 auto; align-self: flex-end; padding: 0; font-size: 11px; }
 .summary-schedule-card { display: grid; gap: 8px; }
@@ -600,10 +601,14 @@ th, td { border-bottom-color: var(--line); }
 .summary-date-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; }
 .summary-date-row strong { text-align: right; }
 .summary-schedule-card > p:last-child { margin: 4px 0 0; font-size: 11px; }
+.summary-evidence-scope { display: grid; gap: 4px; margin: 12px 0 0; padding: 12px 14px; border: 1px solid #d5e6dc; border-radius: 10px; background: #f4faf6; }
+.summary-evidence-scope > p { margin: 0; font-size: 11px; }
+.summary-evidence-scope > p:last-child { max-width: 90ch; line-height: 1.45; }
 .summary-inventory { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; padding: 0 2px; font-size: 12px; }
 .summary-inventory-label { color: var(--muted); font-weight: 700; }
 .summary-inventory strong { font-size: 12px; }
 .summary-inventory > span:last-child { flex-basis: 100%; font-size: 11px; }
+.attention-scope { margin: 3px 0 0; font-size: 11px; line-height: 1.35; }
 .dashboard-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0 16px; }
 .dashboard-context-grid .dashboard-card { min-height: 0; }
 .dashboard-inventory { margin: 12px 0 18px; }

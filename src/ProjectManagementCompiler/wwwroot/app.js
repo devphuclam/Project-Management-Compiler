@@ -28,14 +28,14 @@
 
   // Presentation-only labels. The canonical model and source role codes stay untouched.
   const rolePresentation = Object.freeze({
-    LEAD: "Project lead",
-    PDA: "Product Decision Authority",
-    PROC: "Process manager",
-    DEV2: "Supporting developer",
-    QLHT: "System management",
-    HTKT: "Technical support",
-    SPEC: "Specialist reviewer",
-    PILOT: "Pilot observer"
+    LEAD: "Project-specific lead role",
+    PDA: "Project-specific decision role",
+    PROC: "Process / business role",
+    DEV2: "Supporting project role",
+    QLHT: "System management role",
+    HTKT: "Technical support role",
+    SPEC: "Specialist review role",
+    PILOT: "Pilot observer role"
   });
 
   function normalizeDisplayTitle(value, id) {
@@ -216,55 +216,64 @@
     const model = summary && summary.views && summary.views.wbs
       ? buildGanttRows(summary.views.wbs.root, gantt, baseline)
       : { rows: [] };
-    const phase = resolveRelevantPhase(model.rows, analysis.asOfDate);
+    const scheduledPhase = resolveRelevantPhase(model.rows, analysis.asOfDate);
     const milestones = (gantt.milestones || [])
       .filter(item => parseDate(item.plannedDate) !== null)
       .sort((left, right) => parseDate(left.plannedDate) - parseDate(right.plannedDate));
     const asOf = parseDate(analysis.asOfDate);
-    const nextControlPoint = milestones.find(item => asOf === null || parseDate(item.plannedDate) >= asOf) || milestones[0] || null;
+    const nextBaselineControlPoint = milestones.find(item => asOf === null || parseDate(item.plannedDate) >= asOf) || null;
     const inventory = {
       phases: model.rows.filter(row => row.kind === "Phase").length,
       workPackages: model.rows.filter(row => row.kind === "WorkPackage").length,
       deliveryCards: model.rows.filter(row => row.kind === "DeliveryCard").length,
       controlPoints: model.rows.filter(row => row.kind === "Milestone").length
     };
-    return { phase, nextControlPoint, inventory };
+    return { scheduledPhase, nextBaselineControlPoint, inventory };
   }
 
-  function controlPointState(item) {
-    const raw = String(item && item.state || "").toUpperCase();
-    if (["OPEN", "BLOCKED", "NOT_RUN", "COMPLETED", "CANCELLED", "CLOSED"].includes(raw)) return stateLabel(raw);
+  function controlPointState() {
     return "Planned · result not evaluated";
+  }
+
+  function evidenceScopeMessage(summary) {
+    const execution = hasExecutionEvidence(summary)
+      ? "Planning baseline and recorded execution overlay loaded."
+      : "Planning baseline loaded. No execution evidence recorded in Compiler.";
+    return execution + " Readiness/gate execution records are not part of the current MVP1 intake.";
   }
 
   function renderControlStrip(summary, context) {
     const strip = node("section", null, "summary-control-strip");
     const phaseCard = node("div", null, "summary-control-card");
     const phaseCopy = node("div", null, "summary-control-copy");
-    phaseCopy.appendChild(node("span", "CURRENT PHASE", "summary-control-kicker"));
-    phaseCopy.appendChild(node("strong", context.phase ? context.phase.id + " · " + context.phase.displayName : "Phase not identified"));
-    phaseCopy.appendChild(node("span", context.phase ? displayDate(context.phase.plan.start) + " → " + displayDate(context.phase.plan.finish) : "No dated phase evidence", "muted"));
+    phaseCopy.appendChild(node("span", "SCHEDULED PHASE", "summary-control-kicker"));
+    phaseCopy.appendChild(node("strong", context.scheduledPhase ? context.scheduledPhase.id + " · " + context.scheduledPhase.displayName : "Phase not identified"));
+    phaseCopy.appendChild(node("span", context.scheduledPhase ? displayDate(context.scheduledPhase.plan.start) + " → " + displayDate(context.scheduledPhase.plan.finish) : "No dated phase evidence", "muted"));
+    phaseCopy.appendChild(node("span", "Derived from the immutable baseline; actual phase entry and gate authorization are not loaded.", "muted summary-semantic-note"));
     phaseCard.appendChild(phaseCopy);
-    if (context.phase) {
+    if (context.scheduledPhase) {
       const phaseAction = node("button", "View phase", "text-action");
       phaseAction.type = "button";
       phaseAction.dataset.summaryView = "gantt";
-      phaseAction.dataset.summaryKey = context.phase.key;
+      phaseAction.dataset.summaryKey = context.scheduledPhase.key;
       phaseCard.appendChild(phaseAction);
     }
     strip.appendChild(phaseCard);
 
     const gateCard = node("div", null, "summary-control-card");
     const gateCopy = node("div", null, "summary-control-copy");
-    gateCopy.appendChild(node("span", "NEXT CONTROL POINT", "summary-control-kicker"));
-    gateCopy.appendChild(node("strong", context.nextControlPoint ? normalizeDisplayTitle(context.nextControlPoint.name, context.nextControlPoint.milestoneId) : "No dated control point"));
-    gateCopy.appendChild(node("span", context.nextControlPoint ? formatDate(context.nextControlPoint.plannedDate) + " · " + controlPointState(context.nextControlPoint) : "No dated milestone evidence", "muted"));
+    gateCopy.appendChild(node("span", "NEXT BASELINE CONTROL POINT", "summary-control-kicker"));
+    const noControlPointMessage = context.inventory.controlPoints ? "No upcoming baseline control point" : "No baseline control point evidence";
+    const noControlPointDetail = context.inventory.controlPoints ? "All baseline control points precede the reporting date." : "No dated milestone evidence is loaded.";
+    gateCopy.appendChild(node("strong", context.nextBaselineControlPoint ? normalizeDisplayTitle(context.nextBaselineControlPoint.name, context.nextBaselineControlPoint.milestoneId) : noControlPointMessage));
+    gateCopy.appendChild(node("span", context.nextBaselineControlPoint ? formatDate(context.nextBaselineControlPoint.plannedDate) + " · " + controlPointState(context.nextBaselineControlPoint) : noControlPointDetail, "muted"));
+    gateCopy.appendChild(node("span", "Baseline chronology only; authoritative gate outcome is not loaded.", "muted summary-semantic-note"));
     gateCard.appendChild(gateCopy);
-    if (context.nextControlPoint) {
+    if (context.nextBaselineControlPoint) {
       const gateAction = node("button", "View control point", "text-action");
       gateAction.type = "button";
       gateAction.dataset.summaryView = "gantt";
-      gateAction.dataset.summaryKey = typedKey("Milestone", context.nextControlPoint.milestoneId);
+      gateAction.dataset.summaryKey = typedKey("Milestone", context.nextBaselineControlPoint.milestoneId);
       gateCard.appendChild(gateAction);
     }
     strip.appendChild(gateCard);
@@ -283,8 +292,9 @@
     const queue = node("section", null, "attention-queue" + (compact ? " attention-queue-compact" : ""));
     const heading = node("div", null, "section-heading");
     const headingCopy = node("div");
-    headingCopy.appendChild(node("p", "INTERVENTION", "eyebrow"));
+    headingCopy.appendChild(node("p", "SCHEDULE EXCEPTIONS", "eyebrow"));
     headingCopy.appendChild(node("h3", "Needs attention"));
+    headingCopy.appendChild(node("p", "Schedule exceptions derived from loaded evidence.", "muted attention-scope"));
     heading.appendChild(headingCopy);
     const rows = attentionRows(summary);
     const attentionCount = rows.length;
@@ -294,8 +304,11 @@
     const visibleRows = rows.slice(0, compact ? 4 : 5);
     if (!visibleRows.length) {
       const clearState = node("div", null, "attention-empty");
-      clearState.appendChild(node("strong", "No active attention signals."));
-      clearState.appendChild(node("span", "The current baseline is not asking for intervention.", "muted"));
+      clearState.appendChild(node("strong", "No active schedule alerts"));
+      clearState.appendChild(node("span", "No schedule exceptions are derived from the loaded evidence.", "muted"));
+      clearState.appendChild(node("span", hasExecutionEvidence(summary)
+        ? "Readiness/gate execution records are not part of the current MVP1 intake."
+        : "Planning baseline loaded. No execution evidence recorded in Compiler; readiness/gate execution records are not part of the current MVP1 intake.", "muted"));
       queue.appendChild(clearState);
       return queue;
     }
@@ -372,7 +385,7 @@
     panel.className = "summary-region project-control-center";
     const counts = attentionCounts(summary);
     const attentionCount = Object.values(counts).reduce((total, value) => total + value, 0);
-    const healthLabel = counts.BLOCKED || counts.OVERDUE ? "Intervention needed" : attentionCount ? "Watch closely" : "No active alerts";
+    const healthLabel = counts.BLOCKED || counts.OVERDUE ? "Schedule intervention" : attentionCount ? "Schedule attention" : "Schedule clear";
     const healthClass = counts.BLOCKED || counts.OVERDUE ? "danger" : attentionCount ? "warning" : "success";
     const completed = Number(dashboard.completed || 0);
     const totalCards = Number(dashboard.totalCards || 0);
@@ -388,7 +401,7 @@
     hero.appendChild(heroCopy);
     const heroMeta = node("div", null, "summary-hero-meta");
     heroMeta.appendChild(node("span", healthLabel, "summary-status " + healthClass));
-    heroMeta.appendChild(node("span", attentionCount ? attentionCount + " attention alerts" : "No active alerts", "summary-signal-count"));
+    heroMeta.appendChild(node("span", attentionCount ? attentionCount + " derived schedule alerts" : "No active schedule alerts", "summary-signal-count"));
     hero.appendChild(heroMeta);
     panel.appendChild(hero);
     panel.appendChild(renderControlStrip(summary, context));
@@ -430,6 +443,12 @@
     scheduleCard.appendChild(node("p", "Dependency CPM uses analysis-eligible dependencies and the working calendar; it does not perform resource leveling.", "muted"));
     mainGrid.appendChild(scheduleCard);
     panel.appendChild(mainGrid);
+
+    const evidenceScope = node("section", null, "summary-evidence-scope");
+    evidenceScope.appendChild(node("p", "EVIDENCE SCOPE", "eyebrow"));
+    evidenceScope.appendChild(node("strong", progressKnown ? "Planning + recorded execution" : "Planning baseline only"));
+    evidenceScope.appendChild(node("p", evidenceScopeMessage(summary), "muted"));
+    panel.appendChild(evidenceScope);
 
     const metrics = node("div", null, "summary-metric-grid");
     const plannedEffort = summary.baseline.plannedEffortHours === null || summary.baseline.plannedEffortHours === undefined ? "Not recorded" : summary.baseline.plannedEffortHours + "h";
@@ -478,7 +497,7 @@
     const heading = node("div", null, "dashboard-heading");
     heading.appendChild(node("p", "MANAGEMENT OVERVIEW", "eyebrow"));
     heading.appendChild(node("h3", "Management detail"));
-    heading.appendChild(node("p", "The control center above already surfaces phase, gate, exceptions, and schedule. Use this view for operating constraints and calculated detail.", "muted"));
+    heading.appendChild(node("p", "The control center above already surfaces scheduled phase, baseline control points, schedule exceptions, and schedule health. Use this view for operating constraints and calculated detail.", "muted"));
     fragment.appendChild(heading);
     if (!summary) return fragment;
     const context = managementContext(summary);
@@ -1242,7 +1261,7 @@
     const toolbarHeading = node("div", null, "gantt-toolbar-heading");
     toolbarHeading.appendChild(node("p", "PLAN CONTROL", "eyebrow"));
     toolbarHeading.appendChild(node("h3", state.gantt.structureMode ? "Structure view" : "When is work planned?"));
-    toolbarHeading.appendChild(node("p", state.gantt.structureMode ? "Inspect the full Project → Phase → WorkPackage → DeliveryCard hierarchy." : "Read the immutable baseline first; use Needs attention to isolate derived exceptions.", "muted"));
+    toolbarHeading.appendChild(node("p", state.gantt.structureMode ? "Inspect the full Project → Phase → WorkPackage → DeliveryCard hierarchy." : "Read the immutable baseline first; use Needs attention to isolate derived schedule exceptions.", "muted"));
     toolbarTop.appendChild(toolbarHeading);
     const actions = node("div", null, "gantt-toolbar-actions");
     const addAction = (label, action, pressed) => {
@@ -1437,7 +1456,7 @@
     const analysisFields = node("div", null, "gantt-detail-fields");
     const variance = resolveWorkItemVariance(row, analysis);
     appendDetailField(analysisFields, "Primary state", row.primaryState);
-    appendDetailField(analysisFields, "Attention", row.alerts.length ? row.alerts.map(alert => alert.alertCode || "Attention").join(", ") : "Normal");
+    appendDetailField(analysisFields, "Derived schedule alerts", row.alerts.length ? row.alerts.map(alert => alert.alertCode || "Alert").join(", ") : "No derived schedule alerts");
     appendDetailField(analysisFields, "As-of date", displayDate(analysis && analysis.asOfDate));
     appendDetailField(analysisFields, "Start variance", variance && variance.startVarianceWorkingMinutes !== null && variance.startVarianceWorkingMinutes !== undefined ? variance.startVarianceWorkingMinutes + " working minutes" : "Not calculated");
     appendDetailField(analysisFields, "Finish variance", variance && variance.finishVarianceWorkingMinutes !== null && variance.finishVarianceWorkingMinutes !== undefined ? variance.finishVarianceWorkingMinutes + " working minutes" : "Not calculated");
@@ -1470,7 +1489,7 @@
     });
 
     const alerts = appendDetailSection(panel, "ALERTS");
-    if (!row.alerts.length) alerts.appendChild(node("p", "No active alerts.", "muted"));
+    if (!row.alerts.length) alerts.appendChild(node("p", "No derived schedule alerts.", "muted"));
     row.alerts.forEach(alert => {
       const item = node("p", null, "gantt-detail-alert");
       item.appendChild(node("strong", alert.alertCode || "ALERT"));

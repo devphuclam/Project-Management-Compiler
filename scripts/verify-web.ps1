@@ -284,7 +284,7 @@ try {
     Assert-Condition (-not $appJs.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Browser source review must not embed an absolute source path.'
     Assert-Condition ($appJs.Contains('project-control-center', [StringComparison]::Ordinal)) 'Browser UI must expose a project control center summary.'
     Assert-Condition ($appJs.Contains('Needs attention', [StringComparison]::Ordinal)) 'Browser UI must expose an actionable attention queue.'
-    Assert-Condition ($appJs.Contains('NEXT CONTROL POINT', [StringComparison]::Ordinal)) 'Browser UI must expose the next control point readout.'
+    Assert-Condition ($appJs.Contains('NEXT BASELINE CONTROL POINT', [StringComparison]::Ordinal)) 'Browser UI must expose the next baseline control point readout.'
     Assert-Condition ($appJs.Contains('attentionOnly', [StringComparison]::Ordinal)) 'Gantt state must support a focused attention mode.'
     Assert-Condition ($appJs.Contains('Select a row to inspect', [StringComparison]::Ordinal)) 'Gantt detail flow must explain how to inspect a row.'
     Assert-Condition ($indexHtml.Contains('Project control center', [StringComparison]::OrdinalIgnoreCase)) 'Browser shell must label the project control center.'
@@ -292,7 +292,7 @@ try {
     Assert-Condition ($indexHtml.Contains('id="source-intake-panel"', [StringComparison]::Ordinal)) 'Loaded projects must have a collapsible source-intake panel.'
     Assert-Condition ($indexHtml.Contains('id="source-intake-toggle"', [StringComparison]::Ordinal)) 'Source-intake collapse control must be keyboard-addressable.'
     Assert-Condition ($indexHtml.Contains('data-nav-group="plan"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="execution"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="analysis"', [StringComparison]::Ordinal)) 'Primary navigation must group plan, execution, and analysis views.'
-    Assert-Condition ($appJs.Contains('No active alerts', [StringComparison]::Ordinal)) 'Project health must distinguish no active alerts from an unknown execution health.'
+    Assert-Condition ($appJs.Contains('No active schedule alerts', [StringComparison]::Ordinal)) 'Project health must stay scoped to derived schedule alerts rather than whole-project health.'
     Assert-Condition ($appJs.Contains('No execution evidence', [StringComparison]::Ordinal)) 'Planning-only projects must not present missing execution evidence as zero completion.'
     Assert-Condition ($appJs.Contains('health.overall', [StringComparison]::Ordinal)) 'Execution evidence display must use the canonical health indicator rather than a Gantt-lane heuristic.'
     Assert-Condition ($appJs.Contains('Dependency CPM Finish', [StringComparison]::Ordinal)) 'CPM finish must be labeled as a dependency-only calculation in the overview.'
@@ -329,11 +329,23 @@ try {
     Assert-Condition ($appJs.Contains('normalizeDisplayTitle', [StringComparison]::Ordinal)) 'Management UI must normalize redundant source prefixes for display only.'
     Assert-Condition ($appJs.Contains('structureMode', [StringComparison]::Ordinal) -and $appJs.Contains('Structure', [StringComparison]::Ordinal)) 'Gantt must expose an explicit Structure mode.'
     Assert-Condition ($appJs.Contains('Needs attention', [StringComparison]::Ordinal) -and $appJs.Contains('preset === "attention"', [StringComparison]::Ordinal)) 'Gantt must expose a first-class Needs attention preset.'
-    Assert-Condition ($appJs.Contains('CURRENT PHASE', [StringComparison]::Ordinal) -and $appJs.Contains('NEXT CONTROL POINT', [StringComparison]::Ordinal)) 'Overview must expose current phase and next control point context.'
+    Assert-Condition ($appJs.Contains('SCHEDULED PHASE', [StringComparison]::Ordinal) -and $appJs.Contains('NEXT BASELINE CONTROL POINT', [StringComparison]::Ordinal)) 'Overview must expose baseline-derived phase and control point context.'
     Assert-Condition ($appJs.Contains('No execution evidence', [StringComparison]::Ordinal)) 'Planning-only overview must name the missing execution evidence plainly.'
     Assert-Condition ($appJs.Contains('Dependency CPM Finish', [StringComparison]::Ordinal)) 'Schedule overview must label dependency CPM separately from resource constraints.'
     Assert-Condition ($appJs.Contains('primaryOwner', [StringComparison]::Ordinal) -and $appJs.Contains('sourceName', [StringComparison]::Ordinal)) 'Management rows must separate primary owner and source title from the canonical projection.'
     Assert-Condition ($appJs.Contains('WorkPackage', [StringComparison]::Ordinal) -and $appJs.Contains('isStructureMode', [StringComparison]::Ordinal)) 'Default schedule presentation must be able to quiet WorkPackage rows without removing them from the model.'
+    Assert-Condition ($appJs.Contains('SCHEDULED PHASE', [StringComparison]::Ordinal) -and -not $appJs.Contains('CURRENT PHASE', [StringComparison]::Ordinal)) 'Baseline-selected phase must be labeled as scheduled, not actual/current.'
+    Assert-Condition ($appJs.Contains('NEXT BASELINE CONTROL POINT', [StringComparison]::Ordinal) -and -not $appJs.Contains('NEXT CONTROL POINT', [StringComparison]::Ordinal)) 'Baseline milestone chronology must be labeled as a baseline control point.'
+    Assert-Condition ($appJs.Contains('No active schedule alerts', [StringComparison]::Ordinal) -and -not $appJs.Contains('No active alerts', [StringComparison]::Ordinal)) 'Health and empty attention copy must stay scoped to derived schedule alerts.'
+    Assert-Condition ($appJs.Contains('No schedule exceptions are derived from the loaded evidence.', [StringComparison]::Ordinal)) 'Empty attention copy must not claim whole-project health.'
+    Assert-Condition ($appJs.Contains('EVIDENCE SCOPE', [StringComparison]::Ordinal) -and $appJs.Contains('Readiness/gate execution records are not part of the current MVP1 intake.', [StringComparison]::Ordinal)) 'Overview must disclose the current evidence boundary.'
+    Assert-Condition (-not $appJs.Contains('Process manager', [StringComparison]::Ordinal) -and -not $appJs.Contains('Product Decision Authority', [StringComparison]::Ordinal)) 'Role presentation must not invent formal organization-wide titles.'
+    $controlPointStart = $appJs.IndexOf('function controlPointState', [StringComparison]::Ordinal)
+    $controlPointEnd = $appJs.IndexOf('function renderControlStrip', [StringComparison]::Ordinal)
+    $controlPointSource = if ($controlPointStart -ge 0 -and $controlPointEnd -gt $controlPointStart) { $appJs.Substring($controlPointStart, $controlPointEnd - $controlPointStart) } else { '' }
+    Assert-Condition ($controlPointSource.Contains('Planned · result not evaluated', [StringComparison]::Ordinal) -and -not $controlPointSource.Contains('stateLabel(', [StringComparison]::Ordinal)) 'Baseline control points must retain an unevaluated result state without execution evidence.'
+    Assert-Condition (-not $appJs.Contains('|| milestones[0] || null', [StringComparison]::Ordinal)) 'Baseline chronology must not reuse the earliest milestone after the final control point.'
+    Assert-Condition ($appJs.Contains('No upcoming baseline control point', [StringComparison]::Ordinal)) 'Post-baseline chronology must explain when no future control point remains.'
     $presentationStart = $appJs.IndexOf('function createGanttPresentation', [StringComparison]::Ordinal)
     $presentationEnd = $appJs.IndexOf('function formatDate', [StringComparison]::Ordinal)
     Assert-Condition ($presentationStart -ge 0 -and $presentationEnd -gt $presentationStart) 'Gantt presentation projection source boundary must be discoverable.'
