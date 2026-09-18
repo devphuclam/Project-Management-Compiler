@@ -28,6 +28,7 @@ public sealed record GanttItem
     public string PhaseId { get; init; } = string.Empty;
     public string WorkPackageId { get; init; } = string.Empty;
     public ExecutionState? ExecutionState { get; init; }
+    public IReadOnlyList<string> LogicalRoles { get; init; } = Array.Empty<string>();
     public bool IsCritical { get; init; }
     public IReadOnlyList<string> DependencyIds { get; init; } = Array.Empty<string>();
     public IReadOnlyList<GanttLaneEntry> Lanes { get; init; } = Array.Empty<GanttLaneEntry>();
@@ -67,6 +68,12 @@ public sealed class GanttProjector
             .ToDictionary(
                 group => group.Key,
                 group => group.Select(dependency => dependency.PredecessorId).OrderBy(id => id, StringComparer.Ordinal).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+        var logicalRolesByWorkItem = project.Assignments
+            .GroupBy(assignment => assignment.WorkItemId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(assignment => assignment.LogicalRoleCode).Where(role => !string.IsNullOrWhiteSpace(role)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(role => role, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase);
 
         var items = new List<GanttItem>();
@@ -126,6 +133,9 @@ public sealed class GanttProjector
                 PhaseId = card.PhaseId,
                 WorkPackageId = card.WorkPackageId,
                 ExecutionState = state,
+                LogicalRoles = logicalRolesByWorkItem.TryGetValue(card.Id, out var logicalRoles)
+                    ? logicalRoles
+                    : Array.Empty<string>(),
                 IsCritical = criticalPathIds.Contains(card.Id),
                 DependencyIds = dependenciesBySubject.TryGetValue(card.Id, out var dependencyIds)
                     ? dependencyIds

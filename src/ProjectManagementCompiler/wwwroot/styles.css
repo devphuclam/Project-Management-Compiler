@@ -69,7 +69,7 @@ button.secondary:hover, .tab:hover { border-color: var(--accent); color: var(--a
 .view-content { padding-top: 18px; min-height: 240px; }
 .empty-state { color: var(--muted); padding: 28px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
 .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
-table { width: 100%; border-collapse: collapse; min-width: 680px; }
+table { width: 100%; border-collapse: collapse; min-width: 860px; }
 th, td { border-bottom: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
 th { background: var(--panel-2); color: var(--muted); font-size: 12px; position: sticky; top: 0; }
 tr:last-child td { border-bottom: 0; }
@@ -91,10 +91,14 @@ tr:last-child td { border-bottom: 0; }
 .badge.danger { background: #4c0519; color: var(--danger); }
 .badge.success { background: #064e3b; color: var(--success); }
 .lane-grid { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px; }
-.lane { min-height: 32px; border-radius: 5px; padding: 6px 8px; font-size: 12px; }
+.lane { position: relative; min-height: 32px; overflow: hidden; border-radius: 5px; padding: 6px 8px; font-size: 12px; }
 .lane.plan { background: #0c4a6e; color: #bae6fd; }
 .lane.actual { background: #064e3b; color: #a7f3d0; }
 .lane.alert { background: #4c0519; color: #fecdd3; }
+.lane-text { position: relative; z-index: 1; text-shadow: 0 1px 2px #000; }
+.gantt-track { position: absolute; inset: 6px 8px; border-radius: 999px; background: rgba(15, 23, 42, .45); }
+.gantt-bar { position: absolute; top: 4px; bottom: 4px; min-width: 4px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
+.lane.actual .gantt-bar { background: var(--success); }
 .pill { border-radius: 999px; padding: 2px 7px; font-size: 11px; background: #334155; color: var(--muted); }
 .pill.critical { background: #713f12; color: #fde68a; }
 .warning-list { display: grid; gap: 8px; }

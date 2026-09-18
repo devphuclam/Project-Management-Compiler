@@ -128,30 +128,73 @@
     return list;
   }
 
-  function renderGantt(view) {
-    const rows = view.items.map(item => {
-      const lanes = { PLAN: "UNKNOWN", ACTUAL: "UNKNOWN", ALERT: "—" };
-      (item.lanes || []).forEach(lane => {
-        if (lane.lane === "PLAN") lanes.PLAN = (lane.start || "UNKNOWN") + " → " + (lane.finish || "UNKNOWN");
-        if (lane.lane === "ACTUAL") lanes.ACTUAL = (lane.start || "UNKNOWN") + " → " + (lane.finish || "UNKNOWN");
-        if (lane.lane === "ALERT") lanes.ALERT = lane.alertCode || lane.label || "ALERT";
+  function parseDate(value) {
+    if (!value) return null;
+    const parsed = Date.parse(value + "T00:00:00Z");
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function renderGanttLane(entries, kind, timelineStart, timelineEnd) {
+    const lane = node("div", null, "lane " + kind);
+    const knownEntries = (entries || []).filter(entry => entry);
+    const labels = knownEntries.map(entry => {
+      if (kind === "alert") return (entry.alertCode || "ALERT") + (entry.label ? ": " + entry.label : "");
+      return (entry.start || "UNKNOWN") + " → " + (entry.finish || "UNKNOWN");
+    });
+    if (kind !== "alert" && knownEntries.some(entry => entry.start)) {
+      const track = node("div", null, "gantt-track");
+      const span = Math.max(86400000, timelineEnd - timelineStart);
+      knownEntries.forEach(entry => {
+        const start = parseDate(entry.start);
+        const finish = parseDate(entry.finish || entry.start);
+        if (start === null || finish === null) return;
+        const left = Math.max(0, Math.min(100, ((start - timelineStart) / span) * 100));
+        const right = Math.max(left, Math.min(100, ((finish - timelineStart + 86400000) / span) * 100));
+        const bar = node("span", null, "gantt-bar");
+        bar.style.left = left + "%";
+        bar.style.width = Math.max(2, right - left) + "%";
+        bar.setAttribute("aria-label", labels.join("; "));
+        track.appendChild(bar);
       });
+      lane.appendChild(track);
+    }
+    lane.appendChild(node("span", labels.length ? labels.join("; ") : (kind === "alert" ? "—" : "UNKNOWN"), "lane-text"));
+    return lane;
+  }
+
+  function renderGantt(view) {
+    const datedEntries = (view.items || []).flatMap(item => (item.lanes || []).filter(lane => lane.lane !== "ALERT" && lane.start).map(lane => [lane.start, lane.finish || lane.start]));
+    const timestamps = datedEntries.flatMap(range => range.map(parseDate)).filter(value => value !== null);
+    const timelineStart = timestamps.length ? Math.min(...timestamps) : Date.now();
+    const timelineEnd = timestamps.length ? Math.max(...timestamps) : timelineStart + 86400000;
+    const rows = view.items.map(item => {
+      const plan = (item.lanes || []).filter(lane => lane.lane === "PLAN");
+      const actual = (item.lanes || []).filter(lane => lane.lane === "ACTUAL");
+      const alerts = (item.lanes || []).filter(lane => lane.lane === "ALERT");
       const tr = node("tr");
       const identity = node("td");
       identity.appendChild(node("strong", item.workItemId));
       identity.appendChild(document.createTextNode(" " + item.name));
       if (item.isCritical) identity.appendChild(node("span", "critical", "pill critical"));
       tr.appendChild(identity);
-      [["plan", lanes.PLAN], ["actual", lanes.ACTUAL], ["alert", lanes.ALERT]].forEach(([kind, value]) => {
+      const context = node("td");
+      context.appendChild(node("div", item.phaseId || "UNKNOWN"));
+      context.appendChild(node("div", item.workPackageId || "UNKNOWN", "muted"));
+      tr.appendChild(context);
+      tr.appendChild(node("td", item.executionState || "UNKNOWN"));
+      tr.appendChild(node("td", (item.logicalRoles || []).join(", ") || "UNKNOWN"));
+      tr.appendChild(node("td", (item.dependencyIds || []).join(", ") || "—"));
+      [["plan", plan], ["actual", actual], ["alert", alerts]].forEach(([kind, entries]) => {
         const td = node("td");
-        td.appendChild(node("div", value, "lane " + kind));
+        td.appendChild(renderGanttLane(entries, kind, timelineStart, timelineEnd));
         tr.appendChild(td);
       });
       return tr;
     });
-    const table = renderTable(["Delivery card", "PLAN", "ACTUAL", "ALERT"], []);
+    const table = renderTable(["Delivery card", "Phase / Work package", "Status", "Logical roles", "Dependencies", "PLAN", "ACTUAL", "ALERT"], []);
     table.querySelector("tbody").append(...rows);
     const section = node("div");
+    section.appendChild(node("p", "PLAN is the immutable baseline; ACTUAL uses recorded evidence; ALERT is derived analysis. Bars span the displayed plan/actual dates and retain exact dates as text.", "muted"));
     section.appendChild(table);
     section.appendChild(node("h3", "Milestones"));
     section.appendChild(renderTable(["ID", "Kind", "Planned date", "Dependencies"], (view.milestones || []).map(item => [item.milestoneId, item.kind, item.plannedDate || "UNKNOWN", (item.dependencyIds || []).join(", ") || "—"])));

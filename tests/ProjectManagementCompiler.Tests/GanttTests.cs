@@ -30,6 +30,10 @@ internal static class GanttTests
         TestAssert.Equal(new DateOnly(2026, 9, 25), actual.Start, "ACTUAL lane must use the recorded actual start.");
         TestAssert.Equal(new DateOnly(2026, 9, 28), actual.Finish, "In-progress ACTUAL lane must end at explicit as-of date.");
         TestAssert.Equal("P04-A", alert.WorkItemId, "ALERT lane must retain the canonical work-item ID.");
+        TestAssert.Equal(
+            string.Join(",", project.Assignments.Where(assignment => assignment.WorkItemId == "P04-A").Select(assignment => assignment.LogicalRoleCode).OrderBy(role => role, StringComparer.Ordinal)),
+            string.Join(",", item.LogicalRoles),
+            "Gantt must expose available logical responsibility roles without fabricating concrete identities.");
         TestAssert.True(item.IsCritical, "Gantt must expose dependency-critical highlighting from shared analysis.");
     }
 
