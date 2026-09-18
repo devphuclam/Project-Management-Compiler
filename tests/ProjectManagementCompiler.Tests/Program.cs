@@ -143,6 +143,8 @@ internal static class Program
         ,("OrchestratorCombinesCpmAndExecutionAnalysis", CpmTests.OrchestratorCombinesCpmAndExecutionAnalysis)
         ,("GanttKeepsPlanAndAddsActualAndAlertLanes", GanttTests.GanttKeepsPlanAndAddsActualAndAlertLanes)
         ,("GanttLeavesActualLaneUnknownWithoutExecutionEvidence", GanttTests.GanttLeavesActualLaneUnknownWithoutExecutionEvidence)
+        ,("GanttKeepsInProgressActualLaneOpenForPresentation", GanttTests.GanttKeepsInProgressActualLaneOpenForPresentation)
+        ,("GanttRetainsFinishOnlyExecutionEvidenceForInspector", GanttTests.GanttRetainsFinishOnlyExecutionEvidenceForInspector)
         ,("DashboardUsesAuthoritativeWorkPackageEffortAndReserveSemantics", MetricsTests.DashboardUsesAuthoritativeWorkPackageEffortAndReserveSemantics)
         ,("PlanningOnlyActualForecastAndHealthRemainUnknown", MetricsTests.PlanningOnlyActualForecastAndHealthRemainUnknown)
         ,("ActualStartAloneDoesNotFabricateForecastFromCpmFinish", MetricsTests.ActualStartAloneDoesNotFabricateForecastFromCpmFinish)

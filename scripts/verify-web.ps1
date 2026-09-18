@@ -99,8 +99,11 @@ try {
     Assert-Condition ($ganttP04[0].dependencyIds -contains 'P03') 'Gantt P04 must use its DeliveryCard dependency.'
     $ganttP04Plan = @($ganttP04[0].lanes | Where-Object { $_.lane -eq 'PLAN' })
     Assert-Condition ($ganttP04Plan.Count -eq 1) 'Gantt P04 must retain its PLAN lane.'
+    Assert-Condition (-not $ganttP04[0].hasExecutionEvidence) 'Planning-only Gantt P04 must not claim execution evidence.'
+    Assert-Condition (@($ganttP04[0].sourceReferences).Count -gt 0) 'Gantt P04 must expose safe item-level source references.'
     Assert-Condition (@($ganttP04[0].lanes | Where-Object { $_.lane -eq 'ACTUAL' }).Count -eq 0) 'Planning-only Gantt must not fabricate ACTUAL lanes.'
     Assert-Condition (@($views.gantt.milestones | Where-Object { $_.plannedDate }).Count -eq 7) 'Gantt milestones must retain all seven authored dates.'
+    Assert-Condition (@($views.gantt.milestones | Where-Object { @($_.sourceReferences).Count -gt 0 }).Count -eq 7) 'Gantt milestones must expose safe item-level source references.'
     Assert-Condition (@($views.dependencyNetwork.nodes | Where-Object { $_.id -eq 'P04' }).Count -eq 2) 'Dependency network must retain both typed P04 nodes.'
 
     $execution = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
@@ -113,8 +116,9 @@ try {
     $executionP04 = @($execution.views.gantt.items | Where-Object { $_.workItemId -eq 'P04' })[0]
     $executionP04Plan = @($executionP04.lanes | Where-Object { $_.lane -eq 'PLAN' })[0]
     Assert-Condition ($executionP04Plan.start -eq $ganttP04Plan[0].start -and $executionP04Plan.finish -eq $ganttP04Plan[0].finish) 'Execution update must not mutate the P04 PLAN lane.'
+    Assert-Condition ($executionP04.hasExecutionEvidence) 'Execution update must mark P04 as carrying explicit execution evidence.'
     Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $_.start -eq '2026-09-25' }).Count -eq 1) 'API execution update did not produce the P04 ACTUAL lane.'
-    Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $_.finish -eq '2026-09-28' }).Count -eq 1) 'In-progress ACTUAL evidence must end at the explicit as-of date.'
+    Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $null -eq $_.finish -and $_.isOpenEnded }).Count -eq 1) 'In-progress ACTUAL evidence must remain open-ended while the browser displays it through as-of.'
     Assert-Condition (@($execution.analysis.alerts | Where-Object { $_.workItemId -eq 'P04' -and $_.alertCode -eq 'OVERDUE' }).Count -eq 1) 'API execution update did not produce the P04 OVERDUE alert.'
 
     $completedFinishOnly = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
@@ -125,7 +129,7 @@ try {
     }
     Assert-Condition ($completedFinishOnly.analysis.executionStatus.completed -eq 1) 'Completed execution with finish-only evidence must count as completed.'
     $completedP05 = @($completedFinishOnly.views.gantt.items | Where-Object { $_.workItemId -eq 'P05' })[0]
-    Assert-Condition (@($completedP05.lanes | Where-Object { $_.lane -eq 'ACTUAL' }).Count -eq 0) 'Finish-only completion may legitimately have no ACTUAL bar start.'
+    Assert-Condition (@($completedP05.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $null -eq $_.start -and $_.finish -eq '2026-09-28' }).Count -eq 1) 'Finish-only completion must retain its ACTUAL finish without fabricating an actual start.'
     Assert-Condition (@($completedFinishOnly.analysis.healthIndicators | Where-Object { $_.id -eq 'health.overall' -and $_.status -eq 'KNOWN' }).Count -eq 1) 'Finish-only execution evidence must make canonical health known.'
 
     $atRisk = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
@@ -302,6 +306,22 @@ try {
     Assert-Condition ($appJs.Contains('data-gantt-preset', [StringComparison]::Ordinal) -and $appJs.Contains('applyGanttPreset', [StringComparison]::Ordinal)) 'Gantt must expose named management view presets.'
     Assert-Condition ($appJs.Contains('Plan only', [StringComparison]::Ordinal)) 'Planning-only rows must use a readable planning state label.'
     Assert-Condition ($appJs.Contains('isDerivedPlan', [StringComparison]::Ordinal) -and $appJs.Contains('derived summary dates', [StringComparison]::Ordinal)) 'Summary rows must expose rolled-up plan dates from dated children.'
+    Assert-Condition ($appJs.Contains('row.kind !== "DeliveryCard"', [StringComparison]::Ordinal) -and $appJs.Contains('resolveWorkItemVariance', [StringComparison]::Ordinal)) 'Inspector variance must be scoped to typed DeliveryCard rows.'
+    Assert-Condition ($appJs.Contains('planStartOrigin', [StringComparison]::Ordinal) -and $appJs.Contains('planFinishOrigin', [StringComparison]::Ordinal)) 'Inspector must distinguish authored and derived plan boundaries.'
+    Assert-Condition ($appJs.Contains('resolveAlertAnchor', [StringComparison]::Ordinal) -and $appJs.Contains('["START_DELAY", "OVERDUE", "AT_RISK", "SUSPENDED", "CANCELLED"]', [StringComparison]::Ordinal) -and $appJs.Contains('["COMPLETED_LATE", "COMPLETED_ON_TIME"]', [StringComparison]::Ordinal)) 'Alert markers must use explicit alert-specific anchor semantics.'
+    Assert-Condition ($appJs.Contains('marker-end', [StringComparison]::Ordinal) -and $appJs.Contains('gantt-dependency-arrow', [StringComparison]::Ordinal)) 'Dependency connectors must expose direction arrowheads.'
+    Assert-Condition ($appJs.Contains('["critical-path", "Critical path"]', [StringComparison]::Ordinal)) 'Gantt must expose a named Critical path preset.'
+    Assert-Condition ($appJs.Contains('WITH_EVIDENCE', [StringComparison]::Ordinal) -and $appJs.Contains('hasExecutionEvidence', [StringComparison]::Ordinal)) 'Execution preset must show explicit execution evidence, not only in-progress state.'
+    Assert-Condition ($appJs.Contains('visibleRows.length', [StringComparison]::Ordinal) -and $appJs.Contains('presetLabel', [StringComparison]::Ordinal)) 'Gantt must announce visible row count and active view state.'
+    Assert-Condition ($appJs.Contains('CALCULATED · DEPENDENCY CPM', [StringComparison]::Ordinal)) 'Inspector must label CPM values as calculated dependency analysis.'
+    Assert-Condition ($appJs.Contains('SOURCE EVIDENCE', [StringComparison]::Ordinal) -and $appJs.Contains('sourceReferences', [StringComparison]::Ordinal)) 'Inspector must expose safe item-level source evidence.'
+    Assert-Condition ($appJs.Contains('through AS OF', [StringComparison]::Ordinal)) 'Open actual bars must explain the as-of endpoint as observation time.'
+    Assert-Condition ($appJs.Contains('gantt-actual-finish-marker', [StringComparison]::Ordinal) -and $appJs.Contains('ACTUAL finish recorded', [StringComparison]::Ordinal)) 'Finish-only actual evidence must remain visible without fabricating a start date.'
+    Assert-Condition ($appJs.Contains('node("button", null, "gantt-alert-marker"', [StringComparison]::Ordinal) -and $appJs.Contains('marker.type = "button"', [StringComparison]::Ordinal)) 'Alert markers must be keyboard-operable controls.'
+    Assert-Condition ($appJs.Contains('delivery-card count', [StringComparison]::Ordinal)) 'Completion language must remain explicitly card-count based.'
+    $summaryStart = $appJs.IndexOf('function renderSummary', [StringComparison]::Ordinal)
+    $summaryEnd = $appJs.IndexOf('function renderTable', [StringComparison]::Ordinal)
+    Assert-Condition ($summaryStart -ge 0 -and $summaryEnd -gt $summaryStart -and -not $appJs.Substring($summaryStart, $summaryEnd - $summaryStart).Contains('addEventListener', [StringComparison]::Ordinal)) 'Summary rendering must not accumulate click listeners.'
     Assert-Condition ($appJs.Contains('zoom: "week"', [StringComparison]::Ordinal)) 'Gantt must default to a readable weekly planning scale.'
     Assert-Condition ($stylesCss.Contains('background-image: none', [StringComparison]::Ordinal)) 'Management workspace surfaces must not rely on decorative gradients.'
     Assert-Condition ($stylesCss.Contains('.gantt-preset', [StringComparison]::Ordinal) -and $stylesCss.Contains('.execution-panel-body', [StringComparison]::Ordinal)) 'Management workspace must style presets and the progressive execution updater.'

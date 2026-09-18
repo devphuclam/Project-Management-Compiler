@@ -22,6 +22,8 @@ internal static class ManagementProjectionTests
         var package = AllNodes(projection.Root).Single(node => node.Id == "F01" && node.Kind == WbsNodeKind.WorkPackage);
         TestAssert.True(package.Children.Any(child => child.Id == "F01-A" && child.Kind == WbsNodeKind.DeliveryCard), "Delivery cards must remain children of their work package.");
         TestAssert.True(package.Children.Any(child => child.Id == "F01-B" && child.Kind == WbsNodeKind.DeliveryCard), "All work-package delivery cards must be projected.");
+        TestAssert.True(package.SourceReferences.Count > 0, "WBS work-package rows must retain safe source references.");
+        TestAssert.True(projection.Root.SourceReferences.Count > 0, "WBS project rows must retain safe project provenance.");
         TestAssert.True(projection.Diagnostics.Count == 0, "The controlled fixture should produce a complete WBS without hierarchy diagnostics.");
     }
 
@@ -45,6 +47,7 @@ internal static class ManagementProjectionTests
 
         TestAssert.Equal(53, views.Gantt.Items.Count, "Shared Gantt projection must expose every delivery card.");
         TestAssert.Equal(7, views.Gantt.Milestones.Count, "Shared Gantt projection must expose milestone markers.");
+        TestAssert.True(views.Gantt.Milestones.All(milestone => milestone.SourceReferences.Count > 0), "Gantt milestone rows must retain safe item-level source references.");
         TestAssert.Equal(7, views.DependencyNetwork.Nodes.Count(node => node.IsMilestone), "Dependency network must retain milestone nodes.");
         TestAssert.True(
             views.DependencyNetwork.Edges.Any(edge => edge.PredecessorId == "X99" && !edge.IncludedInAnalysis && edge.Reason == "INVALID_SOURCE_EVIDENCE"),

@@ -9,10 +9,13 @@ Follow-up base: `318750a`
 
 ## Current state
 
-The current Gantt remediation increment is implemented and ready to be
-integrated into `main`. It is an incremental, verified work-in-progress; it is
-not a claim that every visual-review item in the approved remediation request
-is complete.
+The original Gantt remediation increment is implemented and already integrated
+into `main` at `cf090dc`. This document preserves the historical branch and
+commit context; it is not a request to integrate that old branch again.
+
+The current trust/presentation follow-up has been implemented from that `main`
+baseline in the working tree. It remains a separate, uncommitted refinement
+pass; no commit, merge, or push was requested for this pass.
 
 Commits in this increment:
 
@@ -34,28 +37,37 @@ followed by a normal push to `origin/main`. No force-push is required.
     overdue/at-risk filters, selection details, and execution-form handoff.
   - Typed dependency selection/connectors and P04 WorkPackage vs DeliveryCard
     identity separation.
+  - Trust-center inspector with safe source evidence, authored/derived plan
+    boundaries, actual effort/last-update fields, calculated CPM labeling,
+    typed alerts, and decision-gate labels.
+  - Execution-evidence and Critical path presets, compact visible-row state,
+    open actual bars, finish-only completion markers, and keyboard-operable
+    alert markers.
   - No plan dragging, forecast fabrication, `innerHTML`, or external assets.
 - `src/ProjectManagementCompiler/wwwroot/styles.css`
   - Split task-identity/timeline layout, sticky headers, weekend shading,
     lane styles, markers, connectors, selected/related states, and responsive
     overflow behavior.
 - `scripts/verify-web.ps1`
-  - Static contract assertions committed in `25366df`.
+  - Static and real-shaped API contracts for the trust/presentation seams.
+- `docs/research/2026-09-18-management-apps-ux-patterns.md`
+  - Official Microsoft Project/Planner Premium and Oracle Primavera P6/Cloud
+    research plus MVP2 deferrals.
 - `docs/superpowers/plans/2026-09-18-gantt-ux-remediation.md`
   - The approved execution plan and remaining checklist.
 - This handoff document.
 
 ## Verification already run
 
-From the remediation worktree:
+From the current working tree:
 
 - `node --check src/ProjectManagementCompiler/wwwroot/app.js` — PASS.
 - `git diff --check` — PASS.
-- `./scripts/verify.ps1` — PASS (build, custom tests, API checks, web checks).
+- `./scripts/verify.ps1` — PASS (152 custom tests, API checks, web checks).
 - Web verification summary:
   `Health=ok`, `ProjectId=IE-PROD-ROADMAP-001`, `Cards=53`,
   `OverdueAfterExecution=1`, `AtRiskAfterExecution=1`, `ReopenOverdue=1`,
-  `ReopenAtRisk=1`, `JsonBytes=434312`, `XlsxBytes=47625`, `SheetCount=6`,
+  `ReopenAtRisk=1`, `JsonBytes=434897`, `XlsxBytes=47616`, `SheetCount=6`,
   `SecurityChecks=PASS`.
 
 ## Follow-up completion
@@ -72,20 +84,32 @@ changing the compiler/API contract:
 - Added a distinct critical-path bar/row treatment and synchronized 40px task,
   timeline, and connector geometry.
 - Extended web/API verification for no fabricated planning-only ACTUAL lanes,
-  authored milestone dates, immutable PLAN dates, and in-progress ACTUAL ending
-  at the explicit as-of date.
+  authored milestone dates, immutable PLAN dates, and in-progress ACTUAL
+  displayed through the explicit as-of date while remaining open-ended.
 - Reviewed the real-shaped fixture manually at `2026-09-28` through month,
   week, and day zoom; hierarchy expansion; critical/dependency mode; typed
   `WorkPackage:P04` versus `DeliveryCard:P04`; P04 overdue/start-delay; and P06
   at-risk reason display.
 - Added the Gantt-specific controls to `docs/runbook/mvp1-local.md`.
 
-## Remaining work for integration
+## Current follow-up status
 
-1. Inspect the final diff, create the coherent local commit, and choose whether
-   to merge it into `main`.
-2. Run the full verification suite again after any integration operation. Do
-   not push until explicitly requested.
+The trust/presentation follow-up is complete in the working tree and is not
+yet integrated into `main` or pushed. It keeps the baseline immutable and does
+not add MVP2 schedule-comparison features. The final review covered:
+
+- typed `WorkPackage:P04` versus `DeliveryCard:P04` inspector variance;
+- safe item provenance and per-boundary authored/derived plan origins;
+- in-progress P04 shown through `AS OF` while actual finish stays UNKNOWN;
+- finish-only P05 completion shown as a dated ACTUAL finish marker without an
+  invented start;
+- P04 overdue/start-delay and P06 at-risk successor in the Risks preset;
+- Execution evidence, Dependencies, and Critical path presets;
+- decision-gate labeling, dependency arrowheads, compact view-state summary,
+  and keyboard selection of alert markers.
+
+The only current integration action is to review, commit, merge/push this
+working-tree follow-up when explicitly requested.
 
 The earlier browser snapshot showed the old table renderer because it was
 served by a stale/other local app instance. Treat that snapshot as a reminder

@@ -10,11 +10,35 @@
 
 **Spec:** Approved Gantt UX / visual-design remediation request in the task attachment; semantic constraints are also defined by `CONTEXT.md`, `docs/superpowers/specs/2026-09-17-project-management-compiler-design.md`, and `specs/001-mvp1-project-management-compiler/spec.md`.
 
+## Current completion status (2026-09-18)
+
+The original checklist below is retained as implementation history. The original
+Gantt remediation is already on `main` at `cf090dc`; it is not waiting for a
+future integration step. The current trust/presentation follow-up is complete
+and verified in the working tree; it remains uncommitted until explicitly
+integrated. It extends the existing renderer with:
+
+- official Microsoft Project / Planner Premium and Oracle Primavera research;
+- typed DeliveryCard-only execution variance lookup;
+- safe item-level source evidence in WBS/Gantt projections and the inspector;
+- explicit calculated CPM, open ACTUAL, alert-anchor, dependency-direction,
+  critical-path preset, execution-evidence, and compact view-state semantics;
+- per-boundary authored/derived summary-date labels, milestone/decision-gate
+  labels, one-time summary event delegation, finish-only ACTUAL markers, and
+  keyboard-operable alert markers.
+
+The follow-up does not implement baseline comparison, forecast/reforecast,
+scenario scheduling, resource leveling, additional dependency types, multiple
+baselines, schedule history, or portfolio roadmap views; those remain MVP2+
+candidates.
+
 ## Global Constraints
 
 - Preserve source PLAN values and never make planned bars draggable or editable.
 - Keep ACTUAL evidence separate from PLAN; an in-progress actual lane ends at the explicit analysis `asOfDate` already supplied to the management engine.
 - Render ALERT as a marker/annotation, not a fabricated schedule bar or forecast.
+- Draw an in-progress ACTUAL span through the explicit `asOfDate` for display,
+  while preserving the missing Actual Finish as open/unknown.
 - Resolve dependency identity as `(kind, id)` so `WorkPackage:P04` and `DeliveryCard:P04` remain distinct; only analysis-eligible typed edges may become execution connectors.
 - Do not add a frontend framework, external Gantt library, CDN asset, third-party JavaScript, canvas dependency, or network request from the browser UI.
 - Use DOM construction and `textContent`; do not introduce `innerHTML` or unsafe interpolation of source names.

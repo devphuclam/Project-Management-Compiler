@@ -15,6 +15,10 @@ public sealed record GanttLaneEntry
     public GanttLane Lane { get; init; }
     public DateOnly? Start { get; init; }
     public DateOnly? Finish { get; init; }
+    public bool IsOpenEnded { get; init; }
+    public decimal? ActualEffortHours { get; init; }
+    public decimal? RemainingEffortHours { get; init; }
+    public DateTimeOffset? LastUpdatedAt { get; init; }
     public DataState State { get; init; } = DataState.Unknown;
     public string? AlertCode { get; init; }
     public string? Label { get; init; }
@@ -28,6 +32,8 @@ public sealed record GanttItem
     public string PhaseId { get; init; } = string.Empty;
     public string WorkPackageId { get; init; } = string.Empty;
     public ExecutionState? ExecutionState { get; init; }
+    public bool HasExecutionEvidence { get; init; }
+    public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
     public IReadOnlyList<string> LogicalRoles { get; init; } = Array.Empty<string>();
     public bool IsCritical { get; init; }
     public IReadOnlyList<string> DependencyIds { get; init; } = Array.Empty<string>();
@@ -41,6 +47,7 @@ public sealed record GanttMilestoneEntry
     public MilestoneKind Kind { get; init; }
     public string? ParentId { get; init; }
     public DateOnly? PlannedDate { get; init; }
+    public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
     public bool IsCritical { get; init; }
     public IReadOnlyList<string> DependencyIds { get; init; } = Array.Empty<string>();
     public DataState State { get; init; } = DataState.Unknown;
@@ -109,21 +116,22 @@ public sealed class GanttProjector
                 }
             };
 
-            if (record?.ActualStart is not null)
+            if (record is not null && (record.ActualStart is not null
+                || record.ActualFinish is not null
+                || record.ActualEffortHours is not null
+                || record.RemainingEffortHours is not null))
             {
-                var actualFinish = record.ActualFinish;
-                if (actualFinish is null && state == ExecutionState.InProgress)
-                {
-                    actualFinish = asOfDate;
-                }
-
                 lanes.Add(new GanttLaneEntry
                 {
                     WorkItemId = card.Id,
                     Lane = GanttLane.Actual,
                     Start = record.ActualStart,
-                    Finish = actualFinish,
-                    State = actualFinish is null ? DataState.Unknown : DataState.Known,
+                    Finish = record.ActualFinish,
+                    IsOpenEnded = record.ActualFinish is null && state == ExecutionState.InProgress,
+                    ActualEffortHours = record.ActualEffortHours,
+                    RemainingEffortHours = record.RemainingEffortHours,
+                    LastUpdatedAt = record.LastUpdatedAt,
+                    State = record.ActualFinish is null ? DataState.Unknown : DataState.Known,
                     Label = "ACTUAL"
                 });
             }
@@ -148,6 +156,8 @@ public sealed class GanttProjector
                 PhaseId = card.PhaseId,
                 WorkPackageId = card.WorkPackageId,
                 ExecutionState = state,
+                HasExecutionEvidence = record is not null,
+                SourceReferences = card.SourceReferences,
                 LogicalRoles = logicalRolesByWorkItem.TryGetValue(card.Id, out var logicalRoles)
                     ? logicalRoles
                     : Array.Empty<string>(),
@@ -169,6 +179,7 @@ public sealed class GanttProjector
                 Kind = milestone.Kind,
                 ParentId = milestone.ParentId,
                 PlannedDate = ValidDate(milestone.PlannedDate) ? milestone.PlannedDate : null,
+                SourceReferences = milestone.SourceReferences,
                 IsCritical = criticalMilestoneIds.Contains(milestone.Id),
                 DependencyIds = milestoneDependenciesBySubject.TryGetValue(milestone.Id, out var dependencyIds)
                     ? dependencyIds

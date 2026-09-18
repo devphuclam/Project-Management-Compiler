@@ -23,6 +23,7 @@ public sealed record WbsNode
     public decimal? PlannedEffortHours { get; init; }
     public int? PlannedDurationWorkingMinutes { get; init; }
     public ExecutionState? ExecutionState { get; init; }
+    public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
     public IReadOnlyList<WbsNode> Children { get; init; } = Array.Empty<WbsNode>();
 }
 
@@ -79,7 +80,8 @@ public sealed class WbsProjector
                         workPackage.PlannedEffortHours,
                         workPackage.PlannedDurationWorkingMinutes,
                         null,
-                        cards));
+                        cards,
+                        workPackage.SourceReferences));
                 }
             }
 
@@ -100,7 +102,8 @@ public sealed class WbsProjector
                 phase.PlannedEffortHours,
                 phase.PlannedDurationWorkingMinutes,
                 null,
-                workPackages.Concat(milestones).OrderBy(node => node.Kind).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray()));
+                workPackages.Concat(milestones).OrderBy(node => node.Kind).ThenBy(node => node.Id, StringComparer.Ordinal).ToArray(),
+                phase.SourceReferences));
         }
 
         foreach (var workPackage in project.WorkPackages.Where(workPackage => !phaseIds.Contains(workPackage.PhaseId)))
@@ -124,7 +127,8 @@ public sealed class WbsProjector
             Id = project.Project.Id,
             Name = project.Project.Name,
             Kind = WbsNodeKind.Project,
-            Children = phases
+            Children = phases,
+            SourceReferences = project.Provenance
         };
 
         return new WbsProjection
@@ -145,7 +149,8 @@ public sealed class WbsProjector
         card.PlannedEffortHours,
         card.PlannedDurationWorkingMinutes,
         card.State,
-        Array.Empty<WbsNode>());
+        Array.Empty<WbsNode>(),
+        card.SourceReferences);
 
     private static WbsNode CreateMilestoneNode(MilestoneDecision milestone) => new()
     {
@@ -157,7 +162,8 @@ public sealed class WbsProjector
         PlannedFinish = ValidDate(milestone.PlannedDate) ? milestone.PlannedDate : null,
         PlannedEffortHours = milestone.PlannedEffortHours,
         PlannedDurationWorkingMinutes = milestone.PlannedDurationWorkingMinutes,
-        ExecutionState = milestone.State
+        ExecutionState = milestone.State,
+        SourceReferences = milestone.SourceReferences
     };
 
     private static WbsNode CreatePlannedNode(
@@ -171,7 +177,8 @@ public sealed class WbsProjector
         decimal? plannedEffortHours,
         int? plannedDurationWorkingMinutes,
         ExecutionState? executionState,
-        IReadOnlyList<WbsNode> children) => new()
+        IReadOnlyList<WbsNode> children,
+        IReadOnlyList<SourceReference>? sourceReferences = null) => new()
     {
         Id = id,
         Name = name,
@@ -183,7 +190,8 @@ public sealed class WbsProjector
         PlannedEffortHours = plannedEffortHours,
         PlannedDurationWorkingMinutes = plannedDurationWorkingMinutes,
         ExecutionState = executionState,
-        Children = children
+        Children = children,
+        SourceReferences = sourceReferences ?? Array.Empty<SourceReference>()
     };
 
     private static void AddMissingParentDiagnostic(ICollection<ImportWarning> diagnostics, string code, string id, string parentId, string kind)
