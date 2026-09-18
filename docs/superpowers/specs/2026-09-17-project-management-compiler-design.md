@@ -389,8 +389,10 @@ Core authored execution states are:
 NOT_STARTED, IN_PROGRESS, COMPLETED, SUSPENDED, CANCELLED
 ```
 
-All imported IDEAEngineering cards begin as `NOT_STARTED`, as the source
-requires. `OVERDUE` is a derived view state:
+An IDEAEngineering card receives an authored execution state only when the
+source explicitly provides a recognized value. Missing or unrecognized source
+states remain null/unknown with a diagnostic; they are never silently changed
+to `NOT_STARTED`. `OVERDUE` is a derived view state:
 
 ```text
 currentDate > deadline
@@ -423,10 +425,15 @@ The CPM module calculates dependency-network results only when supported
 Finish-to-Start edges and normalized card/milestone durations are available. It
 calculates earliest start/finish, latest start/finish, total float, and the
 dependency critical path. CPM consumes `plannedDurationWorkingMinutes`, not raw
-effort. For IDEAEngineering, date ranges and explicit AM/PM half-day markers are
-normalized through the authored Monday–Friday calendar; effort is used for
-capacity/load only. If the source does not make a duration safe to normalize,
-CPM is unknown rather than deriving a duration from effort.
+effort. For IDEAEngineering, date ranges and AM/PM half-day markers are
+normalized through the authored Monday–Friday calendar; an omitted start marker
+means the start of that working day and an omitted finish marker means the end
+of that working day. This supports the source's one-sided marker notation
+without using effort to fill a schedule. Effort is used for capacity/load only;
+an effort/duration mismatch is retained as a warning. Known milestone/gate IDs
+are valid predecessors for cards and gates. If the source does not make a
+duration safe to normalize, CPM is unknown rather than deriving a duration from
+effort.
 
 The algorithm is:
 
@@ -657,10 +664,13 @@ Representative codes are:
 | `STALE_SUBORDINATE_REFERENCE` | Appendix/rendition names a stale authority version | Use higher-ranked current authority and surface variance |
 | `CONFLICTING_BASELINE` | Sources disagree on an authoritative field | Keep the authority-ranked value and mark conflict for review |
 | `AMBIGUOUS_DATE` | A date cannot be resolved safely | Keep date unknown and warn |
+| `AUTHORED_SCHEDULE_AMBIGUOUS` | A schedule marker is missing or unrecognized in a way that cannot be normalized | Keep duration unknown and warn |
 | `MISSING_DEPENDENCY_TARGET` | A dependency names no known item | Exclude edge from CPM and warn |
 | `UNSUPPORTED_DEPENDENCY_TYPE` | Dependency is not Finish-to-Start | Preserve source edge, mark CPM ineligible, warn |
 | `DEPENDENCY_CYCLE` | CPM graph contains a cycle | Return CPM unknown; do not mutate baseline |
 | `EFFORT_RECONCILIATION` | Child card hours differ from parent work-package hours | Preserve both levels and warn about accounting variance |
+| `EFFORT_DURATION_MISMATCH` | Authored effort differs from normalized schedule duration | Preserve both values and warn; do not rewrite either |
+| `UNKNOWN_EXECUTION_STATE` | Source state is absent or unrecognized | Preserve null/unknown state and warn |
 | `MISSING_CARIO_MAPPING` | Logical role has no configured concrete identity | Leave field blank and add workbook warning |
 | `MISSING_ORGANIZATION_MAPPING` | Department/team is not authored or configured | Leave field blank and warn |
 | `UNKNOWN_ACTUALS` | Source contains planning only | Show actual/forecast as unknown |

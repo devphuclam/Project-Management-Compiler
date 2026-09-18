@@ -15,14 +15,24 @@ current public IDEAEngineering reference at commit
 - [x] R002 Run clean verification from the pre-remediation compiler commit.
 - [x] R003 Add failing compatibility tests shaped like DOC-07, Appendix A, and Kanban/CARIO.
 - [x] R004 Amend design/specification/contracts, ADR, context, and task gates.
-- [ ] R005 Rebuild the public-safe controlled fixture from the current source shape.
-- [ ] R006 Implement field-level authority resolution and separate rendition validity.
-- [ ] R007 Extract DOC-07 control, baseline, phase schedule, reserve, and milestones.
-- [ ] R008 Extract Vietnamese Appendix A work packages, outputs, effort, and predecessor evidence.
-- [ ] R009 Extract Kanban cards, CARIO matrices, and many-to-many logical-role assignments.
-- [ ] R010 Preserve work-package, card, and gate dependency graphs without double-feeding CPM.
-- [ ] R011 Preserve nullable authored dates/states, capture provenance, safe source identity, and the source-content boundary.
-- [ ] R012 Run optional local-reference compatibility verification, review the diff, and record blockers before resuming Task 8+.
+- [x] R005 Rebuild the public-safe controlled fixture from the current source shape.
+- [x] R006 Implement field-level authority resolution and separate rendition validity.
+- [x] R007 Extract DOC-07 control, baseline, phase schedule, reserve, and milestones.
+- [x] R008 Extract Vietnamese Appendix A work packages, outputs, effort, and predecessor evidence.
+- [x] R009 Extract Kanban cards, CARIO matrices, and many-to-many logical-role assignments.
+- [x] R010 Preserve work-package, card, and gate dependency graphs without double-feeding CPM.
+- [x] R011 Preserve nullable authored dates/states, capture provenance, safe source identity, and the source-content boundary.
+- [x] R012 Run optional local-reference compatibility verification, review the diff, and record blockers before resuming Task 8+.
+
+Remediation gate result: against IDEAEngineering reference commit
+`afa9638f629999de6faa881ca25226cda44820a5`, Level-B extraction is canonical
+with 6 phases, 35 work packages, 53 delivery cards, 7 milestones, 512 planned
+hours, 88 reserve hours, 600 capacity hours, and 231 CARIO assignments. The
+reference run has no errors; its retained diagnostics are six ordinary source
+row conflicts and one authored effort/duration mismatch. The source identity is
+safe and hashed, the resolved reference is retained, and captured source text
+is excluded from canonical JSON. The gate is locally verified; the branch has
+not yet been pushed at this checkpoint.
 
 ## Foundation
 

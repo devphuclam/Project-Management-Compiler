@@ -240,6 +240,14 @@ configuration; assert structured diagnostics and safe behavior.
   separately from normalized planned working duration and authored baseline
   start/finish dates. CPM MUST consume duration; capacity/load MUST consume
   effort.
+- **FR-013B**: IDEAEngineering date ranges MUST use the Monday-Friday,
+  eight-hour working calendar. A missing start endpoint marker means the start
+  of that working day and a missing finish endpoint marker means the end of
+  that working day; an unrecognized marker MUST leave duration unknown and
+  produce a diagnostic.
+- **FR-013C**: When authored effort and normalized schedule duration differ,
+  the compiler MUST preserve both values and emit an
+  `EFFORT_DURATION_MISMATCH` warning; it MUST NOT rewrite one from the other.
 - **FR-014**: Important extracted values MUST retain repository, ref/commit,
   source file, section/table/item, extraction rule, authority rank, and
   validation/confidence information where available.
@@ -431,7 +439,9 @@ configuration; assert structured diagnostics and safe behavior.
   is not a Git checkout.
 - The IDEAEngineering planning convention remains represented by the documented
   relative paths and headings used by the fixture.
-- All imported source cards begin `NOT_STARTED`, as required by the source plan.
+- Explicit recognized source states are preserved. Missing or unrecognized
+  source states remain null/unknown with a diagnostic rather than becoming
+  `NOT_STARTED`.
 - The source provides planning effort but not actual execution evidence.
 - The source does not prove reserve consumption; initial reserve can be known
   while consumed and remaining reserve remain `NOT-RUN`/`UNKNOWN`.

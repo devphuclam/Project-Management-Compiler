@@ -43,7 +43,11 @@ rendition does not erase a valid DOC-07 + Appendix baseline.
 The remediation also requires nullable unknown dates, non-fabricated unknown
 execution states, capture metadata and safe source identity preservation, and
 exclusion of runtime source content from persisted canonical JSON. The
-execution overlay remains additive and baseline-immutable.
+execution overlay remains additive and baseline-immutable. Card-to-known-gate
+edges remain analysis-eligible; work-package predecessor evidence remains a
+separate traceability graph. The source's one-sided AM/PM notation is
+normalized with start-of-day and end-of-day boundary defaults, while malformed
+markers remain unknown.
 
 ## Scope and invariants
 
@@ -301,13 +305,15 @@ IDEAEngineering repository.
    groups and totals so the fixture has a mechanically obvious 512-hour sum:
    `P01-P07 = 112`, `F01-F05 = 75`, `C01-C05 = 70`, `W01-W07 = 105`,
    `L01-L05 = 80`, and `Q01-Q06 = 70`.
-4. Include authored start/finish dates and explicit half-day markers for enough
-   cards to test the Monday-Friday, eight-hour calendar. Include at least one
+4. Include authored start/finish dates and complete or one-sided half-day
+   markers for enough cards to test the Monday-Friday, eight-hour calendar.
+   Include at least one
    source dependency whose predecessor is absent and mark it only during
    extraction as invalid source evidence.
-5. Encode all cards as `NOT_STARTED`, WIP policy `1`, initial reserve `88`,
-   capacity `600`, and logical CARIO/project role codes without concrete people
-   or departments.
+5. Preserve explicit source states when present; leave planning-only states
+   unknown when the source does not author them. Encode WIP policy `1`, initial
+   reserve `88`, capacity `600`, and logical CARIO/project role codes without
+   concrete people or departments.
 6. Add a test that reads only fixture metadata and asserts the five recognized
    paths exist, no private reference checkout is present, and the fixture
    headers describe the expected counts.
@@ -434,9 +440,11 @@ IDEAEngineering repository.
    dates and decimal hours using invariant culture, retain source references for
    every important value, and emit explicit warnings for missing values.
 5. Implement the working calendar as Monday-Friday, eight hours/day. Convert
-   authored start/finish plus explicit AM/PM markers to working minutes. Set
-   duration state to `KNOWN` only when the authored schedule is safe; leave it
-   unknown rather than using effort as a substitute.
+   authored start/finish plus complete or one-sided AM/PM markers to working
+   minutes; missing start/finish markers use the start/end of the working day.
+   Set duration state to `KNOWN` only when the authored schedule is safe; leave
+   it unknown rather than using effort as a substitute, and diagnose effort /
+   duration mismatches without rewriting either value.
 6. Normalize parent IDs and phase IDs. Preserve Appendix work-package effort as
    the capacity roll-up. Preserve card effort and add an
    `EFFORT_RECONCILIATION` warning when card detail does not equal its parent.
@@ -557,10 +565,10 @@ IDEAEngineering repository.
 1. Add tests asserting authoritative planned effort is 512, capacity is 600,
    initial reserve is 88, and consumed/remaining reserve remain null with
    unknown/not-run states.
-2. Add tests that all 53 cards start `NOT_STARTED`, the dashboard label is
-   exactly `Delivery cards completed 0/53`, manual actuals are unknown without
-   evidence, and fixed as-of dates derive late-start/overdue without mutating
-   authored execution state.
+2. Add tests that the dashboard label is exactly `Delivery cards completed
+   0/53`, manual actuals are unknown without evidence, explicit source states
+   are preserved, unrecognized source states remain unknown, and fixed as-of
+   dates derive late-start/overdue without mutating authored execution state.
 3. Add a test that the analysis labels dependency CPM separately from the
    single-coder/resource baseline constraint.
 4. Add failing tests for actual start/finish variance, completed-on-time/late,

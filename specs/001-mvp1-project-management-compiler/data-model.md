@@ -148,7 +148,7 @@ explicit as-of date for an in-progress card. The overlay never contains
 | `parentId` | string/null | Phase or work package context |
 | `name` | string | Source-authored card title |
 | `plannedDate` | date | Zero-duration source date |
-| `state` | ExecutionState | Starts `NOT_STARTED` |
+| `state` | ExecutionState/null | Explicit recognized source state; absent or unrecognized source state remains null/unknown |
 | `dependencyIds` | string[] | Gate prerequisites |
 | `plannedEffortHours` | number | Always `0` for current source |
 | `plannedDurationWorkingMinutes` | number | Always `0` for current source |
@@ -258,8 +258,10 @@ is a structural failure.
 
 Work-package dependencies remain a traceability graph owned by Appendix A.
 Delivery-card and milestone dependencies form the detailed execution graph.
-Equivalent edges are not silently double-fed into CPM; source work-package
-edges remain visible with their own provenance and analysis eligibility.
+Known milestone/gate IDs may be predecessors of delivery cards or other gates
+and are eligible for CPM when their durations are safe. Equivalent edges are
+not silently double-fed into CPM; source work-package edges remain visible with
+their own provenance and analysis eligibility.
 
 The authoritative work-package effort roll-up for the current fixture is
 exactly 512 hours. Card-level effort remains available for detail and

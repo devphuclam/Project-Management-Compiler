@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for corrective remediation
+Accepted
 
 ## Context
 
@@ -22,6 +22,12 @@ Adapt the compiler to the source contract with explicit field-level authority:
 - Kanban/CARIO owns delivery-card decomposition, card detail/schedule and
   many-to-many responsibility assignments;
 - HTML Gantt is a subordinate cross-check and README is navigation.
+- A known gate/milestone is a valid predecessor for a delivery card or later
+  gate; Appendix work-package edges remain separate traceability evidence.
+- Kanban date ranges accept the source's one-sided AM/PM notation: an omitted
+  start marker is the start of the working day and an omitted finish marker is
+  the end. Unknown markers remain unknown, and effort/duration mismatches are
+  warnings rather than value substitutions.
 
 Canonical validity is reported by capability. Unknown dates and source states
 remain unknown/null, capture provenance survives normalization, and runtime

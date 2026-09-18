@@ -121,3 +121,18 @@ from the delivery-card/milestone execution graph and is not double-fed into CPM.
 **Rendition Validity**:
 The validity of a subordinate Gantt or Kanban rendition is reported separately
 from DOC-07 baseline validity and Appendix work-package validity.
+
+**Authored Schedule Boundary**:
+In the IDEAEngineering Kanban notation, a missing start-side AM/PM marker means
+the start of that working day and a missing finish-side marker means the end of
+that working day. An unrecognized marker leaves duration unknown.
+
+**Effort/Duration Mismatch**:
+An authored effort value and normalized working duration are independent facts.
+When they differ, the compiler retains both and emits a warning; it does not
+rewrite either value.
+
+**Gate Dependency**:
+A dependency from a known milestone/gate to a delivery card or later gate is a
+valid execution-graph edge. Appendix work-package predecessor evidence remains
+separate traceability data and is not double-fed into CPM.
