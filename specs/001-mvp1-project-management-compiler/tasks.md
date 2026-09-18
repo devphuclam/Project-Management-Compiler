@@ -62,10 +62,10 @@ free test harness, the solution build, and the loopback verification workflow.
 | T028 | COMPLETE | Source and warning review is available through the browser UI. |
 | T029 | COMPLETE | Shared WBS/Gantt/Kanban/dependency/CPM/dashboard projections are rendered. |
 | T030 | COMPLETE | UI JSON reopen uses `/api/reopen` and recalculates from an explicit as-of date. |
-| T031 | COMPLETE | Fixture E2E script covers analyze/update/alert/reopen/XLSX and UI labels `Delivery cards completed X/53`. |
-| T032 | COMPLETE | `scripts/verify.ps1` runs build, tests, web/API, JSON, security, Gantt, and XLSX checks. |
-| T033 | COMPLETE | Manual standards/spec review completed; baseline mutation, actual/duration conflation, forecast overclaiming, overdue semantics, JSON reopen, source safety, Gantt context, and CARIO planned-date regressions were checked and remediated. |
-| T034 | COMPLETE | `docs/runbook/mvp1-local.md` documents build, test, verify, run, API, browser, JSON reopen, and CARIO export commands; final verification and repository hygiene checks pass. |
+| T031 | COMPLETE | Primary fixture E2E script uses `ideaengineering-real-shaped` and covers analyze/update/alert/reopen/XLSX plus UI labels `Delivery cards completed X/53`. |
+| T032 | PARTIAL | The verification workflow exists and the hardening pass has a passing local run; final fresh-candidate verification remains open. |
+| T033 | PARTIAL | The prior review is recorded; the final hardening review must still check typed identity, graph leakage, finish semantics, mapping warnings, and source safety. |
+| T034 | PARTIAL | The runbook is updated; final candidate verification and repository hygiene evidence remain open until the hardening branch is complete. |
 
 ## Foundation
 
@@ -78,7 +78,7 @@ free test harness, the solution build, and the loopback verification workflow.
 
 - [x] T005 Define `IProjectSourceAdapter`, `SourceRequest`, and `RepositorySnapshot`.
 - [x] T006 Implement mandatory local repository capture with allow-listed paths, normalized containment checks, reparse-point rejection, file/total size limits, and no-execution guarantees.
-- [x] T007 (Optional capability) Implement existing-Git HTTPS capture with temporary workspace cleanup; offline MVP acceptance must not depend on this task.
+- [ ] T007 (OPTIONAL / DEFERRED) HTTPS capability boundary is implemented and returns a structured unavailable diagnostic; live HTTPS capture is not part of offline MVP1 acceptance.
 - [x] T008 Implement planning-document discovery and authority resolution.
 - [x] T009 Implement deterministic IDEAEngineering Markdown/HTML extraction.
 - [x] T010 Add fixture tests for authority precedence, stale subordinate references, and unsupported input.
@@ -122,3 +122,29 @@ free test harness, the solution build, and the loopback verification workflow.
 - [x] T032 Run offline tests, build, deterministic rerun, execution-overlay round-trip, source safety fixture tests, Gantt lane tests, and workbook XML/package verification.
 - [x] T033 Review the diff against the approved design/specification for baseline mutation, actual/duration conflation, alert overclaiming, JSON compatibility, and CARIO planned-date regression; remediate findings.
 - [x] T034 Run final verification-before-completion checks and document exact application/export commands.
+
+## Final MVP1 hardening / correctness remediation — 2026-09-18
+
+These tasks supersede the earlier broad completion labels where the audit found
+semantic gaps. Each checked item has implementation and regression evidence in
+the hardening branch; H012 remains open until the final candidate verification
+and focused manual review are complete.
+
+Optional Level-B compatibility check (read-only, not copied or committed): the
+available `devphuclam/IDEAEngineering` checkout at reference commit
+`7bef4dc629f242613be399818a649760172e6ced` compiled through the application
+pipeline on 2026-09-18 with 6 phases, 35 work packages, 53 delivery cards, 7
+milestones, 512 authoritative hours, 88 reserve hours, and 600 capacity hours.
+
+- [x] H001 Introduce typed canonical identity `(kind, id)` while preserving raw source IDs; allow cross-kind P04 coexistence.
+- [x] H002 Validate typed dependency endpoints and typed duplicate-edge identity; enforce DeliveryCard-only assignments.
+- [x] H003 Preserve typed dependency-network nodes/edges, filter Gantt and CPM by semantic kind, and keep work-package edges as traceability.
+- [x] H004 Restrict card AT_RISK evaluation to card-to-card edges and aggregate multiple delayed predecessors per successor.
+- [x] H005 Compile the real-shaped fixture through `ProjectCompiler`, JSON reopen, and six-sheet CARIO export.
+- [x] H006 Add explicit inclusive CPM date helpers and boundary tests for 0/240/480/720/960 minutes, Friday, and weekend anchors.
+- [x] H007 Require explicit compile/reopen as-of dates; retain only the visible browser-local date default.
+- [x] H008 Emit structured unresolved CARIO priority/department/team warnings without fabricating blank values.
+- [x] H009 Remove the ambiguous dashboard project completion percentage and retain card counts.
+- [x] H010 Add typed endpoint columns to CARIO dependency export and contract tests.
+- [x] H011 Update source review metadata, JSON filename contract, real-shaped runbook/verify-web flow, and optional HTTPS traceability.
+- [ ] H012 Run fresh restore/build/tests/verify, focused manual code review, secret/source-safety review, and final git handoff.

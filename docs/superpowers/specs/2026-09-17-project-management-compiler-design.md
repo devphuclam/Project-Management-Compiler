@@ -368,7 +368,10 @@ loads the CARIO semantics from the Kanban source:
 Project logical roles such as `LEAD`, `PDA`, `PROC`, `DEV2`, `QLHT`, `HTKT`,
 `SPEC`, and `PILOT` are preserved separately from CARIO role codes.
 `Assignment` connects a work item to a logical role and CARIO role; the concrete
-person/account is optional and is resolved only through configuration.
+person/account is optional and is resolved only through configuration. For MVP1,
+the responsibility-matrix assignment target is a `DeliveryCard`; work packages
+and milestones are not valid assignment targets even when their raw IDs match a
+card ID.
 
 `ResourceCapacity` represents the source plan’s one-coder policy and 75 weekday
 capacity days at 8 hours per day. It is planning policy data, not a global rule
@@ -433,7 +436,11 @@ without using effort to fill a schedule. Effort is used for capacity/load only;
 an effort/duration mismatch is retained as a warning. Known milestone/gate IDs
 are valid predecessors for cards and gates. If the source does not make a
 duration safe to normalize, CPM is unknown rather than deriving a duration from
-effort.
+effort. Canonical IDs are unique within their entity kind, not globally, so
+polymorphic dependency endpoints resolve by `(kind, id)` and preserve both
+`WorkPackage:P04` and `DeliveryCard:P04`. Work-package dependencies remain
+traceability evidence and are never admitted to the detailed card/milestone CPM
+graph merely because their raw IDs match.
 
 The algorithm is:
 
@@ -583,8 +590,8 @@ The workbook is `<ProjectName>_CARIO.xlsx` with these sheets:
    mapping status.
 3. `03_CHILDREN_MILESTONES` — phase/work-package parent, child card or
    milestone, relationship type, and provenance.
-4. `04_DEPENDENCIES` — subject, predecessor, dependency type, validation state,
-   and provenance.
+4. `04_DEPENDENCIES` — subject kind/ID, predecessor kind/ID, dependency type,
+   analysis eligibility, validation state, and provenance.
 5. `05_PROJECT_INFO` — project, baseline, authority, target date, capacity,
    reserve, WIP policy, and status/forecast data states.
 6. `06_IMPORT_WARNINGS` — warning ID, severity, code, message, affected item,
@@ -615,7 +622,7 @@ is validated strictly. Reopen preserves both baseline and overlay, while alerts,
 variance, and other calculated analysis are recomputed from an explicit as-of
 date.
 
-Reopen validates the schema version, required fields, global/collection ID
+Reopen validates the schema version, required fields, per-kind/collection ID
 uniqueness, parent and phase ownership, work-package/card hierarchy, assignment
 targets, baseline shape, and canonical field types. These structural invariant
 failures cause reopen to fail. A source-evidence relationship may remain invalid

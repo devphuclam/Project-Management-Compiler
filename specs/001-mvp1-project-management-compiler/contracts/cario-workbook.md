@@ -71,13 +71,19 @@ Source Reference
 ### 04_DEPENDENCIES
 
 ```text
-Task / Milestone ID
-Depends On
+Subject Kind
+Subject ID
+Predecessor Kind
+Predecessor ID
 Dependency Type
 Analysis Eligibility
 Validation State
 Source Reference
 ```
+
+The kind columns are required because source IDs are unique within their
+canonical kind, not globally. For example, `WorkPackage`/`P04` and
+`DeliveryCard`/`P04` remain distinct rows and are not collapsed.
 
 ### 05_PROJECT_INFO
 
@@ -107,7 +113,8 @@ Source Reference
 - `A`, `R+`, `R`, `C`, `I`, and `O` meanings come from source configuration;
 - person, department, team, and priority fields remain blank without explicit
   configuration;
-- unresolved mappings create warning rows;
+- unresolved mappings create warning rows, including explicit blank
+  priority/department/team categories when those task mappings are absent;
 - `Ngày bắt đầu dự kiến` and `Deadline` always use baseline planned dates;
   manual actual dates, alerts, and variance never replace or rename those
   planning fields;

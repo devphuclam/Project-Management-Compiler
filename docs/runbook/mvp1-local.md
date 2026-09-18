@@ -26,16 +26,21 @@ dotnet run --project .\src\ProjectManagementCompiler\ProjectManagementCompiler.c
 Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The server is loopback
 only by default and is not a LAN service.
 
-For a safe demo, enter the repository-relative fixture path:
+For the primary MVP1 demo, enter the real-shaped repository-relative fixture path:
 
 ```text
-tests\fixtures\ideaengineering
+tests\fixtures\ideaengineering-real-shaped
 ```
 
 Choose an explicit as-of date such as `2026-09-28`, then select **Analyze
-source**. The controlled fixture should show 6 phases, 35 work packages, 53
+source**. The real-shaped fixture should show 6 phases, 35 work packages, 53
 delivery cards, 7 milestones, 512 authoritative work-package hours, 88 reserve
-hours, 600 capacity hours, and unresolved CARIO identities as warnings.
+hours, 600 capacity hours, and unresolved CARIO identity/priority/department/team
+mapping warnings. WorkPackage `P04` and DeliveryCard `P04` intentionally coexist;
+the dependency view distinguishes their typed identities.
+
+The older `tests\fixtures\ideaengineering` fixture remains available as a
+legacy regression fixture, but it is not the primary MVP1 acceptance source.
 
 ## Browser workflow
 
@@ -45,10 +50,12 @@ hours, 600 capacity hours, and unresolved CARIO identities as warnings.
 3. Confirm the dashboard uses `Delivery cards completed 0/53` before execution
    evidence is entered. CPM finish and forecast finish remain separate; forecast
    is `UNKNOWN` when evidence is insufficient.
-4. Enter a delivery-card ID such as `P04-A`, choose `In progress`, provide an
-   actual start such as `2026-09-25`, and apply the update. The baseline PLAN
-   dates remain unchanged; the ACTUAL and ALERT lanes are recalculated.
-5. Use **Save project JSON** to download `project.json`. Use the **Reopen
+4. Enter delivery-card ID `P04`, choose `In progress`, provide an actual start
+   such as `2026-09-25`, and apply the update. The baseline PLAN dates remain
+   unchanged; the ACTUAL and ALERT lanes are recalculated. Enter `P06` as
+   `Not started` afterward to see the dependent `AT_RISK` alert.
+5. Use **Save project JSON** to download
+   `<ProjectName>_project.json`. Use the **Reopen
    saved canonical JSON** control to validate and recalculate that snapshot
    without re-reading the source directory.
 6. Use **Export CARIO XLSX** to download
@@ -64,7 +71,7 @@ hours, 600 capacity hours, and unresolved CARIO identities as warnings.
 - `GET /api/project`
 - `GET /api/views` and `GET /api/views/{dashboard|wbs|gantt|kanban|dependencies|cpm}`
 - `GET /api/warnings`
-- `GET /api/exports/project.json`
+- `GET /api/exports/project.json` (download name: `<ProjectName>_project.json`)
 - `GET /api/exports/cario.xlsx`
 
 The persisted JSON contains safe source metadata, provenance, the immutable

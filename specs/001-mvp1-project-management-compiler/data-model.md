@@ -1,9 +1,11 @@
 # MVP1 Canonical Data Model
 
-The public snapshot contract is `schemaVersion: "1.0"`. IDs are stable within
-one project snapshot and are source-derived where the source provides an ID.
-Dates use ISO `YYYY-MM-DD`; hours are decimal numbers; missing data is `null`
-plus an explicit data-state field where interpretation matters.
+The public snapshot contract is `schemaVersion: "1.0"`. IDs are stable and
+unique within their canonical entity kind; source IDs are preserved where the
+source provides them. A polymorphic reference uses its explicit kind together
+with its ID (for example `WorkPackage:P04` and `DeliveryCard:P04` are distinct
+identities). Dates use ISO `YYYY-MM-DD`; hours are decimal numbers; missing data
+is `null` plus an explicit data-state field where interpretation matters.
 
 ## Root document
 
@@ -38,7 +40,7 @@ plus an explicit data-state field where interpretation matters.
 
 | Field | Type | Rule |
 |---|---|---|
-| `id` | string | Stable neutral ID; fixture uses `idea-ddm-technical-pilot-2026` |
+| `id` | string | Stable neutral ID; the real-shaped fixture uses `IE-PROD-ROADMAP-001` |
 | `name` | string | Source project name, not the provisional compiler name |
 | `description` | string/null | Source description when present |
 | `targetDate` | date/null | Authoritative target date |
@@ -160,9 +162,10 @@ subjectId, subjectKind, predecessorId, predecessorKind,
 dependencyType, analysisEligible, validationState, sourceReferences
 ```
 
-`dependencyType` is `FS` in the supported graph. Work-package dependencies are
-retained for baseline trace but are not analysis-eligible when their equivalent
-card edges are present.
+`dependencyType` is `FS` in the supported graph. Dependency endpoints are
+resolved by `(subjectKind, subjectId)` and `(predecessorKind, predecessorId)`.
+Work-package dependencies remain valid traceability evidence and are never
+silently transformed into delivery-card or milestone CPM edges.
 
 ### Estimate
 
@@ -187,8 +190,10 @@ completionEvidenceState: KNOWN | UNKNOWN | NOT_RUN
 `SPEC`, `PILOT`) plus its source meaning.
 
 `Assignment` contains `workItemId`, `logicalRoleCode`, `carioRoleCode`,
-`concreteIdentity`, `mappingStatus`, and `sourceReferences`. A concrete identity
-is nullable and is never inferred.
+`concreteIdentity`, `mappingStatus`, and `sourceReferences`. In MVP1 the
+assignment target is explicitly `DeliveryCard`-only because the current
+IDEAEngineering responsibility matrix assigns executable cards, not work
+packages or milestones. A concrete identity is nullable and is never inferred.
 
 ### CapacityPlan, Calendar, Reserve
 
@@ -247,7 +252,8 @@ authority and may be recalculated after JSON reopen.
 ## Structural validity and retained source evidence
 
 Reopen and normal analysis fail when a structural invariant is violated:
-malformed schema or required fields, duplicate IDs, impossible parent/phase
+malformed schema or required fields, duplicate IDs within a canonical kind,
+impossible parent/phase
 membership, nonexistent work-package/card or assignment references, invalid
 baseline field types, or any other required relationship that the canonical
 model declares structural. A source dependency target that is absent from the

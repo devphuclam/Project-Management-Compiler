@@ -24,6 +24,10 @@ Adapt the compiler to the source contract with explicit field-level authority:
 - HTML Gantt is a subordinate cross-check and README is navigation.
 - A known gate/milestone is a valid predecessor for a delivery card or later
   gate; Appendix work-package edges remain separate traceability evidence.
+- Source IDs are unique within entity kind rather than globally. Polymorphic
+  dependency and graph references therefore resolve by `(kind, id)` and retain
+  collisions such as `WorkPackage:P04` plus `DeliveryCard:P04`; current CARIO
+  assignments remain explicitly delivery-card-only.
 - Kanban date ranges accept the source's one-sided AM/PM notation: an omitted
   start marker is the start of the working day and an omitted finish marker is
   the end. Unknown markers remain unknown, and effort/duration mismatches are

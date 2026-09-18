@@ -368,6 +368,19 @@ configuration; assert structured diagnostics and safe behavior.
 - **FR-045**: CARIO workbook planned start and deadline fields MUST continue to
   come from the baseline; actual dates and alerts MUST NOT overwrite or rename
   those plan fields.
+- **FR-046**: Canonical IDs MUST be unique within their entity kind, not
+  globally. Polymorphic dependency and graph references MUST resolve using
+  `(kind, id)` while preserving the source-visible raw ID.
+- **FR-047**: MVP1 responsibility assignments and execution-overlay records
+  MUST target `DeliveryCard` entities; a work-package or milestone with the
+  same raw ID MUST NOT satisfy that target contract.
+- **FR-048**: Compile and reopen MUST require an explicit `asOfDate` and MUST
+  return a structured validation diagnostic when it is absent. The engine MUST
+  not choose a system-clock date implicitly.
+- **FR-049**: Source review MUST expose safe captured metadata (source ID,
+  repository identity, ref, capture state, document ID, relative file, format,
+  size, and provenance) without rendering captured content, absolute paths, or
+  credentials.
 
 ## Non-functional requirements
 

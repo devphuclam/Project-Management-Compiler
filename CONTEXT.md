@@ -28,6 +28,14 @@ _Avoid_: zero-hour task, phase
 A directed relationship that constrains the order of two canonical work items. MVP1 supports Finish-to-Start relationships only.
 _Avoid_: blocker, parent-child relationship
 
+**Canonical Work-Item Identity**:
+An ID is stable and unique within its canonical kind. A polymorphic dependency
+or graph reference resolves as `(kind, id)`, so `WorkPackage:P04` and
+`DeliveryCard:P04` are distinct while their source-visible IDs remain `P04`.
+MVP1 responsibility assignments and execution-overlay records are
+`DeliveryCard`-only references.
+_Avoid_: globally unique raw ID, rewritten prefixed source ID
+
 ## Schedule and evidence
 
 **Source Baseline**:

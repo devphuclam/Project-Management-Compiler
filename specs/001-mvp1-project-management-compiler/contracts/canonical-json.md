@@ -8,7 +8,8 @@ unsupported major version rather than treating it as the current contract.
 ## Stability rules
 
 - arrays are emitted in deterministic source order;
-- IDs are stable source IDs where available;
+- IDs are stable source IDs where available and are unique within their
+  canonical entity kind; cross-kind references use the explicit kind plus ID;
 - `ProjectSource.capturedAtUtc` is capture metadata and does not participate in
   semantic equivalence, deterministic project-content comparison, or content
   digests;
@@ -48,12 +49,18 @@ analysis
 The entity definitions and invariants are maintained in
 `specs/001-mvp1-project-management-compiler/data-model.md`.
 
+Dependency objects retain `subjectKind`/`subjectId` and
+`predecessorKind`/`predecessorId`; these typed endpoint fields are part of the
+schema-1.0 contract and are not replaced by an invented globally unique ID.
+MVP1 execution-overlay and responsibility assignments target `DeliveryCard`
+records by `workItemId`.
+
 ## Reopen contract
 
 The application accepts a previously generated canonical document when:
 
 1. `schemaVersion` is supported and required fields have the declared types;
-2. IDs are unique in every collection;
+2. IDs are unique within each canonical entity collection/kind;
 3. parent, phase, work-package/card, and assignment relationships resolve;
 4. baseline dates, effort, duration, and state fields satisfy their invariants;
 5. every dependency target either resolves or is explicitly retained as source
