@@ -221,6 +221,24 @@ try {
     $appJs = Get-Content -LiteralPath $appJsPath -Raw
     $indexHtml = Get-Content -LiteralPath $indexHtmlPath -Raw
     Assert-Condition (-not $appJs.Contains('innerHTML', [StringComparison]::OrdinalIgnoreCase)) 'Browser UI must not use unsafe innerHTML rendering.'
+    Assert-Condition ($appJs.Contains('gantt-timeline', [StringComparison]::Ordinal)) 'Gantt renderer must expose a split timeline surface.'
+    Assert-Condition ($appJs.Contains('gantt-as-of-marker', [StringComparison]::Ordinal)) 'Gantt renderer must expose an explicit as-of marker.'
+    Assert-Condition ($appJs.Contains('gantt-plan-bar', [StringComparison]::Ordinal)) 'Gantt renderer must render immutable PLAN bars.'
+    Assert-Condition ($appJs.Contains('gantt-actual-bar', [StringComparison]::Ordinal)) 'Gantt renderer must render ACTUAL bars.'
+    Assert-Condition ($appJs.Contains('gantt-alert-marker', [StringComparison]::Ordinal)) 'Gantt renderer must render ALERT markers.'
+    Assert-Condition ($appJs.Contains('gantt-milestone', [StringComparison]::Ordinal)) 'Gantt renderer must render milestone markers.'
+    Assert-Condition ($appJs.Contains('Show dependencies', [StringComparison]::Ordinal)) 'Gantt toolbar must expose dependency visibility.'
+    Assert-Condition ($appJs.Contains('Expand all', [StringComparison]::Ordinal)) 'Gantt toolbar must expose expand-all.'
+    Assert-Condition ($appJs.Contains('Collapse all', [StringComparison]::Ordinal)) 'Gantt toolbar must expose collapse-all.'
+    Assert-Condition ($appJs.Contains('fit-project', [StringComparison]::Ordinal)) 'Gantt toolbar must expose fit-project.'
+    Assert-Condition ($appJs.Contains('critical-only', [StringComparison]::Ordinal)) 'Gantt filters must expose critical-only.'
+    Assert-Condition (-not $appJs.Contains('draggable', [StringComparison]::OrdinalIgnoreCase)) 'PLAN bars must not be draggable.'
+    Assert-Condition (-not $indexHtml.Contains('cdn.', [StringComparison]::OrdinalIgnoreCase)) 'Gantt must not add CDN assets.'
+    $ganttStart = $appJs.IndexOf('function renderGantt', [StringComparison]::Ordinal)
+    $ganttEnd = $appJs.IndexOf('function renderKanban', [StringComparison]::Ordinal)
+    Assert-Condition ($ganttStart -ge 0 -and $ganttEnd -gt $ganttStart) 'Gantt renderer source boundary must be discoverable.'
+    $ganttSource = $appJs.Substring($ganttStart, $ganttEnd - $ganttStart)
+    Assert-Condition (-not $ganttSource.Contains('FORECAST', [StringComparison]::OrdinalIgnoreCase)) 'Gantt must not fabricate forecast presentation.'
     Assert-Condition ($appJs.Contains('Delivery cards completed', [StringComparison]::Ordinal)) 'Browser UI must label completion as Delivery cards completed X/53.'
     Assert-Condition ($appJs.Contains('getFullYear', [StringComparison]::Ordinal) -and $appJs.Contains('getMonth', [StringComparison]::Ordinal) -and $appJs.Contains('getDate', [StringComparison]::Ordinal)) 'Browser as-of default must use the browser-local calendar date.'
     Assert-Condition ($indexHtml.Contains('id="as-of-date" type="date" required', [StringComparison]::Ordinal)) 'Browser as-of date must be visibly required.'
