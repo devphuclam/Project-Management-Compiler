@@ -149,19 +149,6 @@ The distinction between authored dates, derived dates, and scheduling mode is cr
 - Planner Premium's task history records recent progress and schedule-impacting changes in a Changes pane inside Task Details. The documented examples include label changes, duration changes, and changes to other tasks that affect the schedule. [Planner Premium task history](https://support.microsoft.com/en-us/planner/teams/advanced-capabilities-with-premium-plans-in-planner)
 - A history/change pane is different from a baseline: history answers “what changed and when,” while a baseline answers “which stored plan should this schedule be compared with.” This distinction is a design inference from Microsoft's separate task-history and baseline features. [Planner Premium task history](https://support.microsoft.com/en-us/planner/teams/advanced-capabilities-with-premium-plans-in-planner), [Create or update a baseline or an interim plan](https://support.microsoft.com/en-us/project/create-or-update-a-baseline-or-an-interim-plan-in-project-desktop)
 
-### Deferred MVP2 candidates for this repository
-
-The repository's MVP1 can display a read-only timeline/Gantt, source milestones, typed source references, an explicit asOfDate, and separate planning/execution evidence. The following mature scheduling features are **deferred MVP2 candidates and are not implemented in MVP1**:
-
-1. A stored, identifiable baseline snapshot with baseline metadata and immutable Baseline Start/Finish fields.
-2. Baseline-vs-current comparison, Tracking Gantt overlays, finish variance, and a dedicated variance table.
-3. Scheduler-calculated critical path, free/total float, slack propagation, and calendar-aware date recalculation.
-4. Full editing and calculation for Finish-to-Start, Start-to-Start, Start-to-Finish, and Finish-to-Finish relationships.
-5. Configurable project/task/resource calendars and non-working-day scheduling.
-6. A Planner-style task history/change pane or an audit trail for schedule-impacting edits.
-
-Milestone markers and the existing asOfDate remain useful MVP1 presentation concepts, but a product-grade milestone workflow and scheduler-grade status-date engine are also outside the MVP1 contract. These boundaries are repository planning decisions informed by the Microsoft features above, not claims about Microsoft's product limitations.
-
 ## Oracle Primavera P6 / Primavera Cloud
 
 **Source boundary.** P6 Professional is used below for CPM scheduling, activity relationships, calendars, baselines, milestones, and float. Primavera Cloud is used for its schedule-comparison, baseline, activity-field, and API documentation. The two products share scheduling vocabulary, but the repository should not assume their field names or workflows are interchangeable.
@@ -191,7 +178,7 @@ Milestone markers and the existing asOfDate remain useful MVP1 presentation conc
 - P6 supports global, project, and resource calendar pools. Calendars can define work hours, holidays, project-specific work/non-work days, and resource vacation; calendar assignments affect activity scheduling, tracking, and resource leveling. [Calendars](https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/calendars.htm)
 - P6 defines Data Date as the date used as the starting point to calculate the schedule. The project scheduling workflow allows a data date to be set per project before scheduling. [Dates tab - Project Details](https://docs.oracle.com/cd/G48902_01/client_help/en_US/dates_tab_-_project_details.htm), [Schedule a project](https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/schedule_a_project.htm)
 - Primavera Cloud's scheduling API calls dataDate the progress point or “as-of date” for project activities; status is up to date as of that date, and the value can be set during scheduling or manually. [Schedule a project](https://docs.oracle.com/en/industries/construction-engineering/primavera-cloud/rest-api/op-action-scheduleproject-post.html)
-- **Repository analogy:** the repository's asOfDate should be documented as the reporting boundary for derived late/overdue/at-risk conditions, analogous to Primavera's Data Date. It is not an assertion that the MVP1 compiler implements Primavera's scheduler. It must not be confused with an Actual Finish, a Baseline Date, or the wall-clock “today.”
+- **Repository analogy and boundary:** the repository's `asOfDate` is a controlled reporting/data-date boundary, analogous to Microsoft Project's status date and Primavera's Data Date, but it is not a Primavera scheduler/data-date implementation. In MVP1 it drives late-start, overdue, risk reporting, and the presentation of open actuals. It must not be confused with an Actual Finish, a Baseline Date, or the wall-clock “today.” [Microsoft Project Status field](https://support.microsoft.com/en-us/project/status-task-field), [Oracle P6 project Data Date](https://docs.oracle.com/cd/G48902_01/client_help/en_US/dates_tab_-_project_details.htm), [Oracle Primavera Cloud schedule API and Data Date](https://docs.oracle.com/en/industries/construction-engineering/primavera-cloud/rest-api/op-action-scheduleproject-post.html)
 
 ### Baseline as a stored schedule version
 
@@ -216,18 +203,42 @@ Milestone markers and the existing asOfDate remain useful MVP1 presentation conc
 - Primavera Cloud baseline variance fields include BL Variance - Finish, defined as the duration difference between the activity Finish date and BL Finish date. [Baseline Variance Fields](https://docs.oracle.com/cd/E80480_01/English/user_guides/schedule_management_user_guide/290074.htm)
 - **Design implication:** a history view and a baseline comparison view answer different questions. The former explains edits between versions; the latter compares a current or revised schedule to a named stored reference. Both should remain read-only analysis surfaces until an explicit merge/update workflow exists. [Compare Two Versions of a Project Schedule](https://docs.oracle.com/cd/E80480_01/help/en/user/191096.htm)
 
-### Deferred MVP2 candidates for this repository
+## MVP1 closure: current implementation truth and precise future candidates
 
-The repository's MVP1 can display a read-only timeline/Gantt, source milestones, typed source references, an explicit asOfDate, and separate planning/execution evidence. The following Primavera-grade capabilities are **deferred MVP2 candidates and are not implemented in MVP1**:
+The following is the current repository implementation, not a claim that Microsoft Project or Oracle Primavera implements these details identically:
 
-1. A stored baseline project/schedule version with selectable current/original/supplementary comparison roles.
-2. Baseline bars, Baseline/Actual/Scheduled-or-Planned Finish fields, start/finish variance, and baseline total-float comparison.
-3. CPM scheduling with forward/backward passes, calculated critical path, multiple float paths, free/total/remaining float, and configurable critical thresholds.
-4. Calendar-aware scheduling across project, activity, resource, holiday, and non-working-day calendars.
-5. Full FS/FF/SS/SF dependency scheduling with lag, constraints, data-date advancement, and rescheduling.
-6. Schedule history/change comparison for added, edited, and deleted activities plus a read-only variance-analysis panel.
+- **Immutable authoritative source baseline persisted in canonical JSON.** MVP1 persists one immutable source baseline in canonical JSON, where it remains authoritative evidence. It is not multiple named/versioned baselines or baseline-vs-current comparison. Microsoft Project and Oracle P6 document saved baselines as reference data for comparison; those sources establish the vocabulary used here, not workflow parity. [Microsoft Project baseline and interim plan](https://support.microsoft.com/en-us/project/create-or-update-a-baseline-or-an-interim-plan-in-project-desktop), [Oracle P6 create and assign baselines](https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/create_a_baseline.htm)
+- **PLAN / ACTUAL / ALERT separation.** PLAN is source-authored schedule evidence, ACTUAL is execution evidence and remains unknown when it is not supplied, and ALERT is derived. This keeps baseline/planned, actual, and calculated status distinct, consistent with the field distinctions documented by Microsoft and Oracle. [Microsoft Project available fields reference](https://support.microsoft.com/en-us/project/available-fields-reference), [Oracle Primavera Cloud activity fields](https://docs.oracle.com/cd/E80480_01/English/user_guides/schedule_management_user_guide/95116.htm)
+- **Explicit `asOfDate`.** `asOfDate` is a controlled reporting/data-date boundary, analogous to Microsoft Project's status date and Primavera's Data Date, not a Primavera scheduler/data-date implementation. It drives late-start, overdue, risk reporting, and the presentation of open actuals. It is not an Actual Finish, a Baseline Date, or wall-clock “today.” [Microsoft Project Status field](https://support.microsoft.com/en-us/project/status-task-field), [Oracle P6 project Data Date](https://docs.oracle.com/cd/G48902_01/client_help/en_US/dates_tab_-_project_details.htm), [Oracle Primavera Cloud schedule API and Data Date](https://docs.oracle.com/en/industries/construction-engineering/primavera-cloud/rest-api/op-action-scheduleproject-post.html)
+- **Weekday working-calendar calculations.** MVP1 calculates working dates and durations/minutes with a fixed weekday working-calendar model. Configurable project, task, resource, and holiday calendars are future candidates; Oracle's calendar documentation is the reference for that broader capability. [Oracle P6 calendars](https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/calendars.htm)
+- **Finish-to-Start dependency CPM.** MVP1 performs bounded Finish-to-Start dependency CPM and calculates `ES`, `EF`, `LS`, and `LF`, `FloatWorkingMinutes` / current dependency float, a dependency critical-path indication, and calculated CPM finish. This is the repository's bounded CPM surface, not the broader relationship and path-analysis feature set documented by Microsoft and Oracle. [Microsoft Project critical path](https://support.microsoft.com/en-us/project/manage-your-project-s-critical-path), [Microsoft Project Scheduled Finish field](https://support.microsoft.com/en-us/project/scheduled-finish-task-field), [Oracle P6 relationships](https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/relationships.htm), [Oracle P6 scheduling projects](https://docs.oracle.com/cd/G48902_01/English/User_Guides/p6_pro_user/scheduling_projects.htm)
+- **Milestone / decision-gate nodes.** MVP1 models milestone and decision-gate nodes as explicit schedule events, with authored dates and provenance kept distinct from calculated task dates. This is consistent with the milestone/event treatment documented by Microsoft and Oracle. [Microsoft Planner Premium advanced capabilities](https://support.microsoft.com/en-us/planner/teams/advanced-capabilities-with-premium-plans-in-planner), [Oracle P6 milestones](https://docs.oracle.com/cd/F25600_01/English/User_Guides/p6_pro_user/define_milestones.htm)
+- **Safe source provenance.** MVP1 preserves safe, identity-qualified source provenance for authoritative inputs and keeps derived values distinguishable from source-authored values.
 
-The MVP1 asOfDate is a transparent reporting boundary only; it is not a Primavera Data Date implementation and does not recalculate a CPM schedule. These are repository scope decisions informed by Oracle's documented capabilities, not claims that P6 or Primavera Cloud behave identically in every deployment.
+| Capability | MVP1 | MVP2 |
+| --- | --- | --- |
+| Immutable authoritative baseline | YES | multi-baseline comparison |
+| Actual execution evidence | YES | external execution adapters |
+| Explicit asOfDate | YES | richer status-date workflow |
+| FS dependency CPM | YES | SS/FF/SF + lag |
+| Critical path | YES | longest/driving/multiple paths |
+| Working calendar | fixed weekday model | configurable calendars |
+| Float | current CPM float | free/total/path analysis |
+| Forecast | mostly UNKNOWN | deterministic reforecast |
+| Gantt | PLAN/ACTUAL/ALERT | baseline/current/forecast comparison |
+| Source provenance | YES | cross-source merge provenance |
+
+### Precise future candidates
+
+- Multiple named/versioned baselines, baseline history, and baseline-vs-current comparison.
+- SS/FF/SF relationships, lag, and richer constraints.
+- Free/total float and richer path analysis.
+- Configurable project/task/resource/holiday calendars.
+- Deterministic reforecast, forecast milestone impact, and scenario analysis.
+- Schedule history/change log.
+- External execution adapters and portfolio views where appropriate.
+
+**Closure note.** This matrix describes the current repository implementation; it is not a promise to implement MVP2 now.
 
 ## Cross-product pattern matrix
 
@@ -244,7 +255,7 @@ The MVP1 asOfDate is a transparent reporting boundary only; it is not a Primaver
 | Filtering | Filter by state, risk, criticality, dependency, or hierarchy level to reduce density. | Keep phase/state/critical/overdue/at-risk/late-start filters. Treat them as a way to answer a question, not as a replacement for a readable default. |
 | Selection / detail | A selected row opens a contextual detail surface while preserving the plan. | Use the current inspector as the place for identity, dates, execution evidence, alert reason, dependency context, and source provenance. |
 | Collaboration / update flow | Roadmap products expose milestone/dependency health; execution products expose progress and update fields. | Keep planning evidence read-only and route mutable execution updates through the execution overlay/form. |
-| Baseline / comparison | Baselines are visual snapshots of real dates, not guesses. | Add baseline comparison only when a stored, identifiable snapshot exists. Do not label calculated risk or elapsed time as forecast. |
+| Baseline / comparison | Baselines are visual snapshots of real dates, not guesses. | Keep the immutable source baseline authoritative. Add baseline-vs-current comparison only when comparing identifiable snapshots. Do not label calculated risk or elapsed time as forecast. |
 
 ## Recommendations for the current app
 

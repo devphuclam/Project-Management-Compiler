@@ -12,11 +12,12 @@
 
 ## Current completion status (2026-09-18)
 
-The original checklist below is retained as implementation history. The original
-Gantt remediation is already on `main` at `cf090dc`; it is not waiting for a
-future integration step. The current trust/presentation follow-up is complete
-and verified in the working tree; it remains uncommitted until explicitly
-integrated. It extends the existing renderer with:
+The original checklist below is retained as implementation history. The Gantt
+remediation and trust/presentation follow-up are complete and integrated into
+`main` at `d3a11d84318eb1872c23254d543cfdadbc2f320f` (`feat: finish gantt trust
+presentation pass`). This file is a closed implementation record; a future
+agent must not treat its historical unchecked steps as pending implementation.
+The integrated renderer includes:
 
 - official Microsoft Project / Planner Premium and Oracle Primavera research;
 - typed DeliveryCard-only execution variance lookup;
@@ -31,6 +32,22 @@ The follow-up does not implement baseline comparison, forecast/reforecast,
 scenario scheduling, resource leveling, additional dependency types, multiple
 baselines, schedule history, or portfolio roadmap views; those remain MVP2+
 candidates.
+
+### Final closure evidence
+
+- `Program.cs` registers 151 custom tests.
+- `scripts/test.ps1`: 151 executed, 151 passed, 0 failed.
+- `scripts/verify.ps1`: exit 0 with 152 PASS markers and 0 FAIL markers; the
+  extra marker is the `LauncherContract` web gate in addition to the 151
+  custom tests.
+- `dotnet build --no-restore`: 0 warnings, 0 errors.
+- `node --check src/ProjectManagementCompiler/wwwroot/app.js`: PASS.
+- `git diff --check`: PASS.
+- Web/API verification: 53 cards, `Health=ok`, `SecurityChecks=PASS`, and
+  `ReopenOverdue=1` / `ReopenAtRisk=1`.
+- `GanttLaneEntry.State` remains the completeness state of a lane's date
+  range; explicit execution presence and open-ended actual presentation are
+  represented separately by `HasExecutionEvidence` and `IsOpenEnded`.
 
 ## Global Constraints
 

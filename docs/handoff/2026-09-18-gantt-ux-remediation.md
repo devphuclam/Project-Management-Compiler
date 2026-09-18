@@ -13,9 +13,9 @@ The original Gantt remediation increment is implemented and already integrated
 into `main` at `cf090dc`. This document preserves the historical branch and
 commit context; it is not a request to integrate that old branch again.
 
-The current trust/presentation follow-up has been implemented from that `main`
-baseline in the working tree. It remains a separate, uncommitted refinement
-pass; no commit, merge, or push was requested for this pass.
+The trust/presentation follow-up is also implemented and integrated into
+`main` at `d3a11d8` (`feat: finish gantt trust presentation pass`). This is the
+current audited state of the repository.
 
 Commits in this increment:
 
@@ -23,8 +23,14 @@ Commits in this increment:
 - `25366df` — failing/static browser contract for the required Gantt seams.
 - `f31b391` — split-pane timeline renderer and visual styles.
 
-The requested integration is a fast-forward of this branch into `main`,
-followed by a normal push to `origin/main`. No force-push is required.
+The historical integration request above is closed. No old branch or worktree
+should be merged again.
+
+## STATUS: INTEGRATED / CLOSED
+
+`main` and `origin/main` both contain `d3a11d84318eb1872c23254d543cfdadbc2f320f`.
+The trust/presentation follow-up is complete; this handoff is retained for
+historical context and future MVP2 planning only.
 
 ## Files delivered by this increment
 
@@ -54,16 +60,20 @@ followed by a normal push to `origin/main`. No force-push is required.
   - Official Microsoft Project/Planner Premium and Oracle Primavera P6/Cloud
     research plus MVP2 deferrals.
 - `docs/superpowers/plans/2026-09-18-gantt-ux-remediation.md`
-  - The approved execution plan and remaining checklist.
+  - The approved execution plan, historical checklist, and closure addendum.
 - This handoff document.
 
 ## Verification already run
 
-From the current working tree:
+From the integrated `main` commit:
 
 - `node --check src/ProjectManagementCompiler/wwwroot/app.js` — PASS.
 - `git diff --check` — PASS.
-- `./scripts/verify.ps1` — PASS (152 custom tests, API checks, web checks).
+- `Program.cs` registrations — 151.
+- `./scripts/test.ps1` — 151 executed, 151 passed, 0 failed.
+- `./scripts/verify.ps1` — exit 0; 152 PASS markers / 0 FAIL markers, made up
+  of the 151 custom tests plus the `LauncherContract` web gate, API checks,
+  and security checks.
 - Web verification summary:
   `Health=ok`, `ProjectId=IE-PROD-ROADMAP-001`, `Cards=53`,
   `OverdueAfterExecution=1`, `AtRiskAfterExecution=1`, `ReopenOverdue=1`,
@@ -94,9 +104,9 @@ changing the compiler/API contract:
 
 ## Current follow-up status
 
-The trust/presentation follow-up is complete in the working tree and is not
-yet integrated into `main` or pushed. It keeps the baseline immutable and does
-not add MVP2 schedule-comparison features. The final review covered:
+The trust/presentation follow-up is integrated and closed. It keeps the
+baseline immutable and does not add MVP2 schedule-comparison features. The
+final review covered:
 
 - typed `WorkPackage:P04` versus `DeliveryCard:P04` inspector variance;
 - safe item provenance and per-boundary authored/derived plan origins;
@@ -108,8 +118,11 @@ not add MVP2 schedule-comparison features. The final review covered:
 - decision-gate labeling, dependency arrowheads, compact view-state summary,
   and keyboard selection of alert markers.
 
-The only current integration action is to review, commit, merge/push this
-working-tree follow-up when explicitly requested.
+`GanttLaneEntry.State` remains the completeness state of the lane's date
+range: an in-progress lane with a known start and unknown finish is therefore
+`Unknown` for its incomplete date range. Explicit execution presence and
+open-ended presentation are carried separately by `HasExecutionEvidence` and
+`IsOpenEnded`; no production-code change is needed for that distinction.
 
 The earlier browser snapshot showed the old table renderer because it was
 served by a stale/other local app instance. Treat that snapshot as a reminder
@@ -134,7 +147,7 @@ Open `http://127.0.0.1:5050`, load
 `docs/runbook/mvp1-local.md`; the implementation checklist is
 `docs/superpowers/plans/2026-09-18-gantt-ux-remediation.md`.
 
-Before any further push, inspect `git status --short --branch`, run the full
+For any future change, inspect `git status --short --branch`, run the full
 verification commands, run `git diff --check`, and confirm no generated files,
 credentials, private company material, or copied IDEAEngineering source has
 entered the public repository.
