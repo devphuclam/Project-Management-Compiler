@@ -64,8 +64,8 @@ free test harness, the solution build, and the loopback verification workflow.
 | T030 | COMPLETE | UI JSON reopen uses `/api/reopen` and recalculates from an explicit as-of date. |
 | T031 | COMPLETE | Fixture E2E script covers analyze/update/alert/reopen/XLSX and UI labels `Delivery cards completed X/53`. |
 | T032 | COMPLETE | `scripts/verify.ps1` runs build, tests, web/API, JSON, security, Gantt, and XLSX checks. |
-| T033 | NOT STARTED | Final two-axis code/spec review is the next gate; actionable High/Medium findings must be fixed. |
-| T034 | PARTIAL | Runbook exists; final clean verification, status/security scan, and push report remain. |
+| T033 | COMPLETE | Manual standards/spec review completed; baseline mutation, actual/duration conflation, forecast overclaiming, overdue semantics, JSON reopen, source safety, Gantt context, and CARIO planned-date regressions were checked and remediated. |
+| T034 | COMPLETE | `docs/runbook/mvp1-local.md` documents build, test, verify, run, API, browser, JSON reopen, and CARIO export commands; final verification and repository hygiene checks pass. |
 
 ## Foundation
 
@@ -120,5 +120,5 @@ free test harness, the solution build, and the loopback verification workflow.
 ## Verification and handoff
 
 - [x] T032 Run offline tests, build, deterministic rerun, execution-overlay round-trip, source safety fixture tests, Gantt lane tests, and workbook XML/package verification.
-- [ ] T033 Review the diff against the approved design/specification for baseline mutation, actual/duration conflation, alert overclaiming, JSON compatibility, and CARIO planned-date regression; remediate findings.
-- [ ] T034 Run final verification-before-completion checks and document exact application/export commands.
+- [x] T033 Review the diff against the approved design/specification for baseline mutation, actual/duration conflation, alert overclaiming, JSON compatibility, and CARIO planned-date regression; remediate findings.
+- [x] T034 Run final verification-before-completion checks and document exact application/export commands.
