@@ -96,6 +96,69 @@ internal static class CanonicalJsonTests
             "User-owned execution evidence must participate in semantic digest.");
     }
 
+    public static void CanonicalJsonRejectsOverlayForUnknownWorkItem()
+    {
+        var project = CaptureCanonicalProject() with
+        {
+            ExecutionOverlay = new ExecutionOverlay
+            {
+                Records =
+                [
+                    new ExecutionRecord
+                    {
+                        WorkItemId = "X99",
+                        ExecutionState = ExecutionState.InProgress,
+                        ActualStart = new DateOnly(2026, 9, 24),
+                        ActualStartState = DataState.Known,
+                        LastUpdatedAt = new DateTimeOffset(2026, 9, 24, 10, 0, 0, TimeSpan.Zero)
+                    }
+                ]
+            }
+        };
+
+        var serializer = new CanonicalJsonSerializer();
+        TestAssert.Throws<InvalidDataException>(
+            () => serializer.Deserialize(serializer.Serialize(project)),
+            "Canonical JSON must reject execution records that do not resolve to delivery cards.");
+    }
+
+    public static void CanonicalJsonRejectsInconsistentOverlayStateAndEffort()
+    {
+        var project = CaptureCanonicalProject() with
+        {
+            ExecutionOverlay = new ExecutionOverlay
+            {
+                Records =
+                [
+                    new ExecutionRecord
+                    {
+                        WorkItemId = "P01-A",
+                        ExecutionState = ExecutionState.InProgress,
+                        ActualEffortHours = -1m,
+                        ActualEffortState = DataState.Known,
+                        LastUpdatedAt = new DateTimeOffset(2026, 9, 24, 10, 0, 0, TimeSpan.Zero)
+                    }
+                ]
+            }
+        };
+
+        var serializer = new CanonicalJsonSerializer();
+        TestAssert.Throws<InvalidDataException>(
+            () => serializer.Deserialize(serializer.Serialize(project)),
+            "Canonical JSON must reject negative effort and state/date inconsistencies.");
+    }
+
+    public static void CanonicalJsonRetainsInvalidSourceDependencyEvidence()
+    {
+        var project = CaptureCanonicalProject();
+        var reopened = new CanonicalJsonSerializer().Deserialize(new CanonicalJsonSerializer().Serialize(project));
+        var invalidDependency = reopened.Dependencies.Single(dependency => dependency.PredecessorId == "X99");
+
+        TestAssert.Equal(ValidationState.InvalidSourceEvidence, invalidDependency.ValidationState, "Reopen must retain the explicit invalid-source dependency state.");
+        TestAssert.False(invalidDependency.AnalysisEligible, "Invalid source dependency evidence must remain excluded from analysis.");
+        TestAssert.Equal("Q06-A", invalidDependency.SubjectId, "Reopen must retain the invalid dependency subject.");
+    }
+
     private static CanonicalProject CaptureCanonicalProject()
     {
         var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");

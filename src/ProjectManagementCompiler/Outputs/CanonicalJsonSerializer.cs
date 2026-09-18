@@ -57,10 +57,18 @@ public sealed class CanonicalJsonSerializer
         var project = JsonSerializer.Deserialize<CanonicalProject>(json, Options)
             ?? throw new InvalidDataException("Canonical JSON did not contain a project document.");
 
-        return project with
+        var reopened = project with
         {
             ExecutionOverlay = project.ExecutionOverlay ?? new ExecutionOverlay()
         };
+
+        var diagnostics = CanonicalProjectValidator.Validate(reopened);
+        if (diagnostics.Any(diagnostic => diagnostic.Severity == WarningSeverity.Error))
+        {
+            throw new InvalidDataException(string.Join(" ", diagnostics.Select(diagnostic => diagnostic.Message)));
+        }
+
+        return reopened;
     }
 
     private static JsonSerializerOptions CreateOptions()
