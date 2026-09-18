@@ -115,6 +115,10 @@ internal static class Program
         ,("CpmDetectsCyclesAndLeavesBaselineUntouched", CpmTests.CpmDetectsCyclesAndLeavesBaselineUntouched)
         ,("CpmRejectsUnsupportedEligibleEdges", CpmTests.CpmRejectsUnsupportedEligibleEdges)
         ,("OrchestratorCombinesCpmAndExecutionAnalysis", CpmTests.OrchestratorCombinesCpmAndExecutionAnalysis)
+        ,("RealShapedAuthorityExtractsCurrentPlanningContract", RealSourceCompatibilityTests.RealShapedAuthorityExtractsCurrentPlanningContract)
+        ,("RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments", RealSourceCompatibilityTests.RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments)
+        ,("RealShapedDoc07OwnsMilestonesAndGateDependencies", RealSourceCompatibilityTests.RealShapedDoc07OwnsMilestonesAndGateDependencies)
+        ,("RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe", RealSourceCompatibilityTests.RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe)
     ];
 
     public static int Main()
