@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-mvp1-project-management-compiler`  
 **Created**: 2026-09-17  
-**Status**: Draft — written specification pending human review  
+**Status**: Approved MVP1 scope with execution-overlay amendment
 **Input**: Approved architecture and MVP1 scope for a local project-management intelligence tool
 
 ## User problem
@@ -96,6 +96,16 @@ view contains the same IDs, hierarchy, dates, statuses, and diagnostic states.
 6. **Given** a dependency network and durations, **when** the user opens
    Critical Path, **then** dependency CPM is labeled separately from the
    single-coder/sequential baseline constraint.
+7. **Given** a delivery card, **when** the user records actual execution,
+   **then** the update is stored in an execution overlay and the original plan
+   dates remain unchanged.
+8. **Given** a card with plan and execution evidence, **when** the user opens
+   Gantt, **then** that card has distinct PLAN, ACTUAL, and ALERT lanes using
+   the same canonical work-item ID.
+9. **Given** an unstarted card whose predecessor is late, **when** the
+   dependency evidence safely establishes downstream exposure, **then** the
+   card shows a conservative `AT_RISK` alert naming the late predecessor and
+   does not receive a fabricated delay date.
 
 ### User Story 3 — Export an explainable CARIO fill file (Priority: P1)
 
@@ -217,6 +227,15 @@ configuration; assert structured diagnostics and safe behavior.
   those distinctions affect interpretation.
 - **FR-016**: The system MUST preserve source baseline values separately from
   calculated CPM, variance, and forecast results.
+- **FR-016A**: The canonical model MUST contain an `executionOverlay` keyed by
+  canonical executable work-item ID. It MUST hold mutable execution evidence
+  separately from the immutable source baseline.
+- **FR-016B**: Each execution record MUST support execution state, actual start,
+  actual finish, actual effort, remaining effort, last-updated timestamp, and
+  an optional note/evidence reference, with explicit unknown/not-run states.
+- **FR-016C**: A manual execution update MUST validate date ordering, numeric
+  values, and state/date consistency without mutating planned dates, planned
+  effort, provenance, or source authority.
 
 ### Management analysis
 
@@ -225,10 +244,22 @@ configuration; assert structured diagnostics and safe behavior.
 - **FR-018**: The system MUST generate a useful Gantt view with hierarchy,
   baseline start/finish, duration, dependency summary, milestone markers,
   status, and critical-path indication when valid.
+- **FR-018A**: The Gantt MUST project every executable delivery card with
+  separate PLAN, ACTUAL, and ALERT lanes. PLAN reads only baseline dates;
+  ACTUAL reads only execution evidence; ALERT reads only derived analysis.
+- **FR-018B**: Actual in-progress rendering MUST use actual start through an
+  explicit as-of date or documented equivalent and MUST NOT invent a future
+  actual finish or derive actual duration from actual effort.
+- **FR-018C**: The management engine MUST calculate working-calendar start
+  variance, finish variance, active overdue, late-start, completed-late,
+  completed-on-time, suspended, cancelled, and conservative dependency-risk
+  conditions as structured alerts.
 - **FR-019**: The system MUST generate a Kanban view from the canonical delivery
   cards and source-compatible authored states.
 - **FR-020**: The system MUST derive overdue display state from date and execution
   state rather than authoring `OVERDUE` as a separate truth.
+- **FR-020A**: `OVERDUE` and `AT_RISK` MUST remain derived conditions and MUST
+  never be persisted as authored execution states.
 - **FR-021**: The system MUST calculate Finish-to-Start dependency CPM when
   graph and normalized duration data are sufficient, including
   earliest/latest times, total float, and dependency critical path. It MUST NOT
@@ -243,6 +274,10 @@ configuration; assert structured diagnostics and safe behavior.
   and forecast finish as separate concepts.
 - **FR-026**: Forecast and actual effort MUST remain unknown unless explicit
   actual/remaining evidence is supplied.
+- **FR-026A**: Dashboard status counts MUST include completed, in-progress,
+  not-started, suspended, cancelled, late-to-start, overdue, completed-late,
+  and at-risk counts without converting them into an unsupported overall
+  project percentage.
 - **FR-027**: Dashboard health indicators MUST have documented rules and MUST
   show `UNKNOWN` when evidence is insufficient; no unsupported RAG score may be
   invented.
@@ -275,6 +310,12 @@ configuration; assert structured diagnostics and safe behavior.
   machine-readable canonical snapshot.
 - **FR-037**: The system MUST validate and reopen supported canonical JSON without
   re-running extraction.
+- **FR-037A**: Canonical JSON MUST preserve the source baseline and execution
+  overlay together. A reopened snapshot MUST be able to recalculate alerts and
+  variance from an explicit as-of date.
+- **FR-037B**: Adding `executionOverlay` is an additive schema-1.0 change:
+  readers MUST treat the field as an empty overlay when it is absent from an
+  older 1.0 snapshot, while newly written snapshots MUST emit it explicitly.
 - **FR-038**: The local browser UI MUST use generic “Source” language and expose
   extraction review before export.
 - **FR-039**: All UI views MUST consume one canonical project and one calculated
@@ -294,6 +335,9 @@ configuration; assert structured diagnostics and safe behavior.
   and excluded from semantic-equivalence/digest comparison.
 - **FR-044**: Optional HTTPS capture MUST be capability-gated and MUST NOT block
   offline MVP1 acceptance or require package/runtime installation.
+- **FR-045**: CARIO workbook planned start and deadline fields MUST continue to
+  come from the baseline; actual dates and alerts MUST NOT overwrite or rename
+  those plan fields.
 
 ## Non-functional requirements
 
@@ -334,6 +378,12 @@ configuration; assert structured diagnostics and safe behavior.
 - **SourceReference / Evidence**: provenance for extracted values.
 - **ImportWarning / Blocker**: structured unsafe or unresolved condition.
 - **ManagementAnalysis**: calculated CPM, variance, health, and forecast results.
+- **ExecutionOverlay**: mutable manual execution evidence keyed by canonical
+  executable work-item ID.
+- **ExecutionRecord**: one overlay record containing authored execution state,
+  actual/remaining evidence, update metadata, and optional note/evidence.
+- **Alert**: a structured derived management condition; never a task or authored
+  execution state.
 
 ## Terminology contract
 
@@ -348,6 +398,11 @@ configuration; assert structured diagnostics and safe behavior.
 - **Actual**: explicit execution evidence, never inferred from repository activity.
 - **Forecast**: a calculated future result when evidence is sufficient.
 - **Variance**: a comparison between baseline and calculated or forecast values.
+- **Execution overlay**: mutable evidence layered on the baseline; it does not
+  change source authority.
+- **As-of date**: explicit analysis input used for overdue and late-start rules.
+- **Alert**: derived condition such as `START_DELAY`, `OVERDUE`,
+  `COMPLETED_LATE`, or `AT_RISK`; it is not persisted as state.
 
 ## Assumptions
 
@@ -362,6 +417,11 @@ configuration; assert structured diagnostics and safe behavior.
 - A blank CARIO person/department/priority field is safer than an inferred value.
 - Optional HTTPS source capture is an environment capability, not a test or
   deployment prerequisite.
+- Manual execution evidence is initially empty for a planning-only source and
+  is supplied by the user through the local application.
+- A downstream dependency is marked `AT_RISK` only when a valid predecessor
+  delay and an unstarted successor establish a conservative risk relationship;
+  insufficient evidence remains `UNKNOWN`.
 
 ## Explicit non-goals
 
@@ -403,3 +463,16 @@ configuration; assert structured diagnostics and safe behavior.
   marked invalid source dependency as non-CPM evidence.
 - **SC-011**: Input-safety tests prove an unsafe path or oversized recognized
   source cannot be loaded or executed.
+- **SC-012**: A manual execution update persists actual state independently from
+  the baseline and rejects invalid actual date ordering.
+- **SC-013**: The Gantt projection exposes PLAN, ACTUAL, and ALERT lanes for
+  the same delivery-card ID without mutating baseline dates.
+- **SC-014**: Fixed as-of tests prove working-calendar start/finish variance,
+  active overdue, completed-late, suspended, cancelled, and completed-on-time
+  semantics.
+- **SC-015**: A delayed predecessor produces a conservative `AT_RISK` alert on
+  an unstarted successor only when the dependency is valid; invalid evidence
+  cannot fabricate downstream risk.
+- **SC-016**: JSON save/reopen preserves the baseline and execution overlay,
+  while derived alerts recalculate and the six-sheet CARIO workbook keeps
+  baseline planned dates.

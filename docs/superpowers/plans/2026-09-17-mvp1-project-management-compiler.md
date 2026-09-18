@@ -58,6 +58,64 @@ The implementation must satisfy these non-negotiable rules:
 10. Every meaningful behavior is implemented red-green-refactor. Unexpected
     failures use the systematic-debugging loop before any fix is attempted.
 
+## Approved MVP1 scope amendment: execution overlay and progress Gantt
+
+The original source-to-canonical architecture remains intact. Future tasks
+must now add a manual execution overlay rather than putting mutable actuals on
+the extracted baseline.
+
+The amended flow is:
+
+```text
+source baseline -> canonical project
+                       + execution overlay
+                       -> management analysis
+                       -> PLAN / ACTUAL / ALERT Gantt
+                       -> Kanban / dashboard / CARIO plan export
+```
+
+The overlay is keyed by executable delivery-card ID and contains execution
+state, actual start/finish, actual effort, remaining effort, last-updated time,
+and optional note/evidence. Planning-only input starts with unknown actuals and
+remaining values. A manual update validates date order, non-negative finite
+effort, and state/date consistency; it never changes planned dates, planned
+effort, source references, or authority.
+
+The management seam accepts an explicit `asOfDate` and derives working-calendar
+start/finish variance, late-start, active overdue, completed-on-time,
+completed-late, suspended, cancelled, and conservative dependency `AT_RISK`
+alerts. `OVERDUE` and `AT_RISK` are derived conditions, not authored states.
+Dependency risk names the late predecessor and never fabricates a deterministic
+successor delay when evidence is insufficient.
+
+The Gantt projection uses one canonical card ID for three lanes: PLAN reads only
+baseline dates, ACTUAL reads execution evidence (actual start through actual
+finish or explicit as-of date while active), and ALERT reads derived analysis.
+CARIO remains a six-sheet, plan-focused human-fill workbook; its planned start
+and deadline columns continue to come from the baseline and are never replaced
+with actual dates.
+
+Canonical JSON remains schema 1.0 with an additive `executionOverlay` field.
+Readers treat a missing field in an older 1.0 snapshot as an empty overlay;
+new writers emit the field and validate present records. Reopen preserves the
+baseline and overlay, while alerts and variance are recalculated.
+
+Implementation order for the amendment is deliberately vertical:
+
+1. Add domain overlay/alert records and failing seam tests.
+2. Add manual update validation and focused red-green tests.
+3. Add JSON serialization/reopen and overlay round-trip tests.
+4. Add duration-based CPM/status/variance/alert analysis, including dependency
+   risk and working-calendar semantics.
+5. Add shared WBS/Gantt/Kanban/dashboard projections with the three lanes.
+6. Preserve the CARIO mapping/writer contract and add plan-date regression tests.
+7. Compose the application/UI flow and run end-to-end tests.
+
+This amendment supersedes the future-task wording below wherever the original
+plan describes actuals as deferred or a Gantt as baseline-only. Completed
+source capture, authority, extraction, and canonical normalization work is not
+reopened.
+
 ## Implementation worktree and commands
 
 After this plan is committed on `main`, create the implementation worktree with
@@ -368,7 +426,7 @@ IDEAEngineering repository.
 9. Run extraction and normalization tests; the expected result is green.
 10. Commit as `feat: normalize IDEA planning baseline into canonical model`.
 
-### 8. Implement deterministic canonical JSON persistence and semantic digest
+### 8. Implement deterministic canonical JSON persistence, execution overlay, and semantic digest
 
 **Files:**
 
@@ -385,15 +443,20 @@ IDEAEngineering repository.
 3. Implement JSON options with camel-case names, no null omission, invariant
    date/number formatting, and deterministic list ordering established by the
    normalizer.
-4. Implement semantic digest by serializing a copy of the source metadata with
-   `capturedAtUtc` removed from semantic content, then hashing UTF-8 bytes with
-   SHA-256. Persist the capture timestamp in the ordinary JSON export for audit
-   context.
-5. Implement read/write methods that never silently upgrade schema versions.
-6. Run the JSON tests; the expected result is green.
-7. Commit as `feat: add deterministic canonical JSON persistence`.
+4. Add `executionOverlay.records` with explicit execution states, actual start/
+   finish, actual/remaining effort states, update metadata, and optional
+   evidence. Emit it in new 1.0 snapshots without placing fields on the
+   immutable baseline entities.
+5. Implement semantic digest by serializing source metadata without
+   `capturedAtUtc` and without replaceable derived analysis, while retaining
+   execution overlay evidence in semantic content. Hash UTF-8 bytes with
+   SHA-256.
+6. Implement read/write methods that never silently upgrade schema versions;
+   missing `executionOverlay` in older 1.0 snapshots becomes an empty overlay.
+7. Run the JSON and overlay round-trip tests; the expected result is green.
+8. Commit as `feat: add deterministic canonical JSON persistence`.
 
-### 9. Add structural validation and reopen
+### 9. Add structural validation and reopen, including execution evidence
 
 **Files:**
 
@@ -410,7 +473,8 @@ IDEAEngineering repository.
 2. Run the tests; they must fail because structural validation is absent.
 3. Implement collection and global ID uniqueness checks, required source and
    baseline checks, parent/phase/card/assignment checks, date and effort type
-   checks, and dependency rules.
+   checks, dependency rules, and execution-overlay target/state/date/effort
+   validation.
 4. Implement the narrow dependency-evidence exception exactly as specified:
    unresolved predecessor plus `INVALID_SOURCE_EVIDENCE`, `analysisEligible=false`,
    and diagnostic is retained; every other unresolved structural reference is a
@@ -456,7 +520,7 @@ IDEAEngineering repository.
 9. Run dependency and CPM tests; the expected result is green.
 10. Commit as `feat: calculate duration-based dependency CPM`.
 
-### 11. Add capacity, reserve, actual, forecast, and dashboard analysis
+### 11. Add capacity, reserve, execution variance, alerts, forecast, and dashboard analysis
 
 **Files:**
 
@@ -471,22 +535,32 @@ IDEAEngineering repository.
    initial reserve is 88, and consumed/remaining reserve remain null with
    unknown/not-run states.
 2. Add tests that all 53 cards start `NOT_STARTED`, the dashboard label is
-   exactly `Delivery cards completed 0/53`, overdue is derived from as-of date
-   and state, and actual/forecast remain unknown without evidence.
+   exactly `Delivery cards completed 0/53`, manual actuals are unknown without
+   evidence, and fixed as-of dates derive late-start/overdue without mutating
+   authored execution state.
 3. Add a test that the analysis labels dependency CPM separately from the
    single-coder/resource baseline constraint.
-4. Run the tests; they must fail because the analysis orchestrator is absent.
-5. Implement effort-based capacity/load and the explicit reserve state rules.
+4. Add failing tests for actual start/finish variance, completed-on-time/late,
+   suspended/cancelled, working-calendar semantics, and conservative
+   predecessor-based `AT_RISK` alerts. Invalid source dependencies must never
+   fabricate downstream risk.
+5. Run the tests; they must fail because the analysis orchestrator and
+   execution update seam are absent.
+6. Implement the manual execution-update module with a small public seam. It
+   validates dates and numeric evidence and returns a new overlay without
+   mutating the canonical baseline.
+7. Implement effort-based capacity/load and the explicit reserve state rules.
    Do not use card effort in the authoritative project total.
-6. Implement status counts, overdue derivation, unknown actual/remaining/
-   forecast states, documented health indicators, and the delivery-card count.
-7. Implement `ManagementAnalysisOrchestrator` to compose dependency, CPM,
-   schedule variance, capacity, reserve, status, and health results without
-   changing source entities.
-8. Run analysis tests; the expected result is green.
-9. Commit as `feat: add management analysis and truthful dashboard metrics`.
+8. Implement working-calendar variance, status counts, derived alerts,
+   unknown actual/remaining/forecast states, documented health indicators,
+   dependency risk, and the delivery-card count.
+9. Implement `ManagementAnalysisOrchestrator` to compose dependency, CPM,
+   schedule variance, capacity, reserve, status, alerts, and health results
+   without changing source entities.
+10. Run analysis tests; the expected result is green.
+11. Commit as `feat: add management analysis and truthful dashboard metrics`.
 
-### 12. Build shared WBS/Gantt/Kanban/CPM view projections
+### 12. Build shared WBS/Gantt/Kanban/CPM view projections with three lanes
 
 **Files:**
 
@@ -500,11 +574,12 @@ IDEAEngineering repository.
    WBS hierarchy, baseline bars, calculated CPM fields, card states, warnings,
    and separate resource constraint labels.
 2. Run the tests; they must fail because view projections are absent.
-3. Implement projections for WBS, Gantt, Kanban, Dependency Network, CPM
-   Critical Path, dashboard, and source/warning review. Use generic `Source`
-   labels in user-facing view models.
-4. Ensure baseline bars read only authored start/finish, calculated bars read
-   only `analysis`, and no view creates a second task collection.
+3. Implement projections for WBS, three-lane Gantt, Kanban, Dependency Network,
+   CPM Critical Path, dashboard, and source/warning review. Use generic
+   `Source` labels in user-facing view models.
+4. Ensure PLAN bars read only authored start/finish, ACTUAL bars read only the
+   overlay, ALERT lanes read only analysis, and no view creates a second task
+   collection.
 5. Run the view tests; the expected result is green.
 6. Commit as `feat: project canonical analysis into management views`.
 
@@ -528,7 +603,7 @@ IDEAEngineering repository.
 5. Run mapping tests; the expected result is green.
 6. Commit as `feat: add configuration-driven CARIO row mappings`.
 
-### 14. Write and verify the six-sheet XLSX package
+### 14. Write and verify the six-sheet plan-focused XLSX package
 
 **Files:**
 
@@ -556,8 +631,9 @@ IDEAEngineering repository.
    ```
 
 2. Add assertions for relationship targets, sheet names, UTF-8 Vietnamese
-   headers/cells, ISO dates, invariant numeric cells, null/unknown state text,
-   and warning rows.
+   headers/cells, ISO baseline dates, invariant numeric cells, null/unknown
+   state text, warning rows, and proof that actual dates never replace planned
+   start/deadline fields.
 3. Run the tests; they must fail because the writer is absent.
 4. Implement `CarioWorkbookWriter` with `System.IO.Compression.ZipArchive` and
    `System.Xml.XmlWriter`. Use inline strings, date cells with a declared date
@@ -569,7 +645,7 @@ IDEAEngineering repository.
 7. Run Xlsx package tests; the expected result is green.
 8. Commit as `feat: export verified six-sheet CARIO workbook`.
 
-### 15. Add the application compiler service and canonical export flow
+### 15. Add the application compiler service, execution updates, and canonical export flow
 
 **Files:**
 
@@ -582,8 +658,8 @@ IDEAEngineering repository.
 **Steps:**
 
 1. Add an end-to-end test that calls the application service on the controlled
-   fixture and asserts capture → discovery → extraction → validation → analysis
-   → views → JSON/XLSX export.
+   fixture and asserts capture → discovery → extraction → validation → manual
+   execution update → analysis → views → JSON/XLSX export.
 2. Assert the result contains six phases, 35 work packages, 53 cards, seven
    milestones, 512 authoritative effort hours, source warnings, and a valid
    workbook package.
@@ -594,12 +670,14 @@ IDEAEngineering repository.
    and workbook output through explicit interfaces.
 5. Block normal exports when structural errors prevent a canonical baseline;
    permit warnings and marked invalid source dependency evidence.
-6. Implement `ReopenAsync` using canonical JSON only and verify it produces the
-   same semantic digest and view summary without source capture.
+6. Implement `ReopenAsync` using canonical JSON only and verify it preserves
+   both baseline and execution overlay, recalculates alerts from an explicit
+   as-of date, and produces the same semantic digest/view summary without
+   source capture.
 7. Run compiler flow tests; the expected result is green.
 8. Commit as `feat: compose the end-to-end compiler workflow`.
 
-### 16. Add the loopback browser application
+### 16. Add the loopback browser application with manual execution and three-lane Gantt
 
 **Files:**
 
@@ -619,13 +697,14 @@ IDEAEngineering repository.
 2. Run the tests; they must fail because routes and static UI do not exist.
 3. Configure the ASP.NET Core host to bind to `http://127.0.0.1:5050` by
    default. Do not bind `0.0.0.0` or expose the LAN automatically.
-4. Add `POST /api/compile`, `POST /api/reopen`, `GET /api/project`,
+4. Add `POST /api/compile`, `POST /api/reopen`, `POST /api/execution`, `GET /api/project`,
    `GET /api/views/{view}`, `GET /api/export/json`, and
    `GET /api/export/xlsx` routes. Keep all route data behind the application
    service and shared view models.
 5. Add a plain HTML/CSS/JavaScript interface with source path input, analyze,
-   extraction review, warning list, WBS, Gantt, Kanban, CPM Critical Path,
-   dashboard, and export controls. Display `Delivery cards completed 0/53`.
+   extraction review, warning list, manual execution form, WBS, three-lane
+   Gantt, Kanban, CPM Critical Path, dashboard, and export controls. Display
+   `Delivery cards completed 0/53`.
 6. Run endpoint contract tests and the application; the expected result is
    green and the browser can be opened at the loopback URL.
 7. Commit as `feat: add loopback browser review application`.
@@ -721,15 +800,17 @@ The implementation branch should contain focused commits in this order:
   installation or network access.
 - The offline fixture compiles to the expected hierarchy and counts with 512
   authoritative work-package effort hours and no double counting.
-- Effort, duration, baseline, actual, forecast, variance, reserve, and
-  resource-constraint semantics are visible and tested separately.
+- Effort, duration, baseline, execution overlay, actual, forecast, variance,
+  reserve, and resource-constraint semantics are visible and tested separately.
 - Source capture is allow-listed, path-safe, size-bounded, reparse-safe, and
   non-executing.
 - Structural canonical corruption fails reopen while marked invalid source
   dependency evidence remains visible and excluded from CPM.
-- Duration-based CPM, baseline preservation, capacity/load, reserve unknown
-  states, dashboard labeling, WBS/Gantt/Kanban/CPM/dashboard views, canonical
-  JSON, and verified six-sheet XLSX output are covered by offline tests.
+- Duration-based CPM, baseline preservation, working-calendar variance,
+  manual execution updates, PLAN/ACTUAL/ALERT Gantt lanes, dependency-risk
+  alerts, capacity/load, reserve unknown states, dashboard labeling,
+  WBS/Gantt/Kanban/CPM/dashboard views, canonical JSON reopen, and verified
+  six-sheet XLSX output are covered by offline tests.
 - The final review reports current branch, commit SHA, pushed/unpushed state,
   uncommitted files, verification commands, and any remaining blocker before a
   push is considered.

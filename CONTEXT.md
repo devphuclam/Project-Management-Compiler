@@ -79,3 +79,23 @@ _Avoid_: overdue state
 **Overdue**:
 A derived display condition: the current date is after the deadline and the execution state is neither completed nor cancelled.
 _Avoid_: authored workflow state
+
+## Execution overlay amendment
+
+**Execution Overlay**:
+Mutable manual evidence maintained by the Compiler for an executable delivery card. It is keyed by canonical work-item ID and never replaces or edits the source baseline.
+_Avoid_: actual task copy, second task store
+
+**Variance**:
+Calculated information comparing actual or derived schedule information with the immutable baseline. Variance does not change execution state.
+_Avoid_: revised baseline, forecast state
+
+**Alert**:
+A structured derived management condition such as `START_DELAY`, `OVERDUE`, `COMPLETED_LATE`, `AT_RISK`, `SUSPENDED`, or `CANCELLED`. It is not an execution state, task, dependency, or source authority.
+_Avoid_: persisted status, work item
+
+**As-of Date**:
+The explicit date supplied to analysis for late-start, active-overdue, and in-progress actual-lane calculations. Analysis never silently substitutes wall-clock time.
+_Avoid_: implicit current date
+
+Execution overlay, actual, and forecast remain separate from plan. Planned and actual effort remain separate from planned and actual working duration. CARIO output stays plan-focused: planned start and deadline are never replaced with actual dates.

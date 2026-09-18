@@ -17,6 +17,10 @@ unsupported major version rather than treating it as the current contract.
 - null/unknown values are explicit and are not omitted when their absence changes
   interpretation;
 - warnings and provenance are part of the snapshot, not transient logging only.
+- `executionOverlay` is additive within schema 1.0. New writers emit it with a
+  `records` array; readers accept older 1.0 snapshots that omit it and use an
+  empty overlay. A present overlay is validated strictly and is never merged
+  into planned dates or planned effort.
 
 ## Required top-level fields
 
@@ -35,6 +39,7 @@ assignments
 capacity
 reserve
 policies
+executionOverlay
 provenance
 warnings
 analysis
@@ -55,7 +60,10 @@ The application accepts a previously generated canonical document when:
    evidence with `validationState: INVALID_SOURCE_EVIDENCE`,
    `analysisEligible: false`, and a diagnostic;
 6. baseline and source metadata are present; and
-7. the document is not silently upgraded to a different source ref.
+7. every execution record targets an executable canonical work item, has a
+   supported authored execution state, uses non-negative finite effort values,
+   and does not place actual finish before actual start; and
+8. the document is not silently upgraded to a different source ref.
 
 Duplicate IDs, malformed schema, impossible hierarchy, nonexistent structural
 assignments, invalid baseline fields, and unmarked missing references are hard
@@ -64,4 +72,16 @@ the evidence itself is useful; it remains visible but is excluded from CPM.
 
 Reopen produces the same views and output contracts without source capture or
 extraction. Calculated analysis may be recomputed from the immutable baseline;
-the baseline itself remains unchanged.
+the baseline itself remains unchanged. The execution overlay is reopened as
+mutable evidence and recalculation may replace alerts, variance, and other
+derived analysis without changing either baseline or overlay values.
+
+## Execution and analysis compatibility
+
+`actualStart`, `actualFinish`, `actualEffortHours`, `remainingEffortHours`,
+execution state, and update metadata are persisted under `executionOverlay`.
+`OVERDUE` and `AT_RISK` are never persisted authored states. An explicit
+`asOfDate` is an analysis input; alerts and working-calendar variance may be
+recomputed after reopen. The semantic digest excludes capture timestamps and
+derived analysis, but includes the execution overlay because it is user-owned
+snapshot content.
