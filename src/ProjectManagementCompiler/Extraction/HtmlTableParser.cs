@@ -62,6 +62,8 @@ public static class HtmlTableParser
             }
 
             var headers = Cells(tableRows[headerPosition].Groups["body"].Value);
+            var headerShapeDiagnostics = PlanningParserSupport.ValidateTableShape(document, tableIndex, 0, 0, headers, headers);
+            diagnostics.AddRange(headerShapeDiagnostics);
             var rowIndex = 0;
             for (var index = headerPosition + 1; index < tableRows.Length; index++)
             {
@@ -69,6 +71,12 @@ public static class HtmlTableParser
                 var values = Cells(rowMatch.Groups["body"].Value);
                 rowIndex++;
                 var sourceLine = content[..(tableMatch.Groups["body"].Index + rowMatch.Index)].Count(character => character == '\n') + 1;
+                diagnostics.AddRange(PlanningParserSupport.ValidateTableShape(document, tableIndex, rowIndex, sourceLine, headers, values));
+                if (headers.Count != values.Count || headers.GroupBy(PlanningParserSupport.Normalize, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+                {
+                    continue;
+                }
+
                 var attributes = DataAttributePattern.Matches(rowMatch.Groups["attributes"].Value)
                     .Cast<Match>()
                     .ToDictionary(match => match.Groups["name"].Value, match => WebUtility.HtmlDecode(match.Groups["value"].Value), StringComparer.OrdinalIgnoreCase);

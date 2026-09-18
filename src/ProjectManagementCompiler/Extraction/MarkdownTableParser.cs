@@ -46,6 +46,7 @@ public static class MarkdownTableParser
 
             tableIndex++;
             var headers = PlanningParserSupport.SplitPipeRow(lines[lineIndex]);
+            diagnostics.AddRange(PlanningParserSupport.ValidateTableShape(document, tableIndex, 0, lineIndex + 1, headers, headers));
             var rowIndex = 0;
             lineIndex += 2;
             for (; lineIndex < lines.Length && lines[lineIndex].Contains('|'); lineIndex++)
@@ -56,6 +57,13 @@ public static class MarkdownTableParser
                 }
 
                 rowIndex++;
+                var values = PlanningParserSupport.SplitPipeRow(lines[lineIndex]);
+                diagnostics.AddRange(PlanningParserSupport.ValidateTableShape(document, tableIndex, rowIndex, lineIndex + 1, headers, values));
+                if (headers.Count != values.Count || headers.GroupBy(PlanningParserSupport.Normalize, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+                {
+                    continue;
+                }
+
                 var row = PlanningParserSupport.CreateRow(
                     document,
                     section,
@@ -63,7 +71,7 @@ public static class MarkdownTableParser
                     rowIndex,
                     lineIndex + 1,
                     headers,
-                    PlanningParserSupport.SplitPipeRow(lines[lineIndex]));
+                    values);
                 rows.Add(row);
                 diagnostics.AddRange(PlanningParserSupport.Validate(document, row));
             }

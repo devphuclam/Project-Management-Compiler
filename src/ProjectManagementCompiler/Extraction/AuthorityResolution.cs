@@ -8,13 +8,14 @@ namespace ProjectManagementCompiler.Extraction;
 public sealed record AuthorityResolution
 {
     public bool HasCanonicalBaseline { get; init; }
-    public PlanningDocument AuthorityDocument { get; init; } = null!;
+    public PlanningDocument? AuthorityDocument { get; init; }
     public ExtractedPlanningBaseline Baseline { get; init; } = new();
     public string? ProjectId => Baseline.ProjectId;
     public string? ProjectName => Baseline.ProjectName;
     public string? BaselineId => Baseline.BaselineId;
     public string? BaselineVersion => Baseline.BaselineVersion;
     public IReadOnlyList<PlanningDocument> Documents { get; init; } = Array.Empty<PlanningDocument>();
+    public IReadOnlyList<PlanningTableRow> Rows { get; init; } = Array.Empty<PlanningTableRow>();
     public IReadOnlyList<PlanningTableRow> PhaseRows { get; init; } = Array.Empty<PlanningTableRow>();
     public IReadOnlyDictionary<string, ExtractedPlanningFact> PolicyFacts { get; init; } = new Dictionary<string, ExtractedPlanningFact>(StringComparer.OrdinalIgnoreCase);
     public IReadOnlyList<ImportWarning> Conflicts { get; init; } = Array.Empty<ImportWarning>();
@@ -25,18 +26,19 @@ public sealed record AuthorityResolution
         var discovery = new IdeaPlanningDiscovery().Discover(snapshot);
         var documents = discovery.Documents;
         var diagnostics = new List<ImportWarning>(discovery.Diagnostics);
-        var allRows = new Dictionary<PlanningDocument, PlanningParseResult>();
+        var parsed = new Dictionary<PlanningDocument, PlanningParseResult>();
 
         foreach (var document in documents)
         {
             var result = document.Source.Format == SourceDocumentFormat.Html
                 ? HtmlTableParser.Parse(document)
                 : MarkdownTableParser.Parse(document);
-            allRows[document] = result;
+            parsed[document] = result;
             diagnostics.AddRange(result.Diagnostics);
         }
 
         var authority = documents.FirstOrDefault(document => document.Kind == PlanningDocumentKind.Doc07);
+        var appendix = documents.FirstOrDefault(document => document.Kind == PlanningDocumentKind.AppendixA);
         if (authority is null)
         {
             diagnostics.Add(new ImportWarning
@@ -50,87 +52,138 @@ public sealed record AuthorityResolution
 
         var facts = new Dictionary<string, ExtractedPlanningFact>(StringComparer.OrdinalIgnoreCase);
         var conflicts = new List<ImportWarning>();
+        var rowIdentities = new Dictionary<string, (PlanningTableRow Row, string Signature)>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in documents.OrderBy(document => document.AuthorityRank))
         {
-            if (!allRows.TryGetValue(document, out var result))
+            if (!parsed.TryGetValue(document, out var result))
             {
                 continue;
             }
 
             foreach (var row in result.Rows)
             {
-                if (!TryGetKeyValue(row, out var key, out var value))
+                if (TryGetKeyValue(row, out var key, out var value))
+                {
+                    var fact = new ExtractedPlanningFact
+                    {
+                        Key = key,
+                        Value = value,
+                        Row = row,
+                        AuthorityRank = document.AuthorityRank
+                    };
+                    if (facts.TryGetValue(key, out var existing) && !string.Equals(existing.Value, value, StringComparison.Ordinal))
+                    {
+                        conflicts.Add(new ImportWarning
+                        {
+                            Id = $"CONFLICTING_BASELINE:{key}:{document.Source.RelativeFile}",
+                            Severity = WarningSeverity.Warning,
+                            Code = "CONFLICTING_BASELINE",
+                            Message = $"Sources disagree on '{key}'; authority rank {existing.AuthorityRank} retains '{existing.Value}' over '{value}'.",
+                            AffectedIds = [key],
+                            SourceReferences = [existing.Row.SourceReference, row.SourceReference]
+                        });
+                    }
+                    else if (!facts.ContainsKey(key))
+                    {
+                        facts[key] = fact;
+                    }
+
+                    continue;
+                }
+
+                if (!TryGetRowIdentity(row, out var identity))
                 {
                     continue;
                 }
 
-                var fact = new ExtractedPlanningFact
-                {
-                    Key = key,
-                    Value = value,
-                    Row = row,
-                    AuthorityRank = document.AuthorityRank
-                };
-                if (facts.TryGetValue(key, out var existing) && !string.Equals(existing.Value, value, StringComparison.Ordinal))
+                var signature = RowSignature(row);
+                if (rowIdentities.TryGetValue(identity, out var existingRow)
+                    && !string.Equals(existingRow.Signature, signature, StringComparison.Ordinal)
+                    && !string.Equals(existingRow.Row.SourceRelativePath, row.SourceRelativePath, StringComparison.OrdinalIgnoreCase))
                 {
                     conflicts.Add(new ImportWarning
                     {
-                        Id = $"CONFLICTING_BASELINE:{key}:{document.Source.RelativeFile}",
+                        Id = $"CONFLICTING_ROW:{identity}:{document.Source.RelativeFile}",
                         Severity = WarningSeverity.Warning,
-                        Code = "CONFLICTING_BASELINE",
-                        Message = $"Sources disagree on '{key}'; authority rank {existing.AuthorityRank} retains '{existing.Value}' over '{value}'.",
-                        AffectedIds = [key],
-                        SourceReferences = [existing.Row.SourceReference, row.SourceReference]
+                        Code = "CONFLICTING_ROW",
+                        Message = $"Sources disagree on ordinary logical row '{identity}'; both row values are retained.",
+                        AffectedIds = [identity],
+                        SourceReferences = [existingRow.Row.SourceReference, row.SourceReference]
                     });
                 }
-                else if (!facts.ContainsKey(key))
+                else if (!rowIdentities.ContainsKey(identity))
                 {
-                    facts[key] = fact;
+                    rowIdentities[identity] = (row, signature);
                 }
             }
         }
 
         if (authority is not null)
         {
-            diagnostics.AddRange(FindStaleSubordinateReferences(authority, documents));
+            diagnostics.AddRange(FindSubordinateReferences(authority, documents));
         }
 
-        var authorityRows = authority is not null && allRows.TryGetValue(authority, out var authorityResult)
+        var authorityRows = authority is not null && parsed.TryGetValue(authority, out var authorityResult)
             ? authorityResult.Rows
             : Array.Empty<PlanningTableRow>();
+        var authorityFacts = authorityRows
+            .Where(row => TryGetKeyValue(row, out _, out _))
+            .Select(row =>
+            {
+                TryGetKeyValue(row, out var key, out var value);
+                return new ExtractedPlanningFact
+                {
+                    Key = key,
+                    Value = value,
+                    Row = row,
+                    AuthorityRank = authority!.AuthorityRank
+                };
+            })
+            .GroupBy(fact => fact.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
         var phaseRows = authorityRows
             .Where(row => row.Headers.Any(header => PlanningParserSupport.Normalize(header) is "PHASE ID" or "PHASE"))
             .ToArray();
+        var allRows = documents
+            .SelectMany(document => parsed.TryGetValue(document, out var result) ? result.Rows : Array.Empty<PlanningTableRow>())
+            .ToArray();
         var baseline = new ExtractedPlanningBaseline
         {
-            ProjectId = FactValue(facts, "Project ID"),
-            ProjectName = FactValue(facts, "Project name") ?? Heading(authority),
-            BaselineId = FactValue(facts, "Baseline ID"),
-            BaselineVersion = FactValue(facts, "Baseline version"),
-            Status = FactValue(facts, "Status"),
+            ProjectId = FactValue(authorityFacts, "Project ID"),
+            ProjectName = FactValue(authorityFacts, "Project name") ?? Heading(authority),
+            BaselineId = FactValue(authorityFacts, "Baseline ID"),
+            BaselineVersion = FactValue(authorityFacts, "Baseline version"),
+            Status = FactValue(authorityFacts, "Status"),
             AuthorityDocumentId = authority?.Source.Id ?? string.Empty,
-            PlanningStart = DateFact(facts, "Planning start"),
-            PlanningFinish = DateFact(facts, "Planning finish"),
-            TargetDate = DateFact(facts, "Target date"),
-            PlannedEffortHours = DecimalFact(facts, "Authoritative effort"),
-            ReserveHours = DecimalFact(facts, "Initial reserve"),
-            CapacityHours = DecimalFact(facts, "Capacity")
+            PlanningStart = DateFact(authorityFacts, "Planning start"),
+            PlanningFinish = DateFact(authorityFacts, "Planning finish"),
+            TargetDate = DateFact(authorityFacts, "Target date"),
+            PlannedEffortHours = DecimalFact(authorityFacts, "Authoritative effort"),
+            ReserveHours = DecimalFact(authorityFacts, "Initial reserve"),
+            CapacityHours = DecimalFact(authorityFacts, "Capacity")
         };
 
         diagnostics.AddRange(conflicts);
         return new AuthorityResolution
         {
-            HasCanonicalBaseline = documents.Any(document => document.Kind == PlanningDocumentKind.Doc07)
-                && documents.Any(document => document.Kind == PlanningDocumentKind.AppendixA),
-            AuthorityDocument = authority!,
+            HasCanonicalBaseline = authority is not null
+                && appendix is not null
+                && IsValidRequiredDocument(authority, parsed)
+                && IsValidRequiredDocument(appendix, parsed),
+            AuthorityDocument = authority,
             Baseline = baseline,
             Documents = documents,
+            Rows = allRows,
             PhaseRows = phaseRows,
             PolicyFacts = facts,
             Conflicts = conflicts,
             Diagnostics = diagnostics
         };
     }
+
+    private static bool IsValidRequiredDocument(PlanningDocument document, IReadOnlyDictionary<PlanningDocument, PlanningParseResult> parsed) =>
+        parsed.TryGetValue(document, out var result)
+        && result.Diagnostics.All(diagnostic => diagnostic.Severity != WarningSeverity.Error);
 
     private static bool TryGetKeyValue(PlanningTableRow row, out string key, out string value)
     {
@@ -152,6 +205,31 @@ public sealed record AuthorityResolution
         value = row.Cells[row.Headers[1]].Trim();
         return key.Length > 0;
     }
+
+    private static bool TryGetRowIdentity(PlanningTableRow row, out string identity)
+    {
+        identity = string.Empty;
+        foreach (var header in row.Headers)
+        {
+            var normalizedHeader = PlanningParserSupport.Normalize(header);
+            if (normalizedHeader is not ("ID" or "PHASE ID" or "WORK PACKAGE ID" or "CODE" or "KEY" or "PHASE"))
+            {
+                continue;
+            }
+
+            var value = row.Cells[header].Trim();
+            if (value.Length > 0)
+            {
+                identity = $"{normalizedHeader}={value}";
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string RowSignature(PlanningTableRow row) =>
+        string.Join("\u001f", row.Headers.Select(header => $"{PlanningParserSupport.Normalize(header)}={row.Cells[header].Trim()}"));
 
     private static string? FactValue(IReadOnlyDictionary<string, ExtractedPlanningFact> facts, string key) =>
         facts.TryGetValue(key, out var fact) ? fact.Value : null;
@@ -189,7 +267,7 @@ public sealed record AuthorityResolution
             .FirstOrDefault(heading => !string.IsNullOrWhiteSpace(heading));
     }
 
-    private static IReadOnlyList<ImportWarning> FindStaleSubordinateReferences(PlanningDocument authority, IReadOnlyList<PlanningDocument> documents)
+    private static IReadOnlyList<ImportWarning> FindSubordinateReferences(PlanningDocument authority, IReadOnlyList<PlanningDocument> documents)
     {
         var current = Regex.Match(authority.Source.Content, @"DOC-07@(?<version>\d+(?:\.\d+)+)", RegexOptions.IgnoreCase).Groups["version"].Value;
         if (string.IsNullOrEmpty(current))
@@ -203,23 +281,45 @@ public sealed record AuthorityResolution
             foreach (Match match in Regex.Matches(document.Source.Content, @"DOC-07@(?<version>\d+(?:\.\d+)+)", RegexOptions.IgnoreCase))
             {
                 var subordinate = match.Groups["version"].Value;
-                if (subordinate == current)
+                var comparison = CompareDottedVersions(subordinate, current);
+                if (comparison == 0)
                 {
                     continue;
                 }
 
+                var code = comparison < 0 ? "STALE_SUBORDINATE_REFERENCE" : "FUTURE_SUBORDINATE_REFERENCE";
+                var age = comparison < 0 ? "older" : "newer";
                 warnings.Add(new ImportWarning
                 {
-                    Id = $"STALE_SUBORDINATE_REFERENCE:{document.Source.RelativeFile}:{subordinate}",
+                    Id = $"{code}:{document.Source.RelativeFile}:{subordinate}",
                     Severity = WarningSeverity.Warning,
-                    Code = "STALE_SUBORDINATE_REFERENCE",
-                    Message = $"'{document.Source.RelativeFile}' references DOC-07@{subordinate}, while the current authority is DOC-07@{current}.",
+                    Code = code,
+                    Message = $"'{document.Source.RelativeFile}' references {age} DOC-07@{subordinate}, while the current authority is DOC-07@{current}.",
                     SourceReferences = [document.Source.SourceReference, authority.Source.SourceReference]
                 });
             }
         }
 
         return warnings;
+    }
+
+    private static int CompareDottedVersions(string left, string right)
+    {
+        var leftParts = left.Split('.').Select(int.Parse).ToArray();
+        var rightParts = right.Split('.').Select(int.Parse).ToArray();
+        var length = Math.Max(leftParts.Length, rightParts.Length);
+        for (var index = 0; index < length; index++)
+        {
+            var leftPart = index < leftParts.Length ? leftParts[index] : 0;
+            var rightPart = index < rightParts.Length ? rightParts[index] : 0;
+            var comparison = leftPart.CompareTo(rightPart);
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+        }
+
+        return 0;
     }
 }
 

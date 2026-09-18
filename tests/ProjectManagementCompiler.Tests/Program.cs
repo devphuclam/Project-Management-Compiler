@@ -39,9 +39,18 @@ internal static class Program
         ,("MarkdownParserPreservesVietnameseAndStableSourceMetadata", ExtractionParserTests.MarkdownParserPreservesVietnameseAndStableSourceMetadata)
         ,("HtmlParserReadsTablesAndDataAttributesInStableOrder", ExtractionParserTests.HtmlParserReadsTablesAndDataAttributesInStableOrder)
         ,("ParsersDiagnoseMissingHeadingsAndMalformedCells", ExtractionParserTests.ParsersDiagnoseMissingHeadingsAndMalformedCells)
+        ,("MarkdownParserRejectsDuplicateHeadersAndWrongCellCounts", ExtractionParserTests.MarkdownParserRejectsDuplicateHeadersAndWrongCellCounts)
+        ,("HtmlParserRejectsDuplicateHeadersAndWrongCellCounts", ExtractionParserTests.HtmlParserRejectsDuplicateHeadersAndWrongCellCounts)
         ,("DiscoveryIgnoresUnrecognizedCapturedDocuments", ExtractionParserTests.DiscoveryIgnoresUnrecognizedCapturedDocuments)
         ,("Doc07WinsPrecedenceAndResolvesTypedPlanningFacts", AuthorityResolutionTests.Doc07WinsPrecedenceAndResolvesTypedPlanningFacts)
+        ,("MissingAuthorityIsSafeAndCannotBecomeCanonical", AuthorityResolutionTests.MissingAuthorityIsSafeAndCannotBecomeCanonical)
+        ,("RequiredDocumentErrorsDisableCanonicalBaseline", AuthorityResolutionTests.RequiredDocumentErrorsDisableCanonicalBaseline)
+        ,("UnsupportedRequiredDocumentFormatDisablesCanonicalBaseline", AuthorityResolutionTests.UnsupportedRequiredDocumentFormatDisablesCanonicalBaseline)
+        ,("GenericSemanticValuesProduceErrorsAndDoNotBecomeNullSilently", AuthorityResolutionTests.GenericSemanticValuesProduceErrorsAndDoNotBecomeNullSilently)
+        ,("TypedBaselineValuesOnlyUseDoc07AuthorityFacts", AuthorityResolutionTests.TypedBaselineValuesOnlyUseDoc07AuthorityFacts)
+        ,("AllRowsAreRetainedAndOrdinaryRowConflictsPreserveSources", AuthorityResolutionTests.AllRowsAreRetainedAndOrdinaryRowConflictsPreserveSources)
         ,("StaleAppendixControlEnvelopeReferenceIsWarning", AuthorityResolutionTests.StaleAppendixControlEnvelopeReferenceIsWarning)
+        ,("FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison", AuthorityResolutionTests.FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison)
         ,("ControlledFixtureResolvesBaselinePhasesAndPolicyFacts", AuthorityResolutionTests.ControlledFixtureResolvesBaselinePhasesAndPolicyFacts)
     ];
 

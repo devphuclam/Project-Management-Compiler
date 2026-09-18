@@ -161,10 +161,20 @@ internal static class PlanningParserSupport
         IReadOnlyList<string> values,
         IReadOnlyDictionary<string, string>? dataAttributes = null)
     {
+        if (headers.Count != values.Count)
+        {
+            throw new ArgumentException("Table headers and values must have the same number of cells.", nameof(values));
+        }
+
+        if (headers.GroupBy(Normalize, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+        {
+            throw new ArgumentException("Table headers must be unique.", nameof(headers));
+        }
+
         var cells = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (var index = 0; index < headers.Count; index++)
         {
-            cells[headers[index]] = index < values.Count ? values[index] : string.Empty;
+            cells.Add(headers[index], values[index]);
         }
 
         return new PlanningTableRow
@@ -193,6 +203,60 @@ internal static class PlanningParserSupport
         };
     }
 
+    public static IReadOnlyList<ImportWarning> ValidateTableShape(
+        PlanningDocument document,
+        int tableIndex,
+        int rowIndex,
+        int sourceLine,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<string> values)
+    {
+        var diagnostics = new List<ImportWarning>();
+        var duplicateHeaders = headers
+            .GroupBy(Normalize, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => string.Join(" / ", group))
+            .ToArray();
+
+        if (duplicateHeaders.Length > 0)
+        {
+            diagnostics.Add(new ImportWarning
+            {
+                Id = $"DUPLICATE_TABLE_HEADER:{document.Source.RelativeFile}:{tableIndex}:{string.Join(",", duplicateHeaders)}",
+                Severity = WarningSeverity.Error,
+                Code = "DUPLICATE_TABLE_HEADER",
+                Message = $"Table {tableIndex} in '{document.Source.RelativeFile}' has duplicate headers: {string.Join(", ", duplicateHeaders)}.",
+                SourceReferences = [document.Source.SourceReference with
+                {
+                    RelativeFile = document.Source.RelativeFile,
+                    Table = $"table-{tableIndex:D2}",
+                    Item = $"row-{rowIndex:D3}",
+                    ExtractionRule = "idea-planning-table-shape"
+                }]
+            });
+        }
+
+        if (headers.Count != values.Count)
+        {
+            diagnostics.Add(new ImportWarning
+            {
+                Id = $"TABLE_CELL_COUNT_MISMATCH:{document.Source.RelativeFile}:{sourceLine}:{rowIndex}",
+                Severity = WarningSeverity.Error,
+                Code = "TABLE_CELL_COUNT_MISMATCH",
+                Message = $"Table {tableIndex} row {rowIndex} in '{document.Source.RelativeFile}' has {values.Count} cells but requires exactly {headers.Count}.",
+                SourceReferences = [document.Source.SourceReference with
+                {
+                    RelativeFile = document.Source.RelativeFile,
+                    Table = $"table-{tableIndex:D2}",
+                    Item = $"row-{rowIndex:D3}",
+                    ExtractionRule = "idea-planning-table-shape"
+                }]
+            });
+        }
+
+        return diagnostics;
+    }
+
     public static IReadOnlyList<ImportWarning> Validate(PlanningDocument document, PlanningTableRow row)
     {
         var diagnostics = new List<ImportWarning>();
@@ -205,13 +269,32 @@ internal static class PlanningParserSupport
                 continue;
             }
 
-            if (IsNumericHeader(header) && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+            if (IsNumericHeader(header) && !TryParseNumeric(value, allowHoursSuffix: true, out _))
             {
                 diagnostics.Add(Diagnostic("MALFORMED_NUMERIC", document, row, $"The value '{value}' in '{pair.Key}' is not a valid invariant numeric value."));
             }
             else if (IsDateHeader(header) && !IsDate(value))
             {
                 diagnostics.Add(Diagnostic("MALFORMED_DATE", document, row, $"The value '{value}' in '{pair.Key}' is not a supported ISO date."));
+            }
+        }
+
+        if (TryGetKeyValue(row, out var key, out var semanticValue))
+        {
+            var normalizedKey = Normalize(key);
+            if (normalizedKey is "PLANNING START" or "PLANNING FINISH" or "TARGET DATE")
+            {
+                if (!IsIsoDate(semanticValue))
+                {
+                    diagnostics.Add(Diagnostic("MALFORMED_DATE", document, row, $"The value '{semanticValue}' for '{key}' is not a supported ISO date."));
+                }
+            }
+            else if (normalizedKey is "AUTHORITATIVE EFFORT" or "INITIAL RESERVE" or "CAPACITY" or "WIP POLICY")
+            {
+                if (!TryParseNumeric(semanticValue, allowHoursSuffix: normalizedKey is not "WIP POLICY", out _))
+                {
+                    diagnostics.Add(Diagnostic("MALFORMED_NUMERIC", document, row, $"The value '{semanticValue}' for '{key}' is not a valid invariant numeric value."));
+                }
             }
         }
 
@@ -267,4 +350,39 @@ internal static class PlanningParserSupport
     private static bool IsDate(string value) =>
         DatePattern.Match(value) is { Success: true } match
         && DateOnly.TryParseExact(match.Groups["date"].Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+
+    private static bool IsIsoDate(string value) =>
+        DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+
+    private static bool TryParseNumeric(string value, bool allowHoursSuffix, out decimal result)
+    {
+        var normalized = value.Trim();
+        if (allowHoursSuffix)
+        {
+            normalized = Regex.Replace(normalized, @"\s+(?:hours?|h)$", string.Empty, RegexOptions.IgnoreCase);
+        }
+
+        return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out result);
+    }
+
+    private static bool TryGetKeyValue(PlanningTableRow row, out string key, out string value)
+    {
+        key = string.Empty;
+        value = string.Empty;
+        if (row.Headers.Count < 2)
+        {
+            return false;
+        }
+
+        var firstHeader = Normalize(row.Headers[0]);
+        var secondHeader = Normalize(row.Headers[1]);
+        if (firstHeader is not ("FIELD" or "POLICY") || secondHeader != "VALUE")
+        {
+            return false;
+        }
+
+        key = row.Cells[row.Headers[0]].Trim();
+        value = row.Cells[row.Headers[1]].Trim();
+        return key.Length > 0;
+    }
 }

@@ -53,6 +53,33 @@ internal static class ExtractionParserTests
         TestAssert.True(result.Diagnostics.Any(d => d.Code == "MALFORMED_DATE"), "Malformed date cells must be explicit.");
     }
 
+    public static void MarkdownParserRejectsDuplicateHeadersAndWrongCellCounts()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n## Source identity\n\n| Field | Value | Value |\n|---|---|---|\n| Project ID | project | duplicate |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | only | extra |\n| PH1 |\n");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.True(result.Diagnostics.Any(d => d.Code == "DUPLICATE_TABLE_HEADER" && d.Severity == WarningSeverity.Error), "Duplicate Markdown headers must be explicit errors.");
+        TestAssert.True(result.Diagnostics.Count(d => d.Code == "TABLE_CELL_COUNT_MISMATCH" && d.Severity == WarningSeverity.Error) >= 2, "Too few and too many Markdown cells must be explicit errors.");
+        TestAssert.Equal(0, result.Rows.Count, "Malformed Markdown rows must not be padded, truncated, or dictionary-overwritten.");
+    }
+
+    public static void HtmlParserRejectsDuplicateHeadersAndWrongCellCounts()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th><th>Name</th></tr><tr><td>A01</td><td>One</td><td>Duplicate</td></tr></table>"
+            + "<table><tr><th>ID</th><th>Name</th></tr><tr><td>A02</td></tr><tr><td>A03</td><td>Three</td><td>Extra</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.True(result.Diagnostics.Any(d => d.Code == "DUPLICATE_TABLE_HEADER" && d.Severity == WarningSeverity.Error), "Duplicate HTML headers must be explicit errors.");
+        TestAssert.True(result.Diagnostics.Count(d => d.Code == "TABLE_CELL_COUNT_MISMATCH" && d.Severity == WarningSeverity.Error) >= 2, "Too few and too many HTML cells must be explicit errors.");
+        TestAssert.Equal(0, result.Rows.Count, "Malformed HTML rows must not be padded, truncated, or dictionary-overwritten.");
+    }
+
     public static void DiscoveryIgnoresUnrecognizedCapturedDocuments()
     {
         var snapshot = new ProjectManagementCompiler.Sources.RepositorySnapshot
