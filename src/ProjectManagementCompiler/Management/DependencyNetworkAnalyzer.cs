@@ -198,7 +198,7 @@ public sealed class DependencyNetworkAnalyzer
         var hasAnchor = ValidDate(anchor);
         var anchorDate = anchor.GetValueOrDefault();
         DateOnly? calculatedFinish = hasAnchor
-            ? calendar.AddWorkingMinutes(anchorDate, projectDuration)
+            ? calendar.DateForFinishOffset(anchorDate, projectDuration)
             : null;
         var scheduleVariance = BuildScheduleVariance(project.Baseline.PlanningFinish, calculatedFinish, calendar);
         var metrics = nodeDefinitions

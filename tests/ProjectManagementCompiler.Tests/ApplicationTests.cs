@@ -118,6 +118,35 @@ internal static class ApplicationTests
         }
     }
 
+    public static void CompilerReopenUsesExplicitAsOfDateDeterministically()
+    {
+        var compiler = new ProjectCompiler();
+        var initial = compiler.CompileAsync(new CompilationRequest
+        {
+            SourcePath = FixturePath(),
+            AsOfDate = new DateOnly(2026, 9, 28)
+        }, CancellationToken.None).GetAwaiter().GetResult();
+        var updated = compiler.ApplyExecutionUpdate(initial, new ExecutionUpdate
+        {
+            WorkItemId = "P04-A",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 9, 25),
+            LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero)
+        }, new DateOnly(2026, 9, 28));
+        TestAssert.True(updated.Accepted, "The explicit-as-of determinism setup update must be accepted.");
+
+        var json = compiler.SaveJson(updated.Result);
+        var sameDateFirst = compiler.Reopen(json, new DateOnly(2026, 9, 28));
+        var sameDateSecond = compiler.Reopen(json, new DateOnly(2026, 9, 28));
+        var firstAlerts = string.Join("|", sameDateFirst.Analysis.Alerts.Select(alert => $"{alert.WorkItemId}:{alert.AlertCode}:{alert.VarianceWorkingMinutes}"));
+        var secondAlerts = string.Join("|", sameDateSecond.Analysis.Alerts.Select(alert => $"{alert.WorkItemId}:{alert.AlertCode}:{alert.VarianceWorkingMinutes}"));
+        TestAssert.Equal(firstAlerts, secondAlerts, "The same canonical JSON and explicit as-of date must derive deterministic alerts.");
+        TestAssert.Equal(1, sameDateFirst.Analysis.ExecutionStatus.Overdue, "The later explicit as-of date must expose the overdue condition.");
+
+        var earlierDate = compiler.Reopen(json, new DateOnly(2026, 9, 24));
+        TestAssert.Equal(0, earlierDate.Analysis.ExecutionStatus.Overdue, "Changing the explicit as-of date must intentionally change overdue analysis.");
+    }
+
     public static void CompilerExecutionUpdateSaveAndReopenPreserveBaselineAndRecalculateAlerts()
     {
         var compiler = new ProjectCompiler();

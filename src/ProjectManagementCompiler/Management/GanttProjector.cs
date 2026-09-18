@@ -59,7 +59,14 @@ public sealed class GanttProjector
     {
         var records = project.ExecutionOverlay.Records
             .ToDictionary(record => record.WorkItemId, StringComparer.OrdinalIgnoreCase);
-        var criticalPathIds = analysis.CriticalPathIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var criticalCardIds = analysis.CpmNodes
+            .Where(node => node.IsCritical && string.Equals(CanonicalWorkItemKey.NormalizeKind(node.NodeKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase))
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var criticalMilestoneIds = analysis.CpmNodes
+            .Where(node => node.IsCritical && string.Equals(CanonicalWorkItemKey.NormalizeKind(node.NodeKind), "Milestone", StringComparison.OrdinalIgnoreCase))
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var alertsByWorkItem = analysis.Alerts
             .GroupBy(alert => alert.WorkItemId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(alert => alert.AlertCode, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
@@ -144,7 +151,7 @@ public sealed class GanttProjector
                 LogicalRoles = logicalRolesByWorkItem.TryGetValue(card.Id, out var logicalRoles)
                     ? logicalRoles
                     : Array.Empty<string>(),
-                IsCritical = criticalPathIds.Contains(card.Id),
+                IsCritical = criticalCardIds.Contains(card.Id),
                 DependencyIds = cardDependenciesBySubject.TryGetValue(card.Id, out var dependencyIds)
                     ? dependencyIds
                     : Array.Empty<string>(),
@@ -162,7 +169,7 @@ public sealed class GanttProjector
                 Kind = milestone.Kind,
                 ParentId = milestone.ParentId,
                 PlannedDate = ValidDate(milestone.PlannedDate) ? milestone.PlannedDate : null,
-                IsCritical = criticalPathIds.Contains(milestone.Id),
+                IsCritical = criticalMilestoneIds.Contains(milestone.Id),
                 DependencyIds = milestoneDependenciesBySubject.TryGetValue(milestone.Id, out var dependencyIds)
                     ? dependencyIds
                     : Array.Empty<string>(),

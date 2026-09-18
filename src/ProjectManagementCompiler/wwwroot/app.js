@@ -317,6 +317,11 @@
     showError(null);
     const sourcePath = byId("source-path").value.trim();
     const asOfDate = byId("as-of-date").value || null;
+    if (!asOfDate) {
+      showError(new Error("As-of date is required."));
+      setStatus("Analysis failed.");
+      return;
+    }
     try {
       setStatus("Capturing and analyzing…");
       const summary = await request("/api/compile", jsonOptions({ sourcePath, asOfDate }));
@@ -360,6 +365,11 @@
       setStatus("Reopening canonical project…");
       const json = await file.text();
       const asOfDate = byId("as-of-date").value || null;
+      if (!asOfDate) {
+        showError(new Error("As-of date is required."));
+        setStatus("Reopen failed.");
+        return;
+      }
       const summary = await request("/api/reopen", jsonOptions({ json, asOfDate }));
       applySummary(summary);
       setStatus("Reopened " + (summary.project.name || summary.project.id) + ".");
@@ -407,6 +417,12 @@
   byId("save-json-button").addEventListener("click", () => { window.location.href = "/api/exports/project.json"; });
   byId("export-xlsx-button").addEventListener("click", () => { window.location.href = "/api/exports/cario.xlsx"; });
   if (!byId("as-of-date").value) {
-    byId("as-of-date").value = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const localDate = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0")
+    ].join("-");
+    byId("as-of-date").value = localDate;
   }
 })();

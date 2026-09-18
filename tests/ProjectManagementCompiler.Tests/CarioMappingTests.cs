@@ -17,7 +17,9 @@ internal static class CarioMappingTests
         TestAssert.True(result.Assignments.All(assignment => string.IsNullOrEmpty(assignment.ConcreteIdentity)), "Default mapping must not fabricate concrete employees.");
         TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_UNRESOLVED"), "Unresolved identity mapping must emit a structured warning.");
         TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_PRIORITY_UNRESOLVED"), "Missing task priority mapping must remain an explicit warning.");
-        TestAssert.True(result.Tasks.All(task => task.Priority is null), "Missing priority mappings must remain blank rather than guessed.");
+        TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_DEPARTMENT_UNRESOLVED"), "Missing department mapping must remain an explicit warning.");
+        TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_TEAM_UNRESOLVED"), "Missing team mapping must remain an explicit warning.");
+        TestAssert.True(result.Tasks.All(task => task.Priority is null && task.Department is null && task.Team is null), "Missing task mappings must remain blank rather than guessed.");
         TestAssert.True(result.Assignments.Select(assignment => assignment.CarioRoleCode).Where(code => code is not null).All(code => new[] { "A", "R+", "R", "C", "I", "O" }.Contains(code!)), "All emitted CARIO role codes must be contract-valid.");
     }
 

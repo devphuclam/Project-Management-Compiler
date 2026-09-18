@@ -302,10 +302,12 @@ public sealed class ManagementViewProjector
 
     private static CpmProjection BuildCpm(CanonicalProject project, ManagementAnalysis analysis)
     {
-        var names = project.DeliveryCards.ToDictionary(card => card.Id, card => (card.Name, IsMilestone: false), StringComparer.OrdinalIgnoreCase);
+        var names = project.DeliveryCards.ToDictionary(
+            card => CanonicalWorkItemKey.DeliveryCard(card.Id),
+            card => (card.Name, IsMilestone: false));
         foreach (var milestone in project.Milestones)
         {
-            names[milestone.Id] = (milestone.Name, IsMilestone: true);
+            names[CanonicalWorkItemKey.Milestone(milestone.Id)] = (milestone.Name, IsMilestone: true);
         }
 
         return new CpmProjection
@@ -319,8 +321,8 @@ public sealed class ManagementViewProjector
                 {
                     NodeKind = node.NodeKind,
                     NodeId = node.NodeId,
-                    Name = names.TryGetValue(node.NodeId, out var name) ? name.Name : node.NodeId,
-                    IsMilestone = names.TryGetValue(node.NodeId, out name) && name.IsMilestone,
+                    Name = names.TryGetValue(new CanonicalWorkItemKey(node.NodeKind, node.NodeId), out var name) ? name.Name : node.NodeId,
+                    IsMilestone = names.TryGetValue(new CanonicalWorkItemKey(node.NodeKind, node.NodeId), out name) && name.IsMilestone,
                     EarliestStartWorkingMinutes = node.EarliestStartWorkingMinutes,
                     EarliestFinishWorkingMinutes = node.EarliestFinishWorkingMinutes,
                     LatestStartWorkingMinutes = node.LatestStartWorkingMinutes,
