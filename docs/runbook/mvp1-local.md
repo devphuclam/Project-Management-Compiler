@@ -62,6 +62,27 @@ legacy regression fixture, but it is not the primary MVP1 acceptance source.
    `<ProjectName>_CARIO.xlsx`. It is a human-assisted fill file, not a claimed
    native CARIO import.
 
+### Gantt review controls
+
+Use the Gantt tab as a management timeline rather than a task table:
+
+- Start with **Fit project** and **Month** zoom, then switch to **Week** and
+  **Day** to check the date scale. The vertical `AS OF` marker is the explicit
+  analysis date, not the browser's hidden current date.
+- Use **Expand all** / **Collapse all** to inspect the Project → Phase → Work
+  Package → Delivery Card hierarchy. Summary rows inherit their authored child
+  range; they are not a second schedule.
+- Turn on **Critical path** only when reviewing the CPM set. Use **Show
+  dependencies** to reveal typed connectors, then select a row to highlight its
+  direct relationships and open the row inspector.
+- Filter by phase, execution state, **Critical only**, **Overdue**, **At risk**,
+  or **Late start**. ALERT markers are derived signals and are not forecast
+  bars. A missing ACTUAL lane shows `—` until execution evidence exists.
+- Select Delivery Card `P04` and choose **Record execution** to jump to the
+  existing execution form. After applying an in-progress update, confirm the
+  PLAN bar is unchanged, ACTUAL ends at the chosen as-of date in the view, and
+  the ALERT marker explains the derived condition.
+
 ## API and output names
 
 - `GET /api/health`

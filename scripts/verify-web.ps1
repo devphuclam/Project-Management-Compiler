@@ -97,7 +97,10 @@ try {
     $ganttP04 = @($views.gantt.items | Where-Object { $_.workItemId -eq 'P04' })
     Assert-Condition ($ganttP04.Count -eq 1) 'Gantt must expose DeliveryCard P04 exactly once.'
     Assert-Condition ($ganttP04[0].dependencyIds -contains 'P03') 'Gantt P04 must use its DeliveryCard dependency.'
-    Assert-Condition (@($ganttP04[0].lanes | Where-Object { $_.lane -eq 'PLAN' }).Count -eq 1) 'Gantt P04 must retain its PLAN lane.'
+    $ganttP04Plan = @($ganttP04[0].lanes | Where-Object { $_.lane -eq 'PLAN' })
+    Assert-Condition ($ganttP04Plan.Count -eq 1) 'Gantt P04 must retain its PLAN lane.'
+    Assert-Condition (@($ganttP04[0].lanes | Where-Object { $_.lane -eq 'ACTUAL' }).Count -eq 0) 'Planning-only Gantt must not fabricate ACTUAL lanes.'
+    Assert-Condition (@($views.gantt.milestones | Where-Object { $_.plannedDate }).Count -eq 7) 'Gantt milestones must retain all seven authored dates.'
     Assert-Condition (@($views.dependencyNetwork.nodes | Where-Object { $_.id -eq 'P04' }).Count -eq 2) 'Dependency network must retain both typed P04 nodes.'
 
     $execution = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
@@ -108,7 +111,10 @@ try {
     }
     Assert-Condition ($execution.analysis.executionStatus.overdue -eq 1) 'API execution update did not recalculate overdue status.'
     $executionP04 = @($execution.views.gantt.items | Where-Object { $_.workItemId -eq 'P04' })[0]
+    $executionP04Plan = @($executionP04.lanes | Where-Object { $_.lane -eq 'PLAN' })[0]
+    Assert-Condition ($executionP04Plan.start -eq $ganttP04Plan[0].start -and $executionP04Plan.finish -eq $ganttP04Plan[0].finish) 'Execution update must not mutate the P04 PLAN lane.'
     Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $_.start -eq '2026-09-25' }).Count -eq 1) 'API execution update did not produce the P04 ACTUAL lane.'
+    Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $_.finish -eq '2026-09-28' }).Count -eq 1) 'In-progress ACTUAL evidence must end at the explicit as-of date.'
     Assert-Condition (@($execution.analysis.alerts | Where-Object { $_.workItemId -eq 'P04' -and $_.alertCode -eq 'OVERDUE' }).Count -eq 1) 'API execution update did not produce the P04 OVERDUE alert.'
 
     $atRisk = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
@@ -234,6 +240,18 @@ try {
     Assert-Condition ($appJs.Contains('Collapse all', [StringComparison]::Ordinal)) 'Gantt toolbar must expose collapse-all.'
     Assert-Condition ($appJs.Contains('fit-project', [StringComparison]::Ordinal)) 'Gantt toolbar must expose fit-project.'
     Assert-Condition ($appJs.Contains('critical-only', [StringComparison]::Ordinal)) 'Gantt filters must expose critical-only.'
+    Assert-Condition ($appJs.Contains('late-start', [StringComparison]::Ordinal)) 'Gantt filters must expose late-start work.'
+    Assert-Condition ($appJs.Contains('START_DELAY', [StringComparison]::Ordinal)) 'Gantt late-start filter must use the derived START_DELAY alert.'
+    Assert-Condition ($appJs.Contains('alert.message || alert.label || alert.reason', [StringComparison]::Ordinal)) 'Gantt alert markers must show the derived alert message safely.'
+    Assert-Condition ($appJs.Contains('formatIsoWeek', [StringComparison]::Ordinal)) 'Week zoom must expose stable ISO week labels.'
+    Assert-Condition ($appJs.Contains('startOfIsoWeek', [StringComparison]::Ordinal)) 'Week zoom ticks must align to ISO week starts.'
+    Assert-Condition ($appJs.Contains('AS OF ', [StringComparison]::Ordinal)) 'Gantt as-of marker must use a clear uppercase analysis label.'
+    Assert-Condition ($appJs.Contains('gantt-critical-bar', [StringComparison]::Ordinal)) 'Critical-path mode must provide a distinct bar treatment.'
+    Assert-Condition ($appJs.Contains('typeof value === "number"', [StringComparison]::Ordinal)) 'Gantt date formatting must accept its internal timestamp scale.'
+    Assert-Condition ($appJs.Contains('minor = []', [StringComparison]::Ordinal)) 'Month zoom must not duplicate the month axis as its own detail axis.'
+    Assert-Condition ($appJs.Contains('let minor = []', [StringComparison]::Ordinal)) 'Month zoom tick generation must allow an empty detail axis.'
+    Assert-Condition ($appJs.Contains('filterActive', [StringComparison]::Ordinal) -and $appJs.Contains('!filterActive', [StringComparison]::Ordinal)) 'Active Gantt filters must reveal matching descendants through collapsed summaries.'
+    Assert-Condition ($stylesCss.Contains('grid-auto-rows: 40px', [StringComparison]::Ordinal)) 'Gantt rows must stay within the target management density.'
     Assert-Condition (-not $appJs.Contains('draggable', [StringComparison]::OrdinalIgnoreCase)) 'PLAN bars must not be draggable.'
     Assert-Condition (-not $indexHtml.Contains('cdn.', [StringComparison]::OrdinalIgnoreCase)) 'Gantt must not add CDN assets.'
     $ganttStart = $appJs.IndexOf('function renderGantt', [StringComparison]::Ordinal)

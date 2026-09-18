@@ -14,6 +14,7 @@
       criticalOnly: false,
       overdueOnly: false,
       atRiskOnly: false,
+      lateStartOnly: false,
       showDependencies: false,
       criticalPath: false,
       selectedRowKey: null
@@ -348,7 +349,8 @@
   const DAY_MS = 86400000;
 
   function parseDate(value) {
-    if (!value) return null;
+    if (value === null || value === undefined || value === "") return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
     const text = String(value);
     const parsed = Date.parse(text.includes("T") ? text : text + "T00:00:00Z");
     return Number.isFinite(parsed) ? parsed : null;
@@ -388,11 +390,26 @@
   }
 
   function formatWeek(timestamp) {
-    return "Week of " + formatDate(timestamp);
+    return formatIsoWeek(timestamp);
+  }
+
+  function formatIsoWeek(timestamp) {
+    const date = new Date(timestamp);
+    date.setUTCHours(0, 0, 0, 0);
+    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+    const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+    const week = Math.ceil((((date.getTime() - yearStart) / DAY_MS) + 1) / 7);
+    return "W" + String(week).padStart(2, "0");
   }
 
   function dateAt(timestamp, days) {
     return timestamp + days * DAY_MS;
+  }
+
+  function startOfIsoWeek(timestamp) {
+    const date = new Date(timestamp);
+    date.setUTCHours(0, 0, 0, 0);
+    return dateAt(date.getTime(), -((date.getUTCDay() + 6) % 7));
   }
 
   function dayCount(start, end) {
@@ -541,7 +558,7 @@
 
   function createTicks(range, zoom) {
     const major = [];
-    const minor = [];
+    let minor = [];
     const first = new Date(range.timelineStart);
     first.setUTCHours(0, 0, 0, 0);
     const month = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), 1));
@@ -550,9 +567,9 @@
       if (major.length > 240) break;
     }
     if (zoom === "month") {
-      minor.push(...major);
+      minor = [];
     } else if (zoom === "week") {
-      for (let cursor = range.timelineStart; cursor <= range.timelineEnd + DAY_MS; cursor = dateAt(cursor, 7)) minor.push(cursor);
+      for (let cursor = startOfIsoWeek(range.timelineStart); cursor <= range.timelineEnd + DAY_MS; cursor = dateAt(cursor, 7)) minor.push(cursor);
     } else {
       for (let cursor = range.timelineStart; cursor <= range.timelineEnd + DAY_MS; cursor = dateAt(cursor, 1)) minor.push(cursor);
     }
@@ -591,7 +608,7 @@
     appendAxisRow(axis, ticks.major, range, width, "gantt-axis-month", formatMonth);
     appendAxisRow(axis, ticks.minor, range, width, "gantt-axis-detail", state.gantt.zoom === "day" ? formatDay : state.gantt.zoom === "week" ? formatWeek : formatMonth);
     header.appendChild(axis);
-    const marker = createMarker(analysis && analysis.asOfDate, range, "gantt-as-of-marker", "As of " + formatDate(analysis && analysis.asOfDate), true);
+    const marker = createMarker(analysis && analysis.asOfDate, range, "gantt-as-of-marker", "AS OF " + formatDay(parseDate(analysis && analysis.asOfDate)), true);
     if (marker) header.appendChild(marker);
     return header;
   }
@@ -628,7 +645,8 @@
     const actualFinish = entry.finish || (row.state === "IN_PROGRESS" ? analysis.asOfDate : null);
     const finish = parseDate(isActual ? actualFinish : entry.finish || entry.start);
     const end = finish === null ? start + DAY_MS : finish + DAY_MS;
-    const bar = node("button", null, "gantt-bar " + className + (finish === null ? " gantt-open-bar" : ""));
+    const criticalClass = state.gantt.criticalPath && row.isCritical ? " gantt-critical-bar" : "";
+    const bar = node("button", null, "gantt-bar " + className + criticalClass + (finish === null ? " gantt-open-bar" : ""));
     bar.type = "button";
     bar.dataset.ganttSelect = row.key;
     bar.dataset.ganttLane = isActual ? "ACTUAL" : "PLAN";
@@ -640,13 +658,13 @@
   }
 
   function renderTimelineRow(row, range, analysis) {
-    const timelineRow = node("div", null, "gantt-timeline-row" + (row.isSummary ? " gantt-summary-row" : ""));
+    const timelineRow = node("div", null, "gantt-timeline-row" + (row.isSummary ? " gantt-summary-row" : "") + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-row" : ""));
     timelineRow.dataset.rowKey = row.key;
     const planLane = node("div", null, "gantt-sub-lane gantt-plan-lane");
     const actualLane = node("div", null, "gantt-sub-lane gantt-actual-lane");
     const planLabel = row.isMilestone ? "PLAN milestone" : "PLAN";
     if (row.isMilestone && row.plan.start) {
-      const milestone = node("button", null, "gantt-milestone");
+      const milestone = node("button", null, "gantt-milestone" + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-bar" : ""));
       milestone.type = "button";
       milestone.dataset.ganttSelect = row.key;
       milestone.style.left = datePercent(parseDate(row.plan.start), range) + "%";
@@ -669,12 +687,12 @@
     timelineRow.appendChild(actualLane);
     row.alerts.forEach(alert => {
       const anchorDate = (row.actual && (row.actual.finish || row.actual.start)) || row.plan.finish || row.plan.start || analysis && analysis.asOfDate;
-      const marker = createMarker(anchorDate, range, "gantt-alert-marker", (alert.alertCode || "ALERT") + (alert.label ? ": " + alert.label : ""), false);
+      const marker = createMarker(anchorDate, range, "gantt-alert-marker", (alert.alertCode || "ALERT") + ": " + ganttAlertText(alert), false);
       if (marker) {
         marker.dataset.ganttSelect = row.key;
         marker.setAttribute("role", "button");
         marker.tabIndex = 0;
-        marker.title = (alert.alertCode || "ALERT") + (alert.label ? ": " + alert.label : "");
+        marker.title = (alert.alertCode || "ALERT") + ": " + ganttAlertText(alert);
         timelineRow.appendChild(marker);
       }
     });
@@ -685,7 +703,7 @@
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "gantt-connectors");
     svg.setAttribute("aria-hidden", "true");
-    const rowHeight = 44;
+    const rowHeight = 40;
     const height = visibleRows.length * rowHeight;
     svg.setAttribute("width", String(width));
     svg.setAttribute("height", String(height));
@@ -718,7 +736,7 @@
   }
 
   function renderTaskRow(row, analysis) {
-    const taskRow = node("div", null, "gantt-task-row" + (row.isSummary ? " gantt-summary-row" : ""));
+    const taskRow = node("div", null, "gantt-task-row" + (row.isSummary ? " gantt-summary-row" : "") + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-row" : ""));
     taskRow.dataset.rowKey = row.key;
     const identity = node("div", null, "gantt-task-cell gantt-task-identity");
     identity.style.paddingInlineStart = (10 + row.depth * 18) + "px";
@@ -771,11 +789,13 @@
     if (state.gantt.criticalOnly && !row.isCritical) return false;
     if (state.gantt.overdueOnly && !row.alerts.some(alert => alert.alertCode === "OVERDUE")) return false;
     if (state.gantt.atRiskOnly && !row.alerts.some(alert => alert.alertCode === "AT_RISK")) return false;
+    if (state.gantt.lateStartOnly && !row.alerts.some(alert => alert.alertCode === "START_DELAY")) return false;
     return true;
   }
 
   function visibleGanttRows(rows, byKey) {
     const matches = new Map(rows.map(row => [row.key, rowMatchesFilters(row)]));
+    const filterActive = state.gantt.phaseFilter !== "ALL" || state.gantt.executionFilter !== "ALL" || state.gantt.attentionOnly || state.gantt.criticalOnly || state.gantt.overdueOnly || state.gantt.atRiskOnly || state.gantt.lateStartOnly;
     const hasMatchingDescendant = row => {
       if (matches.get(row.key)) return true;
       return row.childKeys.some(childKey => {
@@ -787,7 +807,7 @@
       if (!hasMatchingDescendant(row)) return false;
       let parent = row.parentKey && byKey.get(row.parentKey);
       while (parent) {
-        if (parent.isSummary && !state.gantt.expandedKeys.has(parent.key)) return false;
+        if (parent.isSummary && !state.gantt.expandedKeys.has(parent.key) && !filterActive) return false;
         parent = parent.parentKey && byKey.get(parent.parentKey);
       }
       return true;
@@ -860,7 +880,7 @@
     execution.value = state.gantt.executionFilter;
     filters.appendChild(execution);
 
-    [["critical-only", "Critical only", state.gantt.criticalOnly], ["overdue", "Overdue", state.gantt.overdueOnly], ["at-risk", "At risk", state.gantt.atRiskOnly]].forEach(([value, label, checked]) => {
+    [["critical-only", "Critical only", state.gantt.criticalOnly], ["overdue", "Overdue", state.gantt.overdueOnly], ["at-risk", "At risk", state.gantt.atRiskOnly], ["late-start", "Late start", state.gantt.lateStartOnly]].forEach(([value, label, checked]) => {
       const wrapper = node("label", null, "gantt-filter-check");
       const input = node("input");
       input.type = "checkbox";
@@ -931,7 +951,7 @@
     row.alerts.forEach(alert => {
       const item = node("p", null, "gantt-detail-alert");
       item.appendChild(node("strong", alert.alertCode || "ALERT"));
-      item.appendChild(document.createTextNode(" " + (alert.label || "")));
+      item.appendChild(document.createTextNode(" " + ganttAlertText(alert)));
       if (alert.reasonWorkItemIds && alert.reasonWorkItemIds.length) item.appendChild(node("span", " Reasons: " + alert.reasonWorkItemIds.join(", "), "muted"));
       alerts.appendChild(item);
     });
@@ -1006,9 +1026,9 @@
     const taskRows = node("div", null, "gantt-task-rows gantt-task-pane");
     const timeline = node("div", null, "gantt-timeline");
     timeline.style.width = width + "px";
-    timeline.style.height = Math.max(44, visibleRows.length * 44) + "px";
+    timeline.style.height = Math.max(40, visibleRows.length * 40) + "px";
     timeline.appendChild(renderTimelineBackground(range, width));
-    const bodyMarker = createMarker(analysis && analysis.asOfDate, range, "gantt-as-of-marker", "As of " + formatDate(analysis && analysis.asOfDate), false);
+    const bodyMarker = createMarker(analysis && analysis.asOfDate, range, "gantt-as-of-marker", "AS OF " + formatDay(parseDate(analysis && analysis.asOfDate)), false);
     if (bodyMarker) timeline.appendChild(bodyMarker);
     timeline.appendChild(createDependencySvg(visibleRows, dependencyView, range, width, state.gantt.selectedRowKey));
     const timelineRows = node("div", null, "gantt-timeline-rows");
@@ -1093,9 +1113,14 @@
       if (key === "critical-only") state.gantt.criticalOnly = filter.checked;
       if (key === "overdue") state.gantt.overdueOnly = filter.checked;
       if (key === "at-risk") state.gantt.atRiskOnly = filter.checked;
+      if (key === "late-start") state.gantt.lateStartOnly = filter.checked;
       renderActiveView();
     });
     return shell;
+  }
+
+  function ganttAlertText(alert) {
+    return alert.message || alert.label || alert.reason || "Derived schedule condition";
   }
 
   function renderKanban(view) {

@@ -3,7 +3,9 @@
 Date: 2026-09-18
 Repository: `devphuclam/Project-Management-Compiler`
 Baseline before this increment: `e9a7447edb9b2f25eb12b7f9941e82e5178d9583`
-Working branch: `codex/005-gantt-ux-remediation`
+Original working branch: `codex/005-gantt-ux-remediation`
+Follow-up worktree branch: `codex/gantt-remediation`
+Follow-up base: `318750a`
 
 ## Current state
 
@@ -56,22 +58,34 @@ From the remediation worktree:
   `ReopenAtRisk=1`, `JsonBytes=434312`, `XlsxBytes=47625`, `SheetCount=6`,
   `SecurityChecks=PASS`.
 
-## Remaining work for the next session
+## Follow-up completion
 
-1. Start the application from the checked-out `main` and perform the manual
-   browser review using `tests/fixtures/ideaengineering-real-shaped` with
-   `2026-09-28` as-of date.
-2. Verify project-fit, month/week/day zoom, critical-path mode, dependency
-   toggle, selection/detail panel, execution-form focus, filters, and
-   collapsed/expanded phases.
-3. Confirm the visible result has one typed DeliveryCard `P04`, a distinct
-   WorkPackage `P04`, typed dependency edges, a visible as-of marker, no
-   fabricated forecast, and no duplicate rows or console errors.
-4. Extend `scripts/verify-web.ps1` with the remaining Task 2–4 static/data
-   assertions in the plan, and update `docs/runbook/mvp1-local.md` with the
-   Gantt-specific demo controls.
-5. Re-run the full verification suite and inspect the final diff before the
-   next coherent commit.
+The follow-up pass was completed in the isolated `codex/gantt-remediation`
+worktree. It closes the original manual-review and verification gaps without
+changing the compiler/API contract:
+
+- Added a `Late start` filter backed by the derived `START_DELAY` alert.
+- Made alert markers and the row inspector show the safe derived message, with
+  reason IDs for dependency-driven risk.
+- Added ISO week labels, a clear uppercase `AS OF` marker, numeric timestamp
+  formatting, and removed duplicate month detail labels.
+- Added a distinct critical-path bar/row treatment and synchronized 40px task,
+  timeline, and connector geometry.
+- Extended web/API verification for no fabricated planning-only ACTUAL lanes,
+  authored milestone dates, immutable PLAN dates, and in-progress ACTUAL ending
+  at the explicit as-of date.
+- Reviewed the real-shaped fixture manually at `2026-09-28` through month,
+  week, and day zoom; hierarchy expansion; critical/dependency mode; typed
+  `WorkPackage:P04` versus `DeliveryCard:P04`; P04 overdue/start-delay; and P06
+  at-risk reason display.
+- Added the Gantt-specific controls to `docs/runbook/mvp1-local.md`.
+
+## Remaining work for integration
+
+1. Inspect the final diff, create the coherent local commit, and choose whether
+   to merge it into `main`.
+2. Run the full verification suite again after any integration operation. Do
+   not push until explicitly requested.
 
 The earlier browser snapshot showed the old table renderer because it was
 served by a stale/other local app instance. Treat that snapshot as a reminder
