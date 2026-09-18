@@ -139,6 +139,7 @@ internal static class Program
         ,("DashboardUsesAuthoritativeWorkPackageEffortAndReserveSemantics", MetricsTests.DashboardUsesAuthoritativeWorkPackageEffortAndReserveSemantics)
         ,("PlanningOnlyActualForecastAndHealthRemainUnknown", MetricsTests.PlanningOnlyActualForecastAndHealthRemainUnknown)
         ,("ActualStartAloneDoesNotFabricateForecastFromCpmFinish", MetricsTests.ActualStartAloneDoesNotFabricateForecastFromCpmFinish)
+        ,("DashboardSummariesExposeKnownActualAndRemainingEffort", MetricsTests.DashboardSummariesExposeKnownActualAndRemainingEffort)
         ,("ManagementCalendarUsesWeekdaysSignedVarianceAndWorkingDayDurations", CalendarTests.ManagementCalendarUsesWeekdaysSignedVarianceAndWorkingDayDurations)
         ,("RealShapedAuthorityExtractsCurrentPlanningContract", RealSourceCompatibilityTests.RealShapedAuthorityExtractsCurrentPlanningContract)
         ,("RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments", RealSourceCompatibilityTests.RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments)

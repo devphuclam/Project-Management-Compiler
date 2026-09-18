@@ -20,6 +20,11 @@ internal static class MetricsTests
         TestAssert.Equal(DataState.Unknown, analysis.Reserve.RemainingState, "Planning-only reserve remaining must remain UNKNOWN.");
         TestAssert.Equal(512m, analysis.EffortAccounting!.AuthoritativeEffortHours, "Effort reconciliation must identify the authoritative total.");
         TestAssert.Equal(212m, analysis.EffortAccounting.DetailedEffortHours, "Effort reconciliation must retain card-level detail separately.");
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.planned-effort" && summary.Value == "512h"), "Dashboard summaries must expose authoritative planned effort.");
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.capacity-hours" && summary.Value == "600h"), "Dashboard summaries must expose capacity hours.");
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.actual-effort" && summary.Value == "UNKNOWN"), "Planning-only dashboard actual effort must remain UNKNOWN.");
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.remaining-effort" && summary.Value == "UNKNOWN"), "Planning-only dashboard remaining effort must remain UNKNOWN.");
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.reserve-initial" && summary.Value == "88h"), "Dashboard summaries must expose initial reserve.");
     }
 
     public static void PlanningOnlyActualForecastAndHealthRemainUnknown()
@@ -54,6 +59,25 @@ internal static class MetricsTests
             analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.cpm-finish")
             && analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.forecast-finish"),
             "Dashboard summaries must expose CPM and forecast as separate concepts.");
+    }
+
+    public static void DashboardSummariesExposeKnownActualAndRemainingEffort()
+    {
+        var project = CaptureCanonicalProject();
+        var updated = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        {
+            WorkItemId = "P01-A",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 9, 18),
+            ActualEffortHours = 4m,
+            RemainingEffortHours = 2m,
+            LastUpdatedAt = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero)
+        });
+        TestAssert.True(updated.Accepted, "Actual and remaining effort evidence should be accepted.");
+
+        var analysis = Analyze(updated.Project);
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.actual-effort" && summary.Value == "4h" && summary.State == DataState.Calculated), "Dashboard must expose known actual effort.");
+        TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.remaining-effort" && summary.Value == "2h" && summary.State == DataState.Calculated), "Dashboard must expose known remaining effort.");
     }
 
     private static ManagementAnalysis Analyze(CanonicalProject project) =>

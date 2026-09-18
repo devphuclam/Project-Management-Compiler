@@ -85,8 +85,22 @@ public sealed class ManagementMetricsAnalyzer
             {
                 ViewId = "dashboard.capacity",
                 Label = "Authoritative work-package load",
-                Value = workPackageLoad is null ? "UNKNOWN" : $"{workPackageLoad:0.##}h/{capacityHours:0.##}h",
+                Value = workPackageLoad is null || capacityHours is null ? "UNKNOWN" : $"{workPackageLoad:0.##}h/{capacityHours:0.##}h",
                 State = capacityState
+            },
+            new()
+            {
+                ViewId = "dashboard.planned-effort",
+                Label = "Planned effort",
+                Value = FormatHours(authoritativeEffort),
+                State = authoritativeEffort is null ? DataState.Unknown : DataState.Known
+            },
+            new()
+            {
+                ViewId = "dashboard.capacity-hours",
+                Label = "Capacity",
+                Value = FormatHours(capacityHours),
+                State = capacityHours is null ? DataState.Unknown : DataState.Known
             },
             new()
             {
@@ -94,6 +108,27 @@ public sealed class ManagementMetricsAnalyzer
                 Label = "Reserve remaining",
                 Value = project.Reserve.RemainingHours is null ? "UNKNOWN" : $"{project.Reserve.RemainingHours:0.##}h",
                 State = project.Reserve.RemainingState
+            },
+            new()
+            {
+                ViewId = "dashboard.reserve-initial",
+                Label = "Initial reserve",
+                Value = FormatHours(project.Reserve.InitialHours),
+                State = project.Reserve.InitialHours is null ? DataState.Unknown : DataState.Known
+            },
+            new()
+            {
+                ViewId = "dashboard.actual-effort",
+                Label = "Actual effort",
+                Value = FormatHours(executionEffort.ActualEffortHours),
+                State = executionEffort.ActualState
+            },
+            new()
+            {
+                ViewId = "dashboard.remaining-effort",
+                Label = "Remaining effort",
+                Value = FormatHours(executionEffort.RemainingEffortHours),
+                State = executionEffort.RemainingState
             },
             new()
             {
@@ -168,4 +203,5 @@ public sealed class ManagementMetricsAnalyzer
     }
 
     private static string FormatDate(DateOnly? value) => value?.ToString("yyyy-MM-dd") ?? "UNKNOWN";
+    private static string FormatHours(decimal? value) => value is null ? "UNKNOWN" : $"{value:0.##}h";
 }
