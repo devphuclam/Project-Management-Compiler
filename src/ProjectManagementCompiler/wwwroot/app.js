@@ -4,7 +4,7 @@
   function createGanttState() {
     return {
       projectId: null,
-      zoom: "week",
+      zoom: "day",
       fit: false,
       preset: "plan",
       expandedKeys: new Set(),
@@ -18,12 +18,56 @@
       lateStartOnly: false,
       showDependencies: false,
       criticalPath: false,
+      structureMode: false,
       selectedRowKey: null
     };
   }
 
   const state = { project: null, sources: [], views: null, warnings: [], activeView: "dashboard", gantt: createGanttState() };
   const byId = (id) => document.getElementById(id);
+
+  // Presentation-only labels. The canonical model and source role codes stay untouched.
+  const rolePresentation = Object.freeze({
+    LEAD: "Project lead",
+    PDA: "Product Decision Authority",
+    PROC: "Process manager",
+    DEV2: "Supporting developer",
+    QLHT: "System management",
+    HTKT: "Technical support",
+    SPEC: "Specialist reviewer",
+    PILOT: "Pilot observer"
+  });
+
+  function normalizeDisplayTitle(value, id) {
+    const source = String(value || id || "").trim();
+    const unquoted = source.replace(/^`([\s\S]*)`$/, "$1").trim();
+    const normalizedId = String(id || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const withId = normalizedId
+      ? new RegExp("^\\s*\\[PH[^\\]]+\\]\\s*\\[" + normalizedId + "\\]\\s*", "i")
+      : null;
+    if (withId && withId.test(unquoted)) return unquoted.replace(withId, "").trim() || id;
+    return unquoted.replace(/^\s*\[PH[^\]]+\]\s*\[[^\]]+\]\s*/i, "").trim() || id || unquoted;
+  }
+
+  function roleLabel(code) {
+    const normalized = String(code || "").toUpperCase();
+    return rolePresentation[normalized] || "Role not mapped";
+  }
+
+  function primaryOwner(roles) {
+    const codes = Array.isArray(roles) ? roles.map(role => String(role || "").toUpperCase()).filter(Boolean) : [];
+    const code = codes.includes("LEAD") ? "LEAD" : codes[0] || null;
+    return code ? { code, label: roleLabel(code) } : null;
+  }
+
+  function roleSummary(roles) {
+    const codes = Array.isArray(roles) ? roles.map(role => String(role || "").toUpperCase()).filter(Boolean) : [];
+    return codes.length ? codes.map(code => code + " · " + roleLabel(code)).join(", ") : "Unassigned";
+  }
+
+  function displayState(value, fallback) {
+    return value ? stateLabel(value) : fallback;
+  }
 
   function node(tag, text, className) {
     const element = document.createElement(tag);
@@ -102,7 +146,7 @@
 
   function displaySummaryLabel(label) {
     if (label === "Delivery cards completed") return "Recorded completion";
-    if (label === "CPM calculated finish") return "CPM (dependency-only)";
+    if (label === "CPM calculated finish") return "Dependency CPM Finish";
     return label;
   }
 
@@ -131,7 +175,7 @@
       const item = items.get(String(alert.workItemId));
       return {
         id: alert.workItemId || "UNKNOWN",
-        name: item && item.name || alert.workItemId || "Unidentified work item",
+        name: normalizeDisplayTitle(item && item.name, alert.workItemId || "Unidentified work item"),
         code: alert.alertCode || "ATTENTION",
         label: alert.message || alert.label || alert.reason || "Derived schedule condition"
       };
@@ -141,13 +185,98 @@
       (item.lanes || []).filter(lane => String(lane.lane || "").toUpperCase() === "ALERT" && isAttentionAlert(lane)).forEach(alert => {
         rows.push({
           id: item.workItemId || "UNKNOWN",
-          name: item.name || item.workItemId || "Unidentified work item",
+          name: normalizeDisplayTitle(item.name, item.workItemId || "Unidentified work item"),
           code: alert.alertCode || "ATTENTION",
           label: alert.message || alert.label || "Derived schedule condition"
         });
       });
     });
     return rows;
+  }
+
+  function attentionCounts(summary) {
+    const counts = { BLOCKED: 0, OVERDUE: 0, AT_RISK: 0, START_DELAY: 0, OTHER: 0 };
+    attentionRows(summary).forEach(row => {
+      const code = String(row.code || "OTHER").toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(counts, code)) counts[code] += 1;
+      else counts.OTHER += 1;
+    });
+    return counts;
+  }
+
+  function attentionLabel(code) {
+    const labels = { BLOCKED: "Blocked", OVERDUE: "Overdue", AT_RISK: "At risk", START_DELAY: "Late start" };
+    return labels[String(code || "").toUpperCase()] || "Attention";
+  }
+
+  function managementContext(summary) {
+    const baseline = summary && summary.baseline || {};
+    const analysis = summary && summary.analysis || {};
+    const gantt = summary && summary.views && summary.views.gantt || {};
+    const model = summary && summary.views && summary.views.wbs
+      ? buildGanttRows(summary.views.wbs.root, gantt, baseline)
+      : { rows: [] };
+    const phase = resolveRelevantPhase(model.rows, analysis.asOfDate);
+    const milestones = (gantt.milestones || [])
+      .filter(item => parseDate(item.plannedDate) !== null)
+      .sort((left, right) => parseDate(left.plannedDate) - parseDate(right.plannedDate));
+    const asOf = parseDate(analysis.asOfDate);
+    const nextControlPoint = milestones.find(item => asOf === null || parseDate(item.plannedDate) >= asOf) || milestones[0] || null;
+    const inventory = {
+      phases: model.rows.filter(row => row.kind === "Phase").length,
+      workPackages: model.rows.filter(row => row.kind === "WorkPackage").length,
+      deliveryCards: model.rows.filter(row => row.kind === "DeliveryCard").length,
+      controlPoints: model.rows.filter(row => row.kind === "Milestone").length
+    };
+    return { phase, nextControlPoint, inventory };
+  }
+
+  function controlPointState(item) {
+    const raw = String(item && item.state || "").toUpperCase();
+    if (["OPEN", "BLOCKED", "NOT_RUN", "COMPLETED", "CANCELLED", "CLOSED"].includes(raw)) return stateLabel(raw);
+    return "Planned · result not evaluated";
+  }
+
+  function renderControlStrip(summary, context) {
+    const strip = node("section", null, "summary-control-strip");
+    const phaseCard = node("div", null, "summary-control-card");
+    const phaseCopy = node("div", null, "summary-control-copy");
+    phaseCopy.appendChild(node("span", "CURRENT PHASE", "summary-control-kicker"));
+    phaseCopy.appendChild(node("strong", context.phase ? context.phase.id + " · " + context.phase.displayName : "Phase not identified"));
+    phaseCopy.appendChild(node("span", context.phase ? displayDate(context.phase.plan.start) + " → " + displayDate(context.phase.plan.finish) : "No dated phase evidence", "muted"));
+    phaseCard.appendChild(phaseCopy);
+    if (context.phase) {
+      const phaseAction = node("button", "View phase", "text-action");
+      phaseAction.type = "button";
+      phaseAction.dataset.summaryView = "gantt";
+      phaseAction.dataset.summaryKey = context.phase.key;
+      phaseCard.appendChild(phaseAction);
+    }
+    strip.appendChild(phaseCard);
+
+    const gateCard = node("div", null, "summary-control-card");
+    const gateCopy = node("div", null, "summary-control-copy");
+    gateCopy.appendChild(node("span", "NEXT CONTROL POINT", "summary-control-kicker"));
+    gateCopy.appendChild(node("strong", context.nextControlPoint ? normalizeDisplayTitle(context.nextControlPoint.name, context.nextControlPoint.milestoneId) : "No dated control point"));
+    gateCopy.appendChild(node("span", context.nextControlPoint ? formatDate(context.nextControlPoint.plannedDate) + " · " + controlPointState(context.nextControlPoint) : "No dated milestone evidence", "muted"));
+    gateCard.appendChild(gateCopy);
+    if (context.nextControlPoint) {
+      const gateAction = node("button", "View control point", "text-action");
+      gateAction.type = "button";
+      gateAction.dataset.summaryView = "gantt";
+      gateAction.dataset.summaryKey = typedKey("Milestone", context.nextControlPoint.milestoneId);
+      gateCard.appendChild(gateAction);
+    }
+    strip.appendChild(gateCard);
+
+    const planCard = node("div", null, "summary-control-card summary-control-card-plan");
+    const planCopy = node("div", null, "summary-control-copy");
+    planCopy.appendChild(node("span", "REPORTING BOUNDARY", "summary-control-kicker"));
+    planCopy.appendChild(node("strong", "As of " + formatDate(summary.analysis && summary.analysis.asOfDate)));
+    planCopy.appendChild(node("span", "Planning baseline · " + displayDate(summary.baseline && summary.baseline.planningStart) + " → " + displayDate(summary.baseline && summary.baseline.planningFinish), "muted"));
+    planCard.appendChild(planCopy);
+    strip.appendChild(planCard);
+    return strip;
   }
 
   function renderAttentionQueue(summary, compact) {
@@ -176,7 +305,7 @@
       item.dataset.summaryView = "gantt";
       item.dataset.summaryKey = typedKey("DeliveryCard", row.id);
       item.dataset.summaryAttention = "true";
-      item.appendChild(node("span", row.code, "attention-code"));
+      item.appendChild(node("span", attentionLabel(row.code), "attention-code"));
       const copy = node("span", null, "attention-copy");
       copy.appendChild(node("strong", row.name));
       copy.appendChild(node("span", row.label, "muted"));
@@ -210,6 +339,7 @@
       prepareGanttState(projectId);
       state.gantt.selectedRowKey = key || null;
       state.gantt.attentionOnly = Boolean(attention);
+      if (attention) state.gantt.preset = "attention";
       if (key && state.views && state.views.wbs && state.views.gantt) {
         const model = buildGanttRows(state.views.wbs.root, state.views.gantt, state.project && state.project.baseline || {});
         let row = model.byKey.get(key) || null;
@@ -240,37 +370,36 @@
     }
     const dashboard = summary.views.dashboard;
     panel.className = "summary-region project-control-center";
-    const overdue = Number(dashboard.overdue || 0);
-    const atRisk = Number(dashboard.atRisk || 0);
-    const lateToStart = Number(dashboard.lateToStart || 0);
-    const attentionCount = overdue + atRisk + lateToStart;
-    const healthLabel = overdue ? "Intervention needed" : attentionCount ? "Watch closely" : "No active alerts";
-    const healthClass = overdue ? "danger" : attentionCount ? "warning" : "success";
+    const counts = attentionCounts(summary);
+    const attentionCount = Object.values(counts).reduce((total, value) => total + value, 0);
+    const healthLabel = counts.BLOCKED || counts.OVERDUE ? "Intervention needed" : attentionCount ? "Watch closely" : "No active alerts";
+    const healthClass = counts.BLOCKED || counts.OVERDUE ? "danger" : attentionCount ? "warning" : "success";
     const completed = Number(dashboard.completed || 0);
     const totalCards = Number(dashboard.totalCards || 0);
     const progressKnown = hasExecutionEvidence(summary);
     const progress = progressKnown && totalCards ? Math.round((completed / totalCards) * 100) : null;
-    const milestones = (summary.views.gantt && summary.views.gantt.milestones || []).filter(item => parseDate(item.plannedDate) !== null).sort((left, right) => parseDate(left.plannedDate) - parseDate(right.plannedDate));
-    const asOfTimestamp = parseDate(summary.analysis && summary.analysis.asOfDate);
-    const nextMilestone = milestones.find(item => asOfTimestamp === null || parseDate(item.plannedDate) >= asOfTimestamp) || milestones[0] || null;
+    const context = managementContext(summary);
 
     const hero = node("div", null, "summary-hero");
     const heroCopy = node("div", null, "summary-hero-copy");
     heroCopy.appendChild(node("p", "PROJECT CONTROL CENTER", "eyebrow"));
     heroCopy.appendChild(node("h2", summary.project.name || summary.project.id));
-    heroCopy.appendChild(node("p", "Baseline " + (summary.baseline.version || summary.baseline.id || "UNKNOWN") + " · reporting as of " + formatDate(summary.analysis && summary.analysis.asOfDate), "summary-meta"));
+    heroCopy.appendChild(node("p", "Baseline " + (summary.baseline.version || summary.baseline.id || "Not identified") + " · reporting as of " + formatDate(summary.analysis && summary.analysis.asOfDate), "summary-meta"));
     hero.appendChild(heroCopy);
     const heroMeta = node("div", null, "summary-hero-meta");
     heroMeta.appendChild(node("span", healthLabel, "summary-status " + healthClass));
     heroMeta.appendChild(node("span", attentionCount ? attentionCount + " attention alerts" : "No active alerts", "summary-signal-count"));
     hero.appendChild(heroMeta);
     panel.appendChild(hero);
+    panel.appendChild(renderControlStrip(summary, context));
 
     const mainGrid = node("div", null, "summary-main-grid");
+    mainGrid.appendChild(renderAttentionQueue(summary, false));
+
     const progressCard = node("section", null, "summary-progress-card");
     const progressHeading = node("div", null, "summary-card-heading");
-    progressHeading.appendChild(node("span", "DELIVERY PROGRESS", "eyebrow"));
-    progressHeading.appendChild(node("strong", progressKnown ? progress + "%" : "—", "summary-progress-value"));
+    progressHeading.appendChild(node("span", "EXECUTION EVIDENCE", "eyebrow"));
+    progressHeading.appendChild(node("strong", progressKnown ? progress + "%" : "Not recorded", "summary-progress-value"));
     progressCard.appendChild(progressHeading);
     const progressTrack = node("div", null, "summary-progress-track");
     if (!progressKnown) progressTrack.classList.add("is-unknown");
@@ -278,43 +407,48 @@
     progressFill.style.width = progressKnown ? progress + "%" : "0%";
     progressTrack.appendChild(progressFill);
     progressCard.appendChild(progressTrack);
-    progressCard.appendChild(node("p", progressKnown ? "Recorded completion · " + completed + " / " + totalCards + " delivery cards (" + progress + "% of delivery-card count)." : "Execution data unavailable · planning evidence only."));
+    progressCard.appendChild(node("p", progressKnown ? "Recorded completion · " + completed + " / " + totalCards + " delivery cards (" + progress + "% of delivery-card count)." : "No execution evidence. Planning baseline loaded successfully."));
     const progressStats = node("div", null, "summary-inline-stats");
     if (progressKnown) {
       progressStats.appendChild(node("span", String(dashboard.inProgress || 0) + " in progress"));
       progressStats.appendChild(node("span", String(dashboard.notStarted || 0) + " not started"));
     } else {
-      progressStats.appendChild(node("span", "No execution overlay recorded"));
+      progressStats.appendChild(node("span", "Execution overlay not yet recorded"));
     }
     progressCard.appendChild(progressStats);
     mainGrid.appendChild(progressCard);
 
-    const milestoneCard = node("section", null, "summary-milestone-card");
-    milestoneCard.appendChild(node("p", "UP NEXT", "eyebrow"));
-    milestoneCard.appendChild(node("h3", "Next milestone"));
-    milestoneCard.appendChild(node("strong", nextMilestone ? nextMilestone.name || nextMilestone.milestoneId : "No dated milestone"));
-    milestoneCard.appendChild(node("p", nextMilestone ? formatDate(nextMilestone.plannedDate) + " · " + (nextMilestone.milestoneId || "Milestone") : "Add a dated decision point to the baseline.", "muted"));
-    if (nextMilestone) {
-      const milestoneAction = node("button", "Open in Gantt →", "text-action");
-      milestoneAction.type = "button";
-      milestoneAction.dataset.summaryView = "gantt";
-      milestoneAction.dataset.summaryKey = typedKey("Milestone", nextMilestone.milestoneId);
-      milestoneCard.appendChild(milestoneAction);
-    }
-    mainGrid.appendChild(milestoneCard);
-    mainGrid.appendChild(renderAttentionQueue(summary, false));
+    const scheduleCard = node("section", null, "summary-milestone-card summary-schedule-card");
+    scheduleCard.appendChild(node("p", "SCHEDULE HEALTH", "eyebrow"));
+    scheduleCard.appendChild(node("h3", "Baseline versus analysis"));
+    [["Baseline finish", dashboard.baselineFinish || "Not recorded"], ["Dependency CPM Finish", dashboard.cpmFinish || "Not calculated"], ["Forecast", dashboard.forecastFinish || "Not calculated"]].forEach(([label, value]) => {
+      const dateRow = node("div", null, "summary-date-row");
+      dateRow.appendChild(node("span", label, "muted"));
+      dateRow.appendChild(node("strong", value));
+      scheduleCard.appendChild(dateRow);
+    });
+    scheduleCard.appendChild(node("p", "Dependency CPM uses analysis-eligible dependencies and the working calendar; it does not perform resource leveling.", "muted"));
+    mainGrid.appendChild(scheduleCard);
     panel.appendChild(mainGrid);
 
     const metrics = node("div", null, "summary-metric-grid");
-    [["Work items", dashboard.totalCards, ""], ["Recorded completion", executionValue(summary, dashboard.completed), "success"], ["Schedule alerts", overdue + atRisk, overdue + atRisk ? "danger" : ""], ["Late starts", dashboard.lateToStart, "warning"]].forEach(([label, value, tone]) => {
+    const plannedEffort = summary.baseline.plannedEffortHours === null || summary.baseline.plannedEffortHours === undefined ? "Not recorded" : summary.baseline.plannedEffortHours + "h";
+    const capacity = summary.baseline.capacityHours === null || summary.baseline.capacityHours === undefined ? "Not recorded" : summary.baseline.capacityHours + "h";
+    const reserve = summary.baseline.reserveHours === null || summary.baseline.reserveHours === undefined ? "Not recorded" : summary.baseline.reserveHours + "h";
+    [["Planned effort", plannedEffort, "accent"], ["Capacity", capacity, ""], ["Controlled reserve", reserve, "success"], ["Execution", progressKnown ? "Recorded" : "Not yet recorded", ""]].forEach(([label, value, tone]) => {
       const card = node("div", null, "summary-card " + tone);
       card.appendChild(node("span", label, "label"));
       card.appendChild(node("strong", value, "value"));
       metrics.appendChild(card);
     });
     panel.appendChild(metrics);
+    const inventory = node("div", null, "summary-inventory");
+    inventory.appendChild(node("span", "Scope structure", "summary-inventory-label"));
+    inventory.appendChild(node("strong", context.inventory.phases + " phases · " + context.inventory.workPackages + " work packages · " + context.inventory.deliveryCards + " execution cards · " + context.inventory.controlPoints + " control points"));
+    inventory.appendChild(node("span", "Details stay available in WBS, Structure mode, and the row inspector.", "muted"));
+    panel.appendChild(inventory);
     const footer = node("div", null, "summary-footer");
-    footer.appendChild(node("span", (summary.baseline.planningStart || "UNKNOWN") + " → " + (summary.baseline.planningFinish || "UNKNOWN"), "muted"));
+    footer.appendChild(node("span", displayDate(summary.baseline.planningStart) + " → " + displayDate(summary.baseline.planningFinish), "muted"));
     footer.appendChild(node("span", "Baseline remains immutable · execution is recorded separately", "muted"));
     panel.appendChild(footer);
   }
@@ -342,46 +476,40 @@
     const fragment = document.createDocumentFragment();
     const summary = currentSummary();
     const heading = node("div", null, "dashboard-heading");
-    heading.appendChild(node("p", "OPERATING PULSE", "eyebrow"));
-    heading.appendChild(node("h3", "Delivery pulse"));
-    heading.appendChild(node("p", "A compact read on progress, schedule pressure, and the decisions that need a human next.", "muted"));
+    heading.appendChild(node("p", "MANAGEMENT OVERVIEW", "eyebrow"));
+    heading.appendChild(node("h3", "Management detail"));
+    heading.appendChild(node("p", "The control center above already surfaces phase, gate, exceptions, and schedule. Use this view for operating constraints and calculated detail.", "muted"));
     fragment.appendChild(heading);
-    const baseline = summary && summary.baseline || {};
-    const metrics = [
-      ["Planned effort", baseline.plannedEffortHours === null || baseline.plannedEffortHours === undefined ? "UNKNOWN" : baseline.plannedEffortHours + "h", "accent"],
-      ["Capacity", baseline.capacityHours === null || baseline.capacityHours === undefined ? "UNKNOWN" : baseline.capacityHours + "h", ""],
-      ["Reserve", baseline.reserveHours === null || baseline.reserveHours === undefined ? "UNKNOWN" : baseline.reserveHours + "h", "success"],
-      ["Execution evidence", hasExecutionEvidence(summary) ? "Recorded" : "Planning only", ""]
-    ];
-    const grid = node("div", null, "metric-grid");
-    metrics.forEach(([label, value, tone]) => {
-      const metric = node("div", null, "metric " + tone);
-      metric.appendChild(node("strong", value));
-      metric.appendChild(node("span", label));
-      grid.appendChild(metric);
-    });
-    fragment.appendChild(grid);
-    const dashboardGrid = node("div", null, "dashboard-grid");
-    const schedule = node("section", null, "dashboard-card");
-    schedule.appendChild(node("p", "SCHEDULE READOUT", "eyebrow"));
-    schedule.appendChild(node("h3", "Three dates to keep visible"));
-    [["Baseline finish", view.baselineFinish], ["CPM (dependency-only)", view.cpmFinish], ["Forecast finish", view.forecastFinish]].forEach(([label, value]) => {
-      const row = node("div", null, "readout-row");
-      row.appendChild(node("span", label, "muted"));
-      row.appendChild(node("strong", value || "UNKNOWN"));
-      schedule.appendChild(row);
-    });
-    dashboardGrid.appendChild(schedule);
-    if (summary) dashboardGrid.appendChild(renderAttentionQueue(summary, true));
-    fragment.appendChild(dashboardGrid);
-    fragment.appendChild(node("h3", "Analysis summaries"));
+    if (!summary) return fragment;
+    const context = managementContext(summary);
+    const contextGrid = node("div", null, "dashboard-context-grid");
+    const execution = node("section", null, "dashboard-card");
+    execution.appendChild(node("p", "EXECUTION", "eyebrow"));
+    execution.appendChild(node("h3", hasExecutionEvidence(summary) ? "Recorded delivery evidence" : "Planning baseline only"));
+    execution.appendChild(node("p", hasExecutionEvidence(summary) ? (view.completed || "0") + " delivery cards completed; " + (view.inProgress || "0") + " in progress." : "No execution evidence is recorded yet. This is a valid planning state, not zero completion.", "muted"));
+    contextGrid.appendChild(execution);
+    const capacity = node("section", null, "dashboard-card");
+    capacity.appendChild(node("p", "CAPACITY", "eyebrow"));
+    capacity.appendChild(node("h3", "Effort and operating constraint"));
+    capacity.appendChild(node("div", "Planned effort · " + (summary.baseline.plannedEffortHours ?? "Not recorded") + (summary.baseline.plannedEffortHours === null || summary.baseline.plannedEffortHours === undefined ? "" : "h"), "readout-row"));
+    capacity.appendChild(node("div", "Controlled reserve · " + (summary.baseline.reserveHours ?? "Not recorded") + (summary.baseline.reserveHours === null || summary.baseline.reserveHours === undefined ? "" : "h"), "readout-row"));
+    capacity.appendChild(node("div", "Capacity · " + (summary.baseline.capacityHours ?? "Not recorded") + (summary.baseline.capacityHours === null || summary.baseline.capacityHours === undefined ? "" : "h"), "readout-row"));
+    capacity.appendChild(node("p", "Resource constraints remain distinct from dependency critical path analysis.", "muted"));
+    contextGrid.appendChild(capacity);
+    fragment.appendChild(contextGrid);
+    const inventory = node("p", "Scope structure · " + context.inventory.phases + " phases · " + context.inventory.workPackages + " work packages · " + context.inventory.deliveryCards + " execution cards · " + context.inventory.controlPoints + " control points", "dashboard-inventory muted");
+    fragment.appendChild(inventory);
+    fragment.appendChild(node("h3", "Analysis details"));
     const summaryRows = (view.summaries || []).map(item => {
       if (item.label === "Delivery cards completed" && !hasExecutionEvidence(summary)) {
-        return ["Recorded completion", "UNKNOWN", "UNKNOWN"];
+        return ["Recorded completion", "Not recorded", "Planning state"];
       }
-      return [displaySummaryLabel(item.label), item.value, item.state];
+      return [displaySummaryLabel(item.label), item.value === "UNKNOWN" ? "Not calculated" : item.value, item.state === "UNKNOWN" ? "Not recorded" : item.state];
     });
-    fragment.appendChild(renderTable(["View", "Value", "State"], summaryRows));
+    const details = node("details", null, "dashboard-details");
+    details.appendChild(node("summary", "Show calculated fields", "dashboard-details-summary"));
+    details.appendChild(renderTable(["View", "Value", "State"], summaryRows));
+    fragment.appendChild(details);
     return fragment;
   }
 
@@ -390,7 +518,7 @@
     const label = node("span");
     label.appendChild(node("span", item.kind, "kind"));
     label.appendChild(node("strong", item.id));
-    label.appendChild(document.createTextNode(" " + (item.name || "")));
+    label.appendChild(document.createTextNode(" " + normalizeDisplayTitle(item.name, item.id)));
     li.appendChild(label);
     if (item.children && item.children.length) {
       const children = node("ul");
@@ -460,6 +588,57 @@
   function milestoneKindLabel(row) {
     if (!row || row.kind !== "Milestone") return "";
     return String(row.milestoneKind || "Milestone").toLowerCase() === "decision" ? "Decision gate" : "Milestone";
+  }
+
+  function ManagementPresentationRow(row, parentKey, childKeys, depth) {
+    return Object.assign({}, row, {
+      parentKey,
+      childKeys,
+      depth,
+      displayName: row.displayName || normalizeDisplayTitle(row.sourceName || row.name, row.id),
+      hierarchyLevel: row.kind,
+      primaryState: ganttStateLabel(row),
+      secondaryState: row.actual ? "Actual evidence" : "No execution evidence",
+      ownerSummary: row.primaryOwner ? row.primaryOwner.code : "Unassigned",
+      attention: row.alerts || [],
+      planSummary: row.plan,
+      actualSummary: row.actual,
+      isGate: row.kind === "Milestone" && String(row.milestoneKind || "").toLowerCase() === "decision"
+    });
+  }
+
+  function isStructureMode() {
+    return Boolean(state.gantt.structureMode);
+  }
+
+  function createGanttPresentation(model) {
+    const included = row => isStructureMode() || row.kind !== "WorkPackage";
+    const includedRows = model.rows.filter(included);
+    const includedKeys = new Set(includedRows.map(row => row.key));
+    const parentByKey = new Map();
+    const depthByKey = new Map();
+    const childrenByKey = new Map(includedRows.map(row => [row.key, []]));
+    includedRows.forEach(row => {
+      let parent = row.parentKey ? model.byKey.get(row.parentKey) : null;
+      let parentKey = null;
+      while (parent) {
+        if (includedKeys.has(parent.key)) {
+          parentKey = parent.key;
+          break;
+        }
+        parent = parent.parentKey ? model.byKey.get(parent.parentKey) : null;
+      }
+      parentByKey.set(row.key, parentKey);
+      depthByKey.set(row.key, parentKey === null ? 0 : (depthByKey.get(parentKey) || 0) + 1);
+      if (parentKey) childrenByKey.get(parentKey).push(row.key);
+    });
+    const rows = includedRows.map(row => ManagementPresentationRow(
+      row,
+      parentByKey.get(row.key) || null,
+      childrenByKey.get(row.key) || [],
+      depthByKey.get(row.key) || 0
+    ));
+    return { rows, byKey: new Map(rows.map(row => [row.key, row])) };
   }
 
   function formatDate(value) {
@@ -539,11 +718,14 @@
         planStart = milestone && milestone.plannedDate || planStart;
         planFinish = milestone && milestone.plannedDate || planFinish || planStart;
       }
+      const sourceName = (item && item.name) || (milestone && milestone.name) || wbsNode.name || id;
       const row = {
         key,
         kind,
         id,
-        name: (item && item.name) || (milestone && milestone.name) || wbsNode.name || id,
+        name: sourceName,
+        sourceName,
+        displayName: normalizeDisplayTitle(sourceName, id),
         parentKey,
         depth,
         phaseId,
@@ -555,6 +737,7 @@
         state: (item && item.executionState) || (milestone && milestone.state) || wbsNode.executionState || null,
         hasExecutionEvidence: Boolean(item && item.hasExecutionEvidence),
         roles: item && item.logicalRoles || [],
+        primaryOwner: primaryOwner(item && item.logicalRoles || []),
         dependencyIds: item && item.dependencyIds || milestone && milestone.dependencyIds || [],
         plan: { start: planStart, finish: planFinish },
         planStartOrigin: planStart ? "AUTHORED" : "UNKNOWN",
@@ -622,11 +805,14 @@
       if (seen.has(key)) continue;
       const planLane = laneEntries(item, "PLAN")[0];
       const actualLane = laneEntries(item, "ACTUAL")[0];
+      const sourceName = item.name || item.workItemId;
       rows.push({
         key,
         kind: "DeliveryCard",
         id: item.workItemId,
-        name: item.name || item.workItemId,
+        name: sourceName,
+        sourceName,
+        displayName: normalizeDisplayTitle(sourceName, item.workItemId),
         parentKey: rows[0] && rows[0].key || null,
         depth: 1,
         phaseId: item.phaseId || null,
@@ -638,6 +824,7 @@
         state: item.executionState || null,
         hasExecutionEvidence: Boolean(item.hasExecutionEvidence),
         roles: item.logicalRoles || [],
+        primaryOwner: primaryOwner(item.logicalRoles || []),
         dependencyIds: item.dependencyIds || [],
         plan: { start: planLane && planLane.start || null, finish: planLane && planLane.finish || null },
         planStartOrigin: planLane && planLane.start ? "AUTHORED" : "UNKNOWN",
@@ -774,12 +961,11 @@
     background.style.width = width + "px";
     for (let cursor = range.timelineStart; cursor <= range.timelineEnd; cursor = dateAt(cursor, 1)) {
       const day = new Date(cursor).getUTCDay();
-      if (day !== 0 && day !== 6) continue;
-      const weekend = node("span", null, "gantt-weekend");
-      weekend.style.left = datePercent(cursor, range) + "%";
-      weekend.style.width = Math.max(0.25, (DAY_MS / range.span) * 100) + "%";
-      weekend.setAttribute("aria-hidden", "true");
-      background.appendChild(weekend);
+      const dayGrid = node("span", null, "gantt-day-grid" + (day === 0 || day === 6 ? " gantt-weekend" : ""));
+      dayGrid.style.left = datePercent(cursor, range) + "%";
+      dayGrid.style.width = Math.max(0.25, (DAY_MS / range.span) * 100) + "%";
+      dayGrid.setAttribute("aria-hidden", "true");
+      background.appendChild(dayGrid);
     }
     return background;
   }
@@ -799,9 +985,9 @@
     bar.dataset.ganttLane = isActual ? "ACTUAL" : "PLAN";
     bar.style.left = datePercent(start, range) + "%";
     bar.style.width = Math.max(0.8, ((end - start) / range.span) * 100) + "%";
-    const rangeLabel = isOpenActual
+    const rangeLabel = (row.id + " · " + row.displayName + " · ") + (isOpenActual
       ? label + " from " + formatDate(entry.start) + " through AS OF " + formatDate(analysis.asOfDate)
-      : label + " " + formatDate(entry.start) + " to " + formatDate(finish);
+      : label + " " + formatDate(entry.start) + " to " + formatDate(finish));
     bar.setAttribute("aria-label", rangeLabel);
     bar.title = rangeLabel;
     return bar;
@@ -822,7 +1008,7 @@
   }
 
   function renderTimelineRow(row, range, analysis) {
-    const timelineRow = node("div", null, "gantt-timeline-row" + (row.isSummary ? " gantt-summary-row" : "") + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-row" : ""));
+    const timelineRow = node("div", null, "gantt-timeline-row gantt-kind-" + row.kind.toLowerCase() + (row.isSummary ? " gantt-summary-row" : "") + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-row" : ""));
     timelineRow.dataset.rowKey = row.key;
     const planLane = node("div", null, "gantt-sub-lane gantt-plan-lane");
     const actualLane = node("div", null, "gantt-sub-lane gantt-actual-lane");
@@ -934,7 +1120,7 @@
   }
 
   function renderTaskRow(row, analysis) {
-    const taskRow = node("div", null, "gantt-task-row" + (row.isSummary ? " gantt-summary-row" : "") + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-row" : ""));
+    const taskRow = node("div", null, "gantt-task-row gantt-kind-" + row.kind.toLowerCase() + (row.isSummary ? " gantt-summary-row" : "") + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-row" : ""));
     taskRow.dataset.rowKey = row.key;
     const identity = node("div", null, "gantt-task-cell gantt-task-identity");
     identity.style.paddingInlineStart = (10 + row.depth * 18) + "px";
@@ -945,7 +1131,7 @@
       toggle.dataset.ganttKey = row.key;
       toggle.disabled = row.childKeys.length === 0;
       toggle.setAttribute("aria-expanded", row.childKeys.length && state.gantt.expandedKeys.has(row.key) ? "true" : "false");
-      toggle.setAttribute("aria-label", (state.gantt.expandedKeys.has(row.key) ? "Collapse " : "Expand ") + row.name);
+      toggle.setAttribute("aria-label", (state.gantt.expandedKeys.has(row.key) ? "Collapse " : "Expand ") + row.displayName);
       identity.appendChild(toggle);
     } else {
       identity.appendChild(node("span", "", "gantt-row-spacer"));
@@ -954,13 +1140,9 @@
     select.type = "button";
     select.dataset.ganttSelect = row.key;
     select.appendChild(node("span", row.id, "gantt-row-id"));
-    select.appendChild(node("span", row.name, "gantt-row-name"));
-    select.appendChild(node("span", row.kind === "Milestone" ? milestoneKindLabel(row) : row.kind, "gantt-row-kind"));
-    const context = [];
-    if (row.phaseId && row.kind !== "Phase") context.push("Phase " + row.phaseId);
-    if (row.workPackageId && row.kind !== "WorkPackage") context.push("WP " + row.workPackageId);
-    if (context.length) select.appendChild(node("span", context.join(" · "), "gantt-row-context"));
-    select.setAttribute("aria-label", (row.kind === "Milestone" ? milestoneKindLabel(row) : row.kind) + " " + row.id + ": " + row.name);
+    select.appendChild(node("span", row.displayName, "gantt-row-name"));
+    if (row.isSummary || row.isGate) select.appendChild(node("span", row.isGate ? milestoneKindLabel(row) : row.kind, "gantt-row-kind"));
+    select.setAttribute("aria-label", (row.kind === "Milestone" ? milestoneKindLabel(row) : row.kind) + " " + row.id + ": " + row.displayName);
     identity.appendChild(select);
     taskRow.appendChild(identity);
 
@@ -970,7 +1152,9 @@
     taskRow.appendChild(status);
 
     const owner = node("div", null, "gantt-task-cell gantt-task-owner");
-    owner.appendChild(node("span", row.roles.length ? row.roles.join(", ") : "—", row.roles.length ? "" : "muted"));
+    const ownerValue = node("span", row.ownerSummary || "Unassigned", row.primaryOwner ? "gantt-owner-code" : "muted");
+    if (row.primaryOwner) ownerValue.title = row.primaryOwner.label;
+    owner.appendChild(ownerValue);
     taskRow.appendChild(owner);
 
     const signals = node("div", null, "gantt-task-cell gantt-task-signals");
@@ -984,12 +1168,16 @@
     if (state.gantt.phaseFilter !== "ALL" && row.phaseId !== state.gantt.phaseFilter) return false;
     if (state.gantt.executionFilter === "WITH_EVIDENCE" && !row.hasExecutionEvidence) return false;
     if (state.gantt.executionFilter !== "ALL" && state.gantt.executionFilter !== "WITH_EVIDENCE" && String(row.state || "UNKNOWN") !== state.gantt.executionFilter) return false;
-    if (state.gantt.attentionOnly && !row.alerts.some(isAttentionAlert)) return false;
+    if (state.gantt.attentionOnly && !rowNeedsAttention(row)) return false;
     if (state.gantt.criticalOnly && !row.isCritical) return false;
     if (state.gantt.overdueOnly && !row.alerts.some(alert => alert.alertCode === "OVERDUE")) return false;
     if (state.gantt.atRiskOnly && !row.alerts.some(alert => alert.alertCode === "AT_RISK")) return false;
     if (state.gantt.lateStartOnly && !row.alerts.some(alert => alert.alertCode === "START_DELAY")) return false;
     return true;
+  }
+
+  function rowNeedsAttention(row) {
+    return Boolean(row && (row.alerts || []).some(isAttentionAlert));
   }
 
   function visibleGanttRows(rows, byKey) {
@@ -1038,12 +1226,14 @@
     state.gantt.lateStartOnly = false;
     state.gantt.showDependencies = false;
     state.gantt.criticalPath = false;
-    state.gantt.zoom = "week";
+    state.gantt.structureMode = false;
+    state.gantt.zoom = "day";
     state.gantt.fit = false;
     if (preset === "execution") state.gantt.executionFilter = "WITH_EVIDENCE";
-    if (preset === "risks") state.gantt.attentionOnly = true;
+    if (preset === "attention" || preset === "risks") state.gantt.attentionOnly = true;
     if (preset === "dependencies") state.gantt.showDependencies = true;
     if (preset === "critical-path") state.gantt.criticalPath = true;
+    if (preset === "structure") state.gantt.structureMode = true;
   }
 
   function renderGanttToolbar(rows, visibleRows, range, analysis) {
@@ -1051,8 +1241,8 @@
     const toolbarTop = node("div", null, "gantt-toolbar-top");
     const toolbarHeading = node("div", null, "gantt-toolbar-heading");
     toolbarHeading.appendChild(node("p", "PLAN CONTROL", "eyebrow"));
-    toolbarHeading.appendChild(node("h3", "Schedule view"));
-    toolbarHeading.appendChild(node("p", "Read the immutable baseline first; use attention mode to isolate the work that needs a decision.", "muted"));
+    toolbarHeading.appendChild(node("h3", state.gantt.structureMode ? "Structure view" : "When is work planned?"));
+    toolbarHeading.appendChild(node("p", state.gantt.structureMode ? "Inspect the full Project → Phase → WorkPackage → DeliveryCard hierarchy." : "Read the immutable baseline first; use Needs attention to isolate derived exceptions.", "muted"));
     toolbarTop.appendChild(toolbarHeading);
     const actions = node("div", null, "gantt-toolbar-actions");
     const addAction = (label, action, pressed) => {
@@ -1077,7 +1267,7 @@
 
     const presets = node("div", null, "gantt-preset-nav");
     presets.appendChild(node("span", "View", "gantt-preset-label"));
-    [["plan", "Plan"], ["execution", "Execution"], ["risks", "Risks"], ["dependencies", "Dependencies"], ["critical-path", "Critical path"]].forEach(([value, label]) => {
+    [["plan", "Plan"], ["execution", "Execution"], ["attention", "Needs attention"], ["dependencies", "Dependencies"], ["critical-path", "Critical path"], ["structure", "Structure"]].forEach(([value, label]) => {
       const button = node("button", label, "secondary gantt-preset" + (state.gantt.preset === value ? " is-active" : ""));
       button.type = "button";
       button.dataset.ganttPreset = value;
@@ -1139,7 +1329,7 @@
     advancedFilters.appendChild(filters);
     toolbar.appendChild(advancedFilters);
 
-    const presetLabels = { plan: "Plan", execution: "Execution", risks: "Risks", dependencies: "Dependencies", "critical-path": "Critical path" };
+    const presetLabels = { plan: "Plan", execution: "Execution", attention: "Needs attention", risks: "Needs attention", dependencies: "Dependencies", "critical-path": "Critical path", structure: "Structure" };
     const presetLabel = presetLabels[state.gantt.preset] || "Custom view";
     const modeLabels = [];
     if (state.gantt.phaseFilter !== "ALL") modeLabels.push("Phase " + state.gantt.phaseFilter);
@@ -1148,8 +1338,9 @@
     if (state.gantt.criticalPath) modeLabels.push("CPM overlay on");
     if (state.gantt.showDependencies) modeLabels.push("connectors on");
     if (state.gantt.attentionOnly) modeLabels.push("attention only");
+    if (state.gantt.structureMode) modeLabels.push("full hierarchy");
     const modeSuffix = modeLabels.length ? " · " + modeLabels.join(" · ") : "";
-    const status = node("div", presetLabel + " · " + visibleRows.length + " visible / " + rows.length + " rows" + modeSuffix + " · As of " + formatDate(analysis && analysis.asOfDate), "gantt-toolbar-status muted");
+    const status = node("div", presetLabel + " · " + visibleRows.length + " visible / " + rows.length + " management rows" + modeSuffix + " · As of " + formatDate(analysis && analysis.asOfDate), "gantt-toolbar-status muted");
     toolbar.appendChild(status);
     return toolbar;
   }
@@ -1169,16 +1360,16 @@
   }
 
   function displayDate(value) {
-    return value ? formatDate(value) : "UNKNOWN";
+    return value ? formatDate(value) : "Not recorded";
   }
 
   function displayOptionalNumber(value, suffix) {
-    return value === null || value === undefined ? "UNKNOWN" : String(value) + (suffix || "");
+    return value === null || value === undefined ? "Not recorded" : String(value) + (suffix || "");
   }
 
   function displaySourceFile(value) {
     const text = String(value || "");
-    if (!text || /^[A-Za-z]:[\\/]/.test(text) || text.startsWith("/") || text.includes("..")) return "UNKNOWN";
+    if (!text || /^[A-Za-z]:[\\/]/.test(text) || text.startsWith("/") || text.includes("..")) return "Not available";
     return text;
   }
 
@@ -1186,14 +1377,14 @@
     const section = appendDetailSection(parent, "SOURCE EVIDENCE", "gantt-detail-source");
     const references = row.sourceReferences || [];
     if (!references.length) {
-      section.appendChild(node("p", "UNKNOWN · no safe item-level source reference.", "muted"));
+      section.appendChild(node("p", "Evidence not available for this row.", "muted"));
       return;
     }
     references.forEach(reference => {
       const evidence = node("article", null, "gantt-source-evidence");
-      evidence.appendChild(node("strong", reference.sourceId || "UNKNOWN"));
+      evidence.appendChild(node("strong", reference.sourceId || "Source reference"));
       const details = node("div", null, "gantt-source-evidence-grid");
-      [["Relative file", displaySourceFile(reference.relativeFile)], ["Section", reference.section || "UNKNOWN"], ["Table", reference.table || "UNKNOWN"], ["Item", reference.item || "UNKNOWN"], ["Extraction rule", reference.extractionRule || "UNKNOWN"], ["Authority", reference.authorityRank === null || reference.authorityRank === undefined ? "UNKNOWN" : "Rank " + reference.authorityRank], ["Confidence", reference.confidenceState || "UNKNOWN"], ["Validation", reference.validationState || "UNKNOWN"]].forEach(([label, value]) => appendDetailField(details, label, value));
+      [["Relative file", displaySourceFile(reference.relativeFile)], ["Section", reference.section || "Not recorded"], ["Table", reference.table || "Not recorded"], ["Item", reference.item || "Not recorded"], ["Extraction rule", reference.extractionRule || "Not recorded"], ["Authority", reference.authorityRank === null || reference.authorityRank === undefined ? "Not recorded" : "Rank " + reference.authorityRank], ["Confidence", reference.confidenceState || "Not recorded"], ["Validation", reference.validationState || "Not recorded"]].forEach(([label, value]) => appendDetailField(details, label, value));
       evidence.appendChild(details);
       section.appendChild(evidence);
     });
@@ -1211,52 +1402,57 @@
     }
     const heading = node("div", null, "gantt-detail-heading");
     heading.appendChild(node("span", (row.kind === "Milestone" ? milestoneKindLabel(row) : row.kind) + " · " + row.id, "eyebrow"));
-    heading.appendChild(node("h3", row.name));
+    heading.appendChild(node("h3", row.displayName));
     panel.appendChild(heading);
     const identity = appendDetailSection(panel, "IDENTITY");
     const identityFields = node("div", null, "gantt-detail-fields");
     appendDetailField(identityFields, "Kind", row.kind === "Milestone" ? milestoneKindLabel(row) : row.kind);
     appendDetailField(identityFields, "ID", row.id);
-    appendDetailField(identityFields, "Name", row.name);
-    appendDetailField(identityFields, "Phase", row.phaseId || "UNKNOWN");
-    appendDetailField(identityFields, "Work package", row.workPackageId || "UNKNOWN");
+    appendDetailField(identityFields, "Display title", row.displayName);
+    appendDetailField(identityFields, "Full source title", row.sourceName || row.name || row.id);
+    appendDetailField(identityFields, "Phase", row.phaseId || "Not assigned");
+    appendDetailField(identityFields, "Work package", row.workPackageId || "Not assigned");
     identity.appendChild(identityFields);
 
     const plan = appendDetailSection(panel, "PLAN / SOURCE");
     const planFields = node("div", null, "gantt-detail-fields");
     appendDetailField(planFields, "Plan start", displayDate(row.plan.start) + " · " + row.planStartOrigin);
     appendDetailField(planFields, "Plan finish", displayDate(row.plan.finish) + " · " + row.planFinishOrigin);
-    appendDetailField(planFields, "Source state", row.sourceReferences && row.sourceReferences.length ? "Known · " + row.sourceReferences.length + " reference(s)" : "UNKNOWN");
+    appendDetailField(planFields, "Source state", row.sourceReferences && row.sourceReferences.length ? "Known · " + row.sourceReferences.length + " reference(s)" : "Evidence not available");
     appendDetailField(planFields, "Baseline", "Immutable");
     plan.appendChild(planFields);
     renderSourceEvidence(plan, row);
 
     const actualSection = appendDetailSection(panel, "ACTUAL");
     const actualFields = node("div", null, "gantt-detail-fields");
-    appendDetailField(actualFields, "State", row.state ? stateLabel(row.state) : "UNKNOWN");
+    appendDetailField(actualFields, "Execution", row.state ? stateLabel(row.state) : "No execution evidence");
     appendDetailField(actualFields, "Actual start", row.actual ? displayDate(row.actual.start) : "No actual evidence");
-    appendDetailField(actualFields, "Actual finish", row.actual && row.actual.isOpenEnded ? "UNKNOWN · open through as-of" : row.actual ? displayDate(row.actual.finish) : "No actual evidence");
+    appendDetailField(actualFields, "Actual finish", row.actual && row.actual.isOpenEnded ? "Open through as-of" : row.actual ? displayDate(row.actual.finish) : "No actual evidence");
     appendDetailField(actualFields, "Actual effort", row.actual ? displayOptionalNumber(row.actual.actualEffortHours, "h") : "No actual evidence");
     appendDetailField(actualFields, "Remaining effort", row.actual ? displayOptionalNumber(row.actual.remainingEffortHours, "h") : "No actual evidence");
-    appendDetailField(actualFields, "Last update", row.actual && row.actual.lastUpdatedAt ? formatDate(row.actual.lastUpdatedAt) : "UNKNOWN");
+    appendDetailField(actualFields, "Last update", row.actual && row.actual.lastUpdatedAt ? formatDate(row.actual.lastUpdatedAt) : "Not recorded");
     actualSection.appendChild(actualFields);
 
-    const analysisSection = appendDetailSection(panel, "ANALYSIS");
+    const analysisSection = appendDetailSection(panel, "MANAGEMENT STATE");
     const analysisFields = node("div", null, "gantt-detail-fields");
     const variance = resolveWorkItemVariance(row, analysis);
+    appendDetailField(analysisFields, "Primary state", row.primaryState);
+    appendDetailField(analysisFields, "Attention", row.alerts.length ? row.alerts.map(alert => alert.alertCode || "Attention").join(", ") : "Normal");
     appendDetailField(analysisFields, "As-of date", displayDate(analysis && analysis.asOfDate));
-    appendDetailField(analysisFields, "Start variance", variance && variance.startVarianceWorkingMinutes !== null && variance.startVarianceWorkingMinutes !== undefined ? variance.startVarianceWorkingMinutes + " working minutes" : "UNKNOWN");
-    appendDetailField(analysisFields, "Finish variance", variance && variance.finishVarianceWorkingMinutes !== null && variance.finishVarianceWorkingMinutes !== undefined ? variance.finishVarianceWorkingMinutes + " working minutes" : "UNKNOWN");
-    appendDetailField(analysisFields, "Logical roles", row.roles.length ? row.roles.join(", ") : "UNKNOWN");
+    appendDetailField(analysisFields, "Start variance", variance && variance.startVarianceWorkingMinutes !== null && variance.startVarianceWorkingMinutes !== undefined ? variance.startVarianceWorkingMinutes + " working minutes" : "Not calculated");
+    appendDetailField(analysisFields, "Finish variance", variance && variance.finishVarianceWorkingMinutes !== null && variance.finishVarianceWorkingMinutes !== undefined ? variance.finishVarianceWorkingMinutes + " working minutes" : "Not calculated");
+    appendDetailField(analysisFields, "Primary owner", row.primaryOwner ? row.primaryOwner.code + " · " + row.primaryOwner.label : "Unassigned");
+    appendDetailField(analysisFields, "Logical roles", roleSummary(row.roles));
     analysisSection.appendChild(analysisFields);
 
     const cpmSection = appendDetailSection(panel, "CALCULATED · DEPENDENCY CPM");
     const cpmFields = node("div", null, "gantt-detail-fields");
     const cpm = resolveCpmRow(row, cpmView);
-    appendDetailField(cpmFields, "Calculated start", cpm ? displayDate(cpm.calculatedStart) : "UNKNOWN");
-    appendDetailField(cpmFields, "Calculated finish", cpm ? displayDate(cpm.calculatedFinish) : "UNKNOWN");
-    appendDetailField(cpmFields, "Float", cpm ? displayOptionalNumber(cpm.floatWorkingMinutes, " working minutes") : "UNKNOWN");
-    appendDetailField(cpmFields, "Critical", cpm ? (cpm.isCritical ? "Yes" : "No") : "UNKNOWN");
+    appendDetailField(cpmFields, "Dependency CPM start", cpm ? displayDate(cpm.calculatedStart) : "Not calculated");
+    appendDetailField(cpmFields, "Dependency CPM finish", cpm ? displayDate(cpm.calculatedFinish) : "Not calculated");
+    appendDetailField(cpmFields, "Float", cpm ? displayOptionalNumber(cpm.floatWorkingMinutes, " working minutes") : "Not calculated");
+    appendDetailField(cpmFields, "Critical", cpm ? (cpm.isCritical ? "Yes" : "No") : "Not calculated");
+    cpmSection.appendChild(node("p", "Calculated from analysis-eligible dependencies and working calendar. Does not perform resource leveling.", "muted"));
     cpmSection.appendChild(cpmFields);
 
     const dependencies = appendDetailSection(panel, "DEPENDENCIES");
@@ -1264,8 +1460,8 @@
     const blockedBy = edges.filter(edge => (edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)) === row.key);
     const blocking = edges.filter(edge => (edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)) === row.key);
     const dependencyFields = node("div", null, "gantt-detail-fields");
-    appendDetailField(dependencyFields, "Blocked by", blockedBy.length ? blockedBy.map(edge => edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)).join(", ") : "UNKNOWN");
-    appendDetailField(dependencyFields, "Blocking", blocking.length ? blocking.map(edge => edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)).join(", ") : "UNKNOWN");
+    appendDetailField(dependencyFields, "Blocked by", blockedBy.length ? blockedBy.map(edge => edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)).join(", ") : "None recorded");
+    appendDetailField(dependencyFields, "Blocking", blocking.length ? blocking.map(edge => edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)).join(", ") : "None recorded");
     dependencies.appendChild(dependencyFields);
     edges.forEach(edge => {
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
@@ -1293,6 +1489,23 @@
     return panel;
   }
 
+  function resolveRelevantPhase(rows, asOfDate) {
+    const phases = rows.filter(row => row.kind === "Phase");
+    if (!phases.length) return null;
+    const asOf = parseDate(asOfDate);
+    if (asOf === null) return phases[0];
+    const containing = phases.find(row => {
+      const start = parseDate(row.plan.start);
+      const finish = parseDate(row.plan.finish);
+      return start !== null && finish !== null && asOf >= start && asOf <= finish;
+    });
+    if (containing) return containing;
+    return phases.find(row => {
+      const start = parseDate(row.plan.start);
+      return start !== null && start > asOf;
+    }) || phases[phases.length - 1];
+  }
+
   function prepareGanttState(projectId) {
     if (state.gantt.projectId === projectId) return;
     state.gantt = createGanttState();
@@ -1302,15 +1515,21 @@
   function renderGantt(view, analysis, baseline, dependencyView, cpmView, projectId) {
     prepareGanttState(projectId || baseline && baseline.id || "project");
     const model = buildGanttRows(state.views && state.views.wbs && state.views.wbs.root, view, baseline || {});
-    const rows = model.rows;
+    const presentation = createGanttPresentation(model);
+    const rows = presentation.rows;
     if (!state.gantt.expansionInitialized) {
-      rows.filter(row => row.kind === "Project" || row.kind === "Phase").forEach(row => state.gantt.expandedKeys.add(row.key));
+      const projectRow = rows.find(row => row.kind === "Project");
+      if (projectRow) state.gantt.expandedKeys.add(projectRow.key);
+      const relevantPhase = resolveRelevantPhase(model.rows, analysis && analysis.asOfDate);
+      if (relevantPhase) state.gantt.expandedKeys.add(relevantPhase.key);
       state.gantt.expansionInitialized = true;
     }
     const range = buildTimelineRange(rows, analysis || {}, baseline || {});
     if (!range) return node("div", "No dated planning evidence is available for a timeline.", "empty-state");
-    const visibleRows = visibleGanttRows(rows, model.byKey);
-    const selectedRow = model.byKey.get(state.gantt.selectedRowKey) || null;
+    const visibleRows = visibleGanttRows(rows, presentation.byKey);
+    const selectedCanonical = model.byKey.get(state.gantt.selectedRowKey) || null;
+    const selectedRow = presentation.byKey.get(state.gantt.selectedRowKey)
+      || (selectedCanonical ? ManagementPresentationRow(selectedCanonical, selectedCanonical.parentKey, selectedCanonical.childKeys, selectedCanonical.depth) : null);
     const relatedKeys = relatedGanttKeys(state.gantt.selectedRowKey, dependencyView);
     const width = timelineWidth(range);
     const shell = node("section", null, "gantt-shell");
@@ -1332,7 +1551,7 @@
     canvas.style.setProperty("--timeline-width", width + "px");
     const headerRow = node("div", null, "gantt-header-row");
     const taskHeader = node("div", null, "gantt-task-header gantt-task-pane");
-    ["Task / ID", "Status", "Owner / role", "Signal"].forEach(label => taskHeader.appendChild(node("span", label)));
+    ["Task / ID", "State", "Primary owner", "Attention"].forEach(label => taskHeader.appendChild(node("span", label)));
     headerRow.appendChild(taskHeader);
     headerRow.appendChild(renderTimelineHeader(range, width, analysis || {}));
     canvas.appendChild(headerRow);

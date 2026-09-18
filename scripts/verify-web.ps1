@@ -284,7 +284,7 @@ try {
     Assert-Condition (-not $appJs.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Browser source review must not embed an absolute source path.'
     Assert-Condition ($appJs.Contains('project-control-center', [StringComparison]::Ordinal)) 'Browser UI must expose a project control center summary.'
     Assert-Condition ($appJs.Contains('Needs attention', [StringComparison]::Ordinal)) 'Browser UI must expose an actionable attention queue.'
-    Assert-Condition ($appJs.Contains('Next milestone', [StringComparison]::Ordinal)) 'Browser UI must expose the next milestone readout.'
+    Assert-Condition ($appJs.Contains('NEXT CONTROL POINT', [StringComparison]::Ordinal)) 'Browser UI must expose the next control point readout.'
     Assert-Condition ($appJs.Contains('attentionOnly', [StringComparison]::Ordinal)) 'Gantt state must support a focused attention mode.'
     Assert-Condition ($appJs.Contains('Select a row to inspect', [StringComparison]::Ordinal)) 'Gantt detail flow must explain how to inspect a row.'
     Assert-Condition ($indexHtml.Contains('Project control center', [StringComparison]::OrdinalIgnoreCase)) 'Browser shell must label the project control center.'
@@ -293,9 +293,9 @@ try {
     Assert-Condition ($indexHtml.Contains('id="source-intake-toggle"', [StringComparison]::Ordinal)) 'Source-intake collapse control must be keyboard-addressable.'
     Assert-Condition ($indexHtml.Contains('data-nav-group="plan"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="execution"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="analysis"', [StringComparison]::Ordinal)) 'Primary navigation must group plan, execution, and analysis views.'
     Assert-Condition ($appJs.Contains('No active alerts', [StringComparison]::Ordinal)) 'Project health must distinguish no active alerts from an unknown execution health.'
-    Assert-Condition ($appJs.Contains('Execution data unavailable', [StringComparison]::Ordinal)) 'Planning-only projects must not present missing execution evidence as zero completion.'
+    Assert-Condition ($appJs.Contains('No execution evidence', [StringComparison]::Ordinal)) 'Planning-only projects must not present missing execution evidence as zero completion.'
     Assert-Condition ($appJs.Contains('health.overall', [StringComparison]::Ordinal)) 'Execution evidence display must use the canonical health indicator rather than a Gantt-lane heuristic.'
-    Assert-Condition ($appJs.Contains('CPM (dependency-only)', [StringComparison]::Ordinal)) 'CPM finish must be labeled as a dependency-only calculation in the overview.'
+    Assert-Condition ($appJs.Contains('Dependency CPM Finish', [StringComparison]::Ordinal)) 'CPM finish must be labeled as a dependency-only calculation in the overview.'
     Assert-Condition ($appJs.Contains('gantt-inspector-column', [StringComparison]::Ordinal)) 'Gantt inspector must have a dedicated adjacent layout column.'
     Assert-Condition ($appJs.Contains('Advanced filters', [StringComparison]::Ordinal)) 'Gantt advanced filters must be progressively disclosed.'
     Assert-Condition ($stylesCss.Contains('.page > * { min-width: 0;', [StringComparison]::Ordinal)) 'Page children must be allowed to shrink without causing document-level horizontal overflow.'
@@ -322,7 +322,33 @@ try {
     $summaryStart = $appJs.IndexOf('function renderSummary', [StringComparison]::Ordinal)
     $summaryEnd = $appJs.IndexOf('function renderTable', [StringComparison]::Ordinal)
     Assert-Condition ($summaryStart -ge 0 -and $summaryEnd -gt $summaryStart -and -not $appJs.Substring($summaryStart, $summaryEnd - $summaryStart).Contains('addEventListener', [StringComparison]::Ordinal)) 'Summary rendering must not accumulate click listeners.'
-    Assert-Condition ($appJs.Contains('zoom: "week"', [StringComparison]::Ordinal)) 'Gantt must default to a readable weekly planning scale.'
+    Assert-Condition ($appJs.Contains('zoom: "day"', [StringComparison]::Ordinal)) 'Gantt must default to a readable daily planning scale.'
+    Assert-Condition ($appJs.Contains('gantt-day-grid', [StringComparison]::Ordinal)) 'Gantt timeline must expose a daily grid.'
+    Assert-Condition ($stylesCss.Contains('.gantt-day-grid', [StringComparison]::Ordinal)) 'Gantt styles must expose a daily grid treatment.'
+    Assert-Condition ($appJs.Contains('ManagementPresentationRow', [StringComparison]::Ordinal)) 'Management UI must expose a narrow presentation projection.'
+    Assert-Condition ($appJs.Contains('normalizeDisplayTitle', [StringComparison]::Ordinal)) 'Management UI must normalize redundant source prefixes for display only.'
+    Assert-Condition ($appJs.Contains('structureMode', [StringComparison]::Ordinal) -and $appJs.Contains('Structure', [StringComparison]::Ordinal)) 'Gantt must expose an explicit Structure mode.'
+    Assert-Condition ($appJs.Contains('Needs attention', [StringComparison]::Ordinal) -and $appJs.Contains('preset === "attention"', [StringComparison]::Ordinal)) 'Gantt must expose a first-class Needs attention preset.'
+    Assert-Condition ($appJs.Contains('CURRENT PHASE', [StringComparison]::Ordinal) -and $appJs.Contains('NEXT CONTROL POINT', [StringComparison]::Ordinal)) 'Overview must expose current phase and next control point context.'
+    Assert-Condition ($appJs.Contains('No execution evidence', [StringComparison]::Ordinal)) 'Planning-only overview must name the missing execution evidence plainly.'
+    Assert-Condition ($appJs.Contains('Dependency CPM Finish', [StringComparison]::Ordinal)) 'Schedule overview must label dependency CPM separately from resource constraints.'
+    Assert-Condition ($appJs.Contains('primaryOwner', [StringComparison]::Ordinal) -and $appJs.Contains('sourceName', [StringComparison]::Ordinal)) 'Management rows must separate primary owner and source title from the canonical projection.'
+    Assert-Condition ($appJs.Contains('WorkPackage', [StringComparison]::Ordinal) -and $appJs.Contains('isStructureMode', [StringComparison]::Ordinal)) 'Default schedule presentation must be able to quiet WorkPackage rows without removing them from the model.'
+    $presentationStart = $appJs.IndexOf('function createGanttPresentation', [StringComparison]::Ordinal)
+    $presentationEnd = $appJs.IndexOf('function formatDate', [StringComparison]::Ordinal)
+    Assert-Condition ($presentationStart -ge 0 -and $presentationEnd -gt $presentationStart) 'Gantt presentation projection source boundary must be discoverable.'
+    $presentationSource = $appJs.Substring($presentationStart, $presentationEnd - $presentationStart)
+    Assert-Condition ($presentationSource.Contains('row.kind !== "WorkPackage"', [StringComparison]::Ordinal) -and $presentationSource.Contains('isStructureMode()', [StringComparison]::Ordinal)) 'Default Gantt behavior must quiet WorkPackage rows while Structure mode retains them.'
+    $timelineBackgroundStart = $appJs.IndexOf('function renderTimelineBackground', [StringComparison]::Ordinal)
+    $timelineBackgroundEnd = $appJs.IndexOf('function createBar', [StringComparison]::Ordinal)
+    Assert-Condition ($timelineBackgroundStart -ge 0 -and $timelineBackgroundEnd -gt $timelineBackgroundStart) 'Daily timeline background source boundary must be discoverable.'
+    $timelineBackgroundSource = $appJs.Substring($timelineBackgroundStart, $timelineBackgroundEnd - $timelineBackgroundStart)
+    Assert-Condition ($timelineBackgroundSource.Contains('gantt-day-grid', [StringComparison]::Ordinal) -and $timelineBackgroundSource.Contains('dateAt(cursor, 1)', [StringComparison]::Ordinal)) 'Daily Gantt behavior must render one grid cell per day.'
+    $dashboardStart = $appJs.IndexOf('function renderDashboard', [StringComparison]::Ordinal)
+    $dashboardEnd = $appJs.IndexOf('function appendTree', [StringComparison]::Ordinal)
+    Assert-Condition ($dashboardStart -ge 0 -and $dashboardEnd -gt $dashboardStart) 'Dashboard renderer source boundary must be discoverable.'
+    $dashboardSource = $appJs.Substring($dashboardStart, $dashboardEnd - $dashboardStart)
+    Assert-Condition (-not $dashboardSource.Contains('renderControlStrip(summary, context)', [StringComparison]::Ordinal) -and -not $dashboardSource.Contains('renderAttentionQueue(summary, false)', [StringComparison]::Ordinal)) 'Dashboard must not repeat the Level-1 control strip and attention queue.'
     Assert-Condition ($stylesCss.Contains('background-image: none', [StringComparison]::Ordinal)) 'Management workspace surfaces must not rely on decorative gradients.'
     Assert-Condition ($stylesCss.Contains('.gantt-preset', [StringComparison]::Ordinal) -and $stylesCss.Contains('.execution-panel-body', [StringComparison]::Ordinal)) 'Management workspace must style presets and the progressive execution updater.'
     Assert-Condition ($stylesCss.Contains('.app-header { flex-direction: column;', [StringComparison]::Ordinal)) 'Mobile workspace header must stack identity and actions.'

@@ -152,6 +152,7 @@ tr:last-child td { border-bottom: 0; }
 .gantt-axis-detail { top: 28px; height: 30px; border-top: 1px solid rgba(148,163,184,.14); }
 .gantt-axis-tick { position: absolute; top: 0; bottom: 0; overflow: hidden; border-inline-start: 1px solid rgba(148,163,184,.18); }
 .gantt-axis-label { display: block; overflow: hidden; padding: 4px 6px; color: var(--muted); font-size: 11px; line-height: 18px; white-space: nowrap; text-overflow: ellipsis; }
+.gantt-axis-detail .gantt-axis-label { padding-inline: 3px; font-size: 10px; text-align: center; }
 .gantt-axis-month .gantt-axis-label { color: var(--text); font-weight: 700; }
 .gantt-grid { align-items: start; }
 .gantt-task-rows, .gantt-timeline-rows { display: grid; grid-auto-rows: 40px; }
@@ -176,7 +177,8 @@ tr:last-child td { border-bottom: 0; }
 .gantt-signal.alert { color: #fecdd3; }
 .gantt-timeline { position: relative; overflow: hidden; background: #101a2e; }
 .gantt-timeline-background { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.gantt-weekend { position: absolute; inset-block: 0; background: rgba(148,163,184,.055); border-inline-start: 1px solid rgba(148,163,184,.05); }
+.gantt-day-grid { position: absolute; inset-block: 0; border-inline-start: 1px solid rgba(148,163,184,.1); }
+.gantt-weekend { background: rgba(148,163,184,.055); }
 .gantt-timeline-rows { position: relative; z-index: 2; }
 .gantt-timeline-row { position: relative; display: grid; grid-template-rows: 20px 20px; }
 .gantt-sub-lane { position: relative; min-width: 0; border-bottom: 1px solid rgba(51,65,85,.38); }
@@ -511,7 +513,8 @@ th, td { border-bottom-color: var(--line); }
 .gantt-signal { border-color: #d6b36a; color: #8d5b0e; background: #fff9e9; }
 .gantt-signal.alert { border-color: #e8a4b2; color: #a42e49; background: #fff1f4; }
 .gantt-timeline { background: #fbfcfa; }
-.gantt-weekend { background: rgba(101, 114, 105, .045); }
+.gantt-day-grid { border-inline-start-color: rgba(101, 114, 105, .12); }
+.gantt-weekend { background: rgba(101, 114, 105, .07); }
 .gantt-plan-bar { background: var(--blue); opacity: .82; }
 .gantt-plan-lane.is-derived .gantt-plan-bar { background: #7b9a8a; opacity: .72; border: 1px dashed #5f7b6c; box-shadow: none; }
 .gantt-actual-bar { background: var(--success); }
@@ -563,4 +566,67 @@ th, td { border-bottom-color: var(--line); }
 
 @media (max-width: 560px) {
   .gantt-source-evidence-grid { grid-template-columns: 1fr; }
+}
+
+/* Management information architecture: stage context first, detail on demand. */
+.summary-control-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, .86fr);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--line);
+}
+.summary-control-card {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 15px;
+  background: var(--panel);
+}
+.summary-control-card:first-of-type { border-left: 3px solid var(--accent); }
+.summary-control-card:nth-of-type(2) { border-left: 3px solid var(--warning); }
+.summary-control-card-plan { background: var(--panel-2); }
+.summary-control-copy { display: grid; min-width: 0; gap: 4px; }
+.summary-control-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.summary-control-copy span { font-size: 11px; }
+.summary-control-kicker { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.summary-control-card .text-action { flex: 0 0 auto; align-self: flex-end; padding: 0; font-size: 11px; }
+.summary-schedule-card { display: grid; gap: 8px; }
+.summary-schedule-card h3 { margin-bottom: 2px; }
+.summary-date-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; }
+.summary-date-row strong { text-align: right; }
+.summary-schedule-card > p:last-child { margin: 4px 0 0; font-size: 11px; }
+.summary-inventory { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; padding: 0 2px; font-size: 12px; }
+.summary-inventory-label { color: var(--muted); font-weight: 700; }
+.summary-inventory strong { font-size: 12px; }
+.summary-inventory > span:last-child { flex-basis: 100%; font-size: 11px; }
+.dashboard-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0 16px; }
+.dashboard-context-grid .dashboard-card { min-height: 0; }
+.dashboard-inventory { margin: 12px 0 18px; }
+.dashboard-details { margin-top: 12px; }
+.dashboard-details-summary { padding: 10px 0; color: var(--accent-strong); cursor: pointer; font-weight: 700; }
+.gantt-kind-workpackage .gantt-row-name { color: var(--muted); font-weight: 600; }
+.gantt-kind-workpackage .gantt-row-id { color: var(--muted); }
+.gantt-kind-workpackage .gantt-task-owner, .gantt-kind-workpackage .gantt-task-signals { opacity: .72; }
+.gantt-owner-code { color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; font-weight: 750; letter-spacing: .03em; }
+.gantt-row-kind { font-size: 9px; letter-spacing: .03em; }
+.gantt-task-row, .gantt-task-header { grid-template-columns: minmax(210px, 1fr) 78px 78px 66px; }
+.gantt-task-header { font-size: 9px; }
+.gantt-row-select { grid-template-columns: auto minmax(0, 1fr) auto; }
+
+@media (max-width: 860px) {
+  .summary-control-strip { grid-template-columns: 1fr; }
+  .summary-control-card { min-height: 76px; }
+  .dashboard-context-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .summary-control-card { padding: 12px; }
+  .summary-control-card .text-action { align-self: flex-end; font-size: 10px; }
+  .gantt-task-row, .gantt-task-header { grid-template-columns: minmax(170px, 1fr) 66px 62px 54px; gap: 5px; padding-inline: 7px; }
+  .gantt-task-header { font-size: 8px; }
 }
