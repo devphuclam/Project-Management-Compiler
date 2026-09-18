@@ -15,6 +15,7 @@ public sealed record ManagementAnalysis
     public ScheduleVariance? ScheduleVariance { get; init; }
     public CapacityAnalysis? Capacity { get; init; }
     public ReserveAnalysis? Reserve { get; init; }
+    public ExecutionEffortSummary ExecutionEffort { get; init; } = new();
     public ExecutionStatusCounts ExecutionStatus { get; init; } = new();
     public IReadOnlyList<WorkItemVariance> WorkItemVariances { get; init; } = Array.Empty<WorkItemVariance>();
     public IReadOnlyList<Alert> Alerts { get; init; } = Array.Empty<Alert>();
@@ -40,7 +41,7 @@ public sealed record ExecutionStatusCounts
 public sealed record WorkItemVariance
 {
     public string WorkItemId { get; init; } = string.Empty;
-    public ExecutionState ExecutionState { get; init; }
+    public ExecutionState? ExecutionState { get; init; }
     public DateOnly? BaselineStart { get; init; }
     public DateOnly? BaselineFinish { get; init; }
     public DateOnly? ActualStart { get; init; }
@@ -112,6 +113,14 @@ public sealed record ReserveAnalysis
     public decimal? ConsumedHours { get; init; }
     public decimal? RemainingHours { get; init; }
     public DataState ConsumptionState { get; init; } = DataState.Unknown;
+    public DataState RemainingState { get; init; } = DataState.Unknown;
+}
+
+public sealed record ExecutionEffortSummary
+{
+    public decimal? ActualEffortHours { get; init; }
+    public DataState ActualState { get; init; } = DataState.Unknown;
+    public decimal? RemainingEffortHours { get; init; }
     public DataState RemainingState { get; init; } = DataState.Unknown;
 }
 

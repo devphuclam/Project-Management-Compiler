@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using ProjectManagementCompiler.Domain;
 
 namespace ProjectManagementCompiler.Extraction;
@@ -76,6 +77,7 @@ public sealed class IdeaEngineeringExtractor
                 Project = project,
                 Baseline = baseline,
                 ValueProvenance = values,
+                CapturedAtUtc = resolution.CapturedAtUtc,
                 Warnings = warnings
             };
         }
@@ -85,14 +87,15 @@ public sealed class IdeaEngineeringExtractor
         var cardEvidence = new List<ExtractedCardEvidence>();
         var cards = ExtractCards(resolution, warnings, cardEvidence);
         var milestones = ExtractMilestones(resolution, warnings);
-        var dependencies = ExtractDependencies(cards, cardEvidence, warnings);
-        var roles = ExtractRoles(cards, cardEvidence);
-        var assignments = ExtractAssignments(cards, cardEvidence);
+        var dependencies = ExtractDependencies(workPackages, cards, milestones, cardEvidence, resolution, warnings);
+        var roles = ExtractRoles(cardEvidence);
+        var assignments = ExtractAssignments(cardEvidence);
         var policies = ExtractPolicies(resolution, warnings);
         var capacity = new CapacityPlan
         {
             CapacityHours = baseline.CapacityHours,
-            SourceResourcePolicy = "WIP=1",
+            SourceResourcePolicy = "One coder; weekday-only baseline",
+            ResourceLogicalRole = "single-coder",
             EffortAccountingLevel = "WORK_PACKAGE_APPENDIX_A",
             Calendar = new CalendarDefinition
             {
@@ -116,7 +119,7 @@ public sealed class IdeaEngineeringExtractor
             SourceId = sourceId,
             Repository = repository,
             ResolvedRef = resolvedRef,
-            CapturedAtUtc = null,
+            CapturedAtUtc = resolution.CapturedAtUtc,
             SourceDocuments = documents,
             Project = project,
             Baseline = baseline,
@@ -141,11 +144,20 @@ public sealed class IdeaEngineeringExtractor
         var phases = new List<Phase>();
         foreach (var row in resolution.PhaseRows.OrderBy(row => row.RowIndex))
         {
-            var id = NormalizeId(Cell(row, "Phase ID", "Phase"));
-            var name = Cell(row, "Name") ?? string.Empty;
-            var start = ParseDate(row, "Start", warnings);
-            var finish = ParseDate(row, "Finish", warnings);
+            var rawId = Cell(row, "Phase ID", "Phase");
+            var id = NormalizePhaseId(rawId) ?? string.Empty;
+            var name = Cell(row, "Name") ?? rawId ?? string.Empty;
+            var start = ParseDate(row, "Start", warnings)
+                ?? ParseDate(row, "Planned start", warnings);
+            var finish = ParseDate(row, "Finish", warnings)
+                ?? ParseDate(row, "Planned finish", warnings);
             var duration = SafeDuration(start, null, finish, null, row, warnings);
+            var allocation = resolution.Rows.FirstOrDefault(candidate =>
+                PathEquals(candidate.SourceRelativePath, Doc07Path)
+                && NormalizePhaseId(Cell(candidate, "Phase")) == id
+                && Cell(candidate, "Planned work") is not null);
+            var plannedWork = ParseDecimal(allocation, "Planned work", warnings);
+            var reserve = ParseDecimal(allocation, "Reserve", warnings);
             var sourceReference = row.SourceReference;
             if (id.Length == 0)
             {
@@ -158,12 +170,13 @@ public sealed class IdeaEngineeringExtractor
                 Id = id,
                 Name = name,
                 PhaseId = id,
-                PlannedStart = start ?? DateOnly.MinValue,
-                PlannedFinish = finish ?? DateOnly.MinValue,
-                PlannedEffortHours = null,
-                PlannedEffortState = DataState.Unknown,
+                PlannedStart = start,
+                PlannedFinish = finish,
+                PlannedEffortHours = plannedWork,
+                PlannedEffortState = plannedWork is null ? DataState.Unknown : DataState.Known,
                 PlannedDurationWorkingMinutes = duration.WorkingMinutes,
                 DurationState = duration.State,
+                ReserveHours = reserve,
                 MilestoneIds = Array.Empty<string>(),
                 SourceReferences = [sourceReference]
             });
@@ -177,12 +190,13 @@ public sealed class IdeaEngineeringExtractor
         var workPackages = new List<WorkPackage>();
         foreach (var row in RowsFor(resolution, AppendixPath).Where(IsWorkPackageRow).OrderBy(row => row.RowIndex))
         {
-            var id = NormalizeId(Cell(row, "ID", "Work package ID", "Code"));
-            var phaseId = NormalizeId(Cell(row, "Phase"));
+            var id = NormalizeId(Cell(row, "ID", "Work package ID", "Code", "Mã"));
+            var phaseId = NormalizePhaseId(Cell(row, "Phase")) ?? PhaseFromSection(row.Section) ?? string.Empty;
             var start = ParseDate(row, "Start", warnings);
             var finish = ParseDate(row, "Finish", warnings);
-            var effort = ParseDecimal(row, "Effort", warnings);
+            var effort = ParseDecimal(row, "Effort", warnings) ?? ParseDecimal(row, "Giờ", warnings);
             var duration = SafeDuration(start, null, finish, null, row, warnings);
+            var predecessors = SplitIds(Cell(row, "Predecessor", "Cần trước"));
             if (id.Length == 0)
             {
                 warnings.Add(MissingValue(row, "MISSING_WORK_PACKAGE_ID", "ID"));
@@ -197,17 +211,17 @@ public sealed class IdeaEngineeringExtractor
             workPackages.Add(new WorkPackage
             {
                 Id = id,
-                Name = Cell(row, "Name") ?? string.Empty,
+                Name = Cell(row, "Name", "Công việc") ?? string.Empty,
                 ParentId = null,
                 PhaseId = phaseId,
-                PlannedStart = start ?? DateOnly.MinValue,
-                PlannedFinish = finish ?? DateOnly.MinValue,
+                PlannedStart = start,
+                PlannedFinish = finish,
                 PlannedEffortHours = effort,
                 PlannedEffortState = effort is null ? DataState.Unknown : DataState.Known,
                 PlannedDurationWorkingMinutes = duration.WorkingMinutes,
                 DurationState = duration.State,
-                DependencyIds = Array.Empty<string>(),
-                CompletionCondition = Cell(row, "Completion condition") ?? string.Empty,
+                DependencyIds = predecessors,
+                CompletionCondition = Cell(row, "Completion condition", "Đầu ra và cách biết đã xong") ?? string.Empty,
                 DeliveryCardIds = Array.Empty<string>(),
                 SourceReferences = [row.SourceReference]
             });
@@ -218,17 +232,59 @@ public sealed class IdeaEngineeringExtractor
 
     private static IReadOnlyList<DeliveryCard> ExtractCards(AuthorityResolution resolution, ICollection<ImportWarning> warnings, ICollection<ExtractedCardEvidence> evidence)
     {
+        var carioRows = RowsFor(resolution, KanbanPath)
+            .Where(IsCarioRow)
+            .GroupBy(row => NormalizeId(Cell(row, "Card")), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
         var cards = new List<DeliveryCard>();
         foreach (var row in RowsFor(resolution, KanbanPath).Where(IsCardRow).OrderBy(row => row.RowIndex))
         {
-            var id = NormalizeId(Cell(row, "ID"));
+            var id = NormalizeId(Cell(row, "ID", "Card"));
             var workPackageId = NormalizeId(Cell(row, "Work package"));
-            var phaseId = NormalizeId(Cell(row, "Phase"));
-            var start = ParseDateToken(row, "Start", warnings);
-            var finish = ParseDateToken(row, "Finish", warnings);
-            var effort = ParseDecimal(row, "Effort", warnings);
-            var duration = SafeDuration(start.Date, start.Marker, finish.Date, finish.Marker, row, warnings);
-            var state = ParseExecutionState(Cell(row, "State"), row, warnings);
+            if (workPackageId.Length == 0)
+            {
+                workPackageId = WorkPackageFromCardId(id);
+            }
+
+            var phaseId = NormalizePhaseId(Cell(row, "Phase")) ?? PhaseFromSection(row.Section) ?? string.Empty;
+            var schedule = ParseDateRange(row, warnings);
+            var effort = ParseDecimal(row, "Effort", warnings) ?? ParseDecimal(row, "Giờ", warnings);
+            var duration = SafeDuration(schedule.Start, schedule.StartMarker, schedule.Finish, schedule.FinishMarker, row, warnings);
+            var stateValue = Cell(row, "State", "Trạng thái");
+            var state = stateValue is null ? (ExecutionState?)null : ParseExecutionState(stateValue, row, warnings);
+            var roleAssignments = new List<ExtractedRoleAssignmentEvidence>();
+            var logical = Cell(row, "Logical role");
+            var cario = Cell(row, "CARIO");
+            if (!string.IsNullOrWhiteSpace(logical) || !string.IsNullOrWhiteSpace(cario))
+            {
+                roleAssignments.Add(new ExtractedRoleAssignmentEvidence
+                {
+                    CardId = id,
+                    LogicalRoleCode = logical ?? string.Empty,
+                    CarioRoleCode = cario ?? string.Empty,
+                    SourceReference = row.SourceReference
+                });
+            }
+
+            if (carioRows.TryGetValue(id, out var matrices))
+            {
+                foreach (var matrix in matrices)
+                {
+                    foreach (var code in CarioCodes)
+                    {
+                        foreach (var logicalRole in SplitRoleCodes(Cell(matrix, code)))
+                        {
+                            roleAssignments.Add(new ExtractedRoleAssignmentEvidence
+                            {
+                                CardId = id,
+                                LogicalRoleCode = logicalRole,
+                                CarioRoleCode = code,
+                                SourceReference = matrix.SourceReference
+                            });
+                        }
+                    }
+                }
+            }
             if (id.Length == 0)
             {
                 warnings.Add(MissingValue(row, "MISSING_DELIVERY_CARD_ID", "ID"));
@@ -243,27 +299,28 @@ public sealed class IdeaEngineeringExtractor
             cards.Add(new DeliveryCard
             {
                 Id = id,
-                Name = Cell(row, "Name") ?? string.Empty,
+                Name = Cell(row, "Name", "Tên task nhập Kanban") ?? string.Empty,
                 ParentId = workPackageId,
                 PhaseId = phaseId,
-                PlannedStart = start.Date ?? DateOnly.MinValue,
-                PlannedFinish = finish.Date ?? DateOnly.MinValue,
+                PlannedStart = schedule.Start,
+                PlannedFinish = schedule.Finish,
                 PlannedEffortHours = effort,
                 PlannedEffortState = effort is null ? DataState.Unknown : DataState.Known,
                 PlannedDurationWorkingMinutes = duration.WorkingMinutes,
                 DurationState = duration.State,
                 WorkPackageId = workPackageId,
                 State = state,
-                RoleAssignmentIds = [$"{id}:assignment"],
+                RoleAssignmentIds = roleAssignments.Select((_, index) => $"{id}:assignment:{index + 1:D3}").ToArray(),
                 SourceReferences = [row.SourceReference]
             });
             evidence.Add(new ExtractedCardEvidence
             {
                 CardId = id,
-                LogicalRoleCode = Cell(row, "Logical role") ?? string.Empty,
-                CarioRoleCode = Cell(row, "CARIO") ?? string.Empty,
-                PredecessorId = Cell(row, "Predecessor"),
-                SourceReference = row.SourceReference
+                LogicalRoleCode = logical ?? string.Empty,
+                CarioRoleCode = cario ?? string.Empty,
+                PredecessorId = Cell(row, "Predecessor", "Cần trước"),
+                SourceReference = row.SourceReference,
+                RoleAssignments = roleAssignments
             });
         }
 
@@ -272,38 +329,42 @@ public sealed class IdeaEngineeringExtractor
 
     private static IReadOnlyList<MilestoneDecision> ExtractMilestones(AuthorityResolution resolution, ICollection<ImportWarning> warnings)
     {
+        var authorityRows = RowsFor(resolution, Doc07Path)
+            .Where(row => Cell(row, "ID / target date") is not null)
+            .OrderBy(row => row.RowIndex)
+            .ToArray();
+        var rows = authorityRows.Length > 0
+            ? authorityRows
+            : RowsFor(resolution, GanttPath).Where(row => Cell(row, "Gate ID") is not null).OrderBy(row => row.RowIndex).ToArray();
+        var parentByGate = BuildGateParents(resolution);
         var milestones = new List<MilestoneDecision>();
-        foreach (var row in RowsFor(resolution, GanttPath).Where(row => Cell(row, "Gate ID") is not null).OrderBy(row => row.RowIndex))
+        foreach (var row in rows)
         {
-            var id = NormalizeId(Cell(row, "Gate ID"));
-            var date = ParseDate(row, "Date", warnings);
+            var identity = Cell(row, "ID / target date");
+            var id = NormalizeMilestoneId(identity?.Split('/', 2)[0] ?? Cell(row, "Gate ID"));
+            var date = identity is null
+                ? ParseDate(row, "Date", warnings)
+                : ParseDateText(identity.Split('/', 2).ElementAtOrDefault(1), row, warnings).Date;
             if (id.Length == 0 || date is null)
             {
                 warnings.Add(MissingValue(row, "MISSING_MILESTONE_VALUE", "Gate ID / Date"));
                 continue;
             }
 
-            var kindText = (Cell(row, "Kind") ?? string.Empty).Trim().ToUpperInvariant();
-            var kind = kindText == "DECISION" ? MilestoneKind.Decision : MilestoneKind.Milestone;
-            var parent = id switch
-            {
-                "G-D0" => "PH0",
-                "G-MS0" => "PH1",
-                "G-MS1" => "PH2",
-                "G-MS2" => "PH3",
-                "G-MS3" => "PH4",
-                "G-MS4" or "G-MS5" => "PH5",
-                _ => null
-            };
+            var kindText = (Cell(row, "Kind", "Type") ?? string.Empty).Trim().ToUpperInvariant();
+            var kind = kindText.Contains("DECISION", StringComparison.Ordinal)
+                || kindText.Contains("CHECKPOINT", StringComparison.Ordinal)
+                ? MilestoneKind.Decision
+                : MilestoneKind.Milestone;
 
             milestones.Add(new MilestoneDecision
             {
                 Id = id,
                 Kind = kind,
-                ParentId = parent,
-                Name = id,
-                PlannedDate = date.Value,
-                State = ExecutionState.NotStarted,
+                ParentId = parentByGate.TryGetValue(id, out var parent) ? parent : null,
+                Name = identity?.Split('/', 2)[0].Trim() ?? id,
+                PlannedDate = date,
+                State = null,
                 DependencyIds = Array.Empty<string>(),
                 PlannedEffortHours = 0m,
                 PlannedDurationWorkingMinutes = 0,
@@ -314,99 +375,148 @@ public sealed class IdeaEngineeringExtractor
         return milestones;
     }
 
-    private static IReadOnlyList<Dependency> ExtractDependencies(IReadOnlyList<DeliveryCard> cards, IReadOnlyList<ExtractedCardEvidence> evidence, ICollection<ImportWarning> warnings)
+    private static IReadOnlyList<Dependency> ExtractDependencies(
+        IReadOnlyList<WorkPackage> workPackages,
+        IReadOnlyList<DeliveryCard> cards,
+        IReadOnlyList<MilestoneDecision> milestones,
+        IReadOnlyList<ExtractedCardEvidence> evidence,
+        AuthorityResolution resolution,
+        ICollection<ImportWarning> warnings)
     {
         var dependencies = new List<Dependency>();
+        var knownWorkPackageIds = workPackages.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var knownCardIds = cards.Select(card => card.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var card in cards)
+        var knownMilestoneIds = milestones.Select(milestone => milestone.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var workPackage in workPackages)
         {
-            var predecessor = evidence.FirstOrDefault(item => item.CardId == card.Id)?.PredecessorId;
-            if (string.IsNullOrWhiteSpace(predecessor) || predecessor is "-" or "—")
+            foreach (var predecessor in workPackage.DependencyIds)
             {
-                continue;
-            }
-
-            var normalizedPredecessor = NormalizeId(predecessor);
-            var valid = knownCardIds.Contains(normalizedPredecessor);
-            var source = card.SourceReferences;
-            dependencies.Add(new Dependency
-            {
-                SubjectId = card.Id,
-                SubjectKind = "DeliveryCard",
-                PredecessorId = normalizedPredecessor,
-                PredecessorKind = valid ? "DeliveryCard" : "Unknown",
-                DependencyType = DependencyType.FinishToStart,
-                AnalysisEligible = valid,
-                ValidationState = valid ? ValidationState.Known : ValidationState.InvalidSourceEvidence,
-                SourceReferences = source
-            });
-
-            if (!valid)
-            {
-                warnings.Add(new ImportWarning
+                dependencies.Add(new Dependency
                 {
-                    Id = $"MISSING_DEPENDENCY_TARGET:{card.Id}:{normalizedPredecessor}",
-                    Severity = WarningSeverity.Warning,
-                    Code = "MISSING_DEPENDENCY_TARGET",
-                    Message = $"Delivery card '{card.Id}' names missing predecessor '{normalizedPredecessor}'; the source edge is retained but excluded from analysis.",
-                    AffectedIds = [card.Id, normalizedPredecessor],
-                    SourceReferences = source
+                    SubjectId = workPackage.Id,
+                    SubjectKind = "WorkPackage",
+                    PredecessorId = predecessor,
+                    PredecessorKind = knownWorkPackageIds.Contains(predecessor) ? "WorkPackage" : "Unknown",
+                    DependencyType = DependencyType.FinishToStart,
+                    AnalysisEligible = false,
+                    ValidationState = knownWorkPackageIds.Contains(predecessor) ? ValidationState.Known : ValidationState.InvalidSourceEvidence,
+                    SourceReferences = workPackage.SourceReferences
                 });
             }
         }
 
-        return dependencies;
+        foreach (var card in cards)
+        {
+            var predecessorText = evidence.FirstOrDefault(item => item.CardId == card.Id)?.PredecessorId;
+            foreach (var predecessor in SplitIds(predecessorText))
+            {
+                var valid = knownCardIds.Contains(predecessor);
+                dependencies.Add(new Dependency
+                {
+                    SubjectId = card.Id,
+                    SubjectKind = "DeliveryCard",
+                    PredecessorId = predecessor,
+                    PredecessorKind = valid ? "DeliveryCard" : "Unknown",
+                    DependencyType = DependencyType.FinishToStart,
+                    AnalysisEligible = valid,
+                    ValidationState = valid ? ValidationState.Known : ValidationState.InvalidSourceEvidence,
+                    SourceReferences = card.SourceReferences
+                });
+
+                if (!valid)
+                {
+                    warnings.Add(new ImportWarning
+                    {
+                        Id = $"MISSING_DEPENDENCY_TARGET:{card.Id}:{predecessor}",
+                        Severity = WarningSeverity.Warning,
+                        Code = "MISSING_DEPENDENCY_TARGET",
+                        Message = $"Delivery card '{card.Id}' names missing predecessor '{predecessor}'; the source edge is retained but excluded from analysis.",
+                        AffectedIds = [card.Id, predecessor],
+                        SourceReferences = card.SourceReferences
+                    });
+                }
+            }
+        }
+
+        foreach (var row in RowsFor(resolution, KanbanPath).Where(IsGateRow))
+        {
+            var subject = NormalizeMilestoneId(Cell(row, "Card"));
+            if (!knownMilestoneIds.Contains(subject))
+            {
+                continue;
+            }
+
+            foreach (var rawPredecessor in SplitIds(Cell(row, "Cần trước", "Predecessor")))
+            {
+                var predecessor = rawPredecessor.StartsWith("G-", StringComparison.OrdinalIgnoreCase)
+                    ? NormalizeMilestoneId(rawPredecessor)
+                    : NormalizeId(rawPredecessor);
+                var valid = knownMilestoneIds.Contains(predecessor) || knownCardIds.Contains(predecessor) || knownWorkPackageIds.Contains(predecessor);
+                var predecessorKind = knownMilestoneIds.Contains(predecessor)
+                    ? "Milestone"
+                    : knownCardIds.Contains(predecessor) ? "DeliveryCard" : knownWorkPackageIds.Contains(predecessor) ? "WorkPackage" : "Unknown";
+                dependencies.Add(new Dependency
+                {
+                    SubjectId = subject,
+                    SubjectKind = "Milestone",
+                    PredecessorId = predecessor,
+                    PredecessorKind = predecessorKind,
+                    DependencyType = DependencyType.FinishToStart,
+                    AnalysisEligible = valid && predecessorKind is "Milestone" or "DeliveryCard",
+                    ValidationState = valid ? ValidationState.Known : ValidationState.InvalidSourceEvidence,
+                    SourceReferences = [row.SourceReference]
+                });
+            }
+        }
+
+        return dependencies
+            .OrderBy(dependency => dependency.SubjectId, StringComparer.Ordinal)
+            .ThenBy(dependency => dependency.PredecessorId, StringComparer.Ordinal)
+            .ToArray();
     }
 
-    private static IReadOnlyList<ResponsibilityRole> ExtractRoles(IReadOnlyList<DeliveryCard> cards, IReadOnlyList<ExtractedCardEvidence> evidence)
+    private static IReadOnlyList<ResponsibilityRole> ExtractRoles(IReadOnlyList<ExtractedCardEvidence> evidence)
     {
-        var roleRows = evidence
-            .Select(item => (Logical: item.LogicalRoleCode, Cario: item.CarioRoleCode, Reference: item.SourceReference))
-            .ToArray();
+        var roleRows = evidence.SelectMany(item => item.RoleAssignments).ToArray();
         var roles = new List<ResponsibilityRole>();
         foreach (var cario in CarioCodes)
         {
-            var reference = roleRows.FirstOrDefault(row => string.Equals(row.Cario, cario, StringComparison.OrdinalIgnoreCase)).Reference ?? new SourceReference();
+            var reference = roleRows.FirstOrDefault(row => string.Equals(row.CarioRoleCode, cario, StringComparison.OrdinalIgnoreCase))?.SourceReference;
             roles.Add(new ResponsibilityRole
             {
                 Code = $"CARIO:{cario}",
                 CarioRoleCode = cario,
                 SourceMeaning = $"CARIO responsibility code {cario}",
-                SourceReferences = reference.RelativeFile.Length == 0 ? Array.Empty<SourceReference>() : [reference]
+                SourceReferences = reference is null ? Array.Empty<SourceReference>() : [reference]
             });
         }
 
-        foreach (var logical in roleRows.Select(row => row.Logical).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal))
+        foreach (var logical in roleRows.Select(row => row.LogicalRoleCode).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value, StringComparer.Ordinal))
         {
-            var reference = roleRows.First(row => string.Equals(row.Logical, logical, StringComparison.OrdinalIgnoreCase)).Reference;
+            var reference = roleRows.First(row => string.Equals(row.LogicalRoleCode, logical, StringComparison.OrdinalIgnoreCase)).SourceReference;
             roles.Add(new ResponsibilityRole
             {
                 Code = logical!,
                 LogicalRoleCode = logical,
                 SourceMeaning = $"Logical project role {logical}",
-                SourceReferences = reference is null ? Array.Empty<SourceReference>() : [reference]
+                SourceReferences = [reference]
             });
         }
 
         return roles;
     }
 
-    private static IReadOnlyList<Assignment> ExtractAssignments(IReadOnlyList<DeliveryCard> cards, IReadOnlyList<ExtractedCardEvidence> evidence) =>
-        cards.Select(card =>
+    private static IReadOnlyList<Assignment> ExtractAssignments(IReadOnlyList<ExtractedCardEvidence> evidence) =>
+        evidence.SelectMany(item => item.RoleAssignments.Select(assignment => new Assignment
         {
-            var cardEvidence = evidence.FirstOrDefault(item => item.CardId == card.Id);
-            var logical = cardEvidence?.LogicalRoleCode ?? string.Empty;
-            var cario = cardEvidence?.CarioRoleCode;
-            return new Assignment
-            {
-                WorkItemId = card.Id,
-                LogicalRoleCode = logical,
-                CarioRoleCode = cario,
-                ConcreteIdentity = null,
-                MappingStatus = "UNRESOLVED",
-                SourceReferences = card.SourceReferences
-            };
-        }).ToArray();
+            WorkItemId = item.CardId,
+            LogicalRoleCode = assignment.LogicalRoleCode,
+            CarioRoleCode = assignment.CarioRoleCode,
+            ConcreteIdentity = null,
+            MappingStatus = "UNRESOLVED",
+            SourceReferences = [assignment.SourceReference]
+        })).ToArray();
 
     private static PolicySet ExtractPolicies(AuthorityResolution resolution, ICollection<ImportWarning> warnings)
     {
@@ -414,7 +524,7 @@ public sealed class IdeaEngineeringExtractor
         return new PolicySet
         {
             WorkInProgressLimit = wip,
-            ResourceConstraint = "WIP=1",
+            ResourceConstraint = "One coder; weekday-only",
             Rules = resolution.PolicyFacts
                 .Where(pair => pair.Key is "Calendar" or "Actual progress")
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
@@ -425,18 +535,18 @@ public sealed class IdeaEngineeringExtractor
 
     private static void AddAuthorityValueReferences(AuthorityResolution resolution, IReadOnlyList<PlanningTableRow> authorityRows, ICollection<ExtractedValueProvenance> values)
     {
-        foreach (var key in new[] { "Project ID", "Baseline ID", "Baseline version", "Status", "Planning start", "Planning finish", "Target date", "Authoritative effort", "Initial reserve", "Capacity" })
+        foreach (var key in new[] { "Project ID", "Stable Document ID", "Baseline ID", "Baseline version", "Status", "Document Status", "Planning start", "Planning finish", "Target date", "Authoritative effort", "Planned phase work", "Initial reserve", "Controlled reserve", "Capacity", "Weekday capacity" })
         {
-            var row = authorityRows.FirstOrDefault(candidate => string.Equals(Cell(candidate, "Field"), key, StringComparison.OrdinalIgnoreCase));
+            var row = authorityRows.FirstOrDefault(candidate => string.Equals(Cell(candidate, "Field", "Item"), key, StringComparison.OrdinalIgnoreCase));
             if (row is not null)
             {
-                values.Add(new ExtractedValueProvenance { Key = key, RawValue = Cell(row, "Value"), SourceReference = row.SourceReference });
+                values.Add(new ExtractedValueProvenance { Key = key, RawValue = Cell(row, "Value", "Recorded value", "Planned hours / condition"), SourceReference = row.SourceReference });
             }
         }
     }
 
     private static IReadOnlyList<SourceReference> FindAuthorityReferences(IEnumerable<PlanningTableRow> rows, string key) =>
-        rows.Where(row => string.Equals(Cell(row, "Field"), key, StringComparison.OrdinalIgnoreCase))
+        rows.Where(row => string.Equals(Cell(row, "Field", "Item"), key, StringComparison.OrdinalIgnoreCase))
             .Select(row => row.SourceReference)
             .ToArray();
 
@@ -444,10 +554,26 @@ public sealed class IdeaEngineeringExtractor
         resolution.Rows.Where(row => PathEquals(row.SourceRelativePath, path));
 
     private static bool IsWorkPackageRow(PlanningTableRow row) =>
-        RegexLikeId(Cell(row, "ID", "Work package ID", "Code")) && Cell(row, "Phase") is not null;
+        RegexLikeId(Cell(row, "ID", "Work package ID", "Code", "Mã"))
+        && (Cell(row, "Phase") is not null || PhaseFromSection(row.Section) is not null)
+        && Cell(row, "Name", "Công việc") is not null;
 
-    private static bool IsCardRow(PlanningTableRow row) =>
-        RegexLikeId(Cell(row, "ID")) && Cell(row, "Work package") is not null && Cell(row, "Logical role") is not null;
+    private static bool IsCardRow(PlanningTableRow row)
+    {
+        var id = Cell(row, "ID", "Card");
+        return RegexLikeId(id)
+            && Cell(row, "Name", "Tên task nhập Kanban") is not null
+            && (Cell(row, "Start", "Finish", "Thời gian") is not null)
+            && !IsGateRow(row);
+    }
+
+    private static bool IsCarioRow(PlanningTableRow row) =>
+        RegexLikeId(Cell(row, "Card"))
+        && CarioCodes.Any(code => row.Headers.Any(header => NormalizeHeader(header) == NormalizeHeader(code)));
+
+    private static bool IsGateRow(PlanningTableRow row) =>
+        RegexLikeId(Cell(row, "Card"))
+        && (Cell(row, "Hạn") is not null || row.Section?.Contains("Bảy card quyết định", StringComparison.OrdinalIgnoreCase) == true);
 
     private static bool RegexLikeId(string? value)
     {
@@ -462,8 +588,13 @@ public sealed class IdeaEngineeringExtractor
             && trimmed.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '-' or '+');
     }
 
-    private static string? Cell(PlanningTableRow row, params string[] names)
+    private static string? Cell(PlanningTableRow? row, params string[] names)
     {
+        if (row is null)
+        {
+            return null;
+        }
+
         foreach (var name in names)
         {
             var header = row.Headers.FirstOrDefault(candidate => NormalizeHeader(candidate) == NormalizeHeader(name));
@@ -480,7 +611,64 @@ public sealed class IdeaEngineeringExtractor
 
     private static string NormalizeId(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
 
-    private static DateOnly? ParseDate(PlanningTableRow row, string header, ICollection<ImportWarning> warnings)
+    private static string? NormalizePhaseId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(value, @"\b(?<id>PH\d+)\b", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups["id"].Value.ToUpperInvariant() : NormalizeId(value);
+    }
+
+    private static string NormalizeMilestoneId(string? value)
+    {
+        var id = NormalizeId(value);
+        if (id.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return id.StartsWith("G-", StringComparison.OrdinalIgnoreCase) ? id : $"G-{id}";
+    }
+
+    private static string WorkPackageFromCardId(string id)
+    {
+        var match = Regex.Match(id, @"^(?<package>[A-Z]+\d+)(?:-[A-Z])?$", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups["package"].Value.ToUpperInvariant() : id;
+    }
+
+    private static string? PhaseFromSection(string? section)
+    {
+        if (string.IsNullOrWhiteSpace(section))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(section, @"\b(?<id>PH\d+)\b", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups["id"].Value.ToUpperInvariant() : null;
+    }
+
+    private static IReadOnlyList<string> SplitIds(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || raw.Trim() is "-" or "—"
+            ? Array.Empty<string>()
+            : raw.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(NormalizeId)
+                .Where(value => value.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+    private static IReadOnlyList<string> SplitRoleCodes(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) || raw.Trim() is "-" or "—"
+            ? Array.Empty<string>()
+            : raw.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => value.Trim())
+                .Where(value => value.Length > 0 && value is not "-" and not "—")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+    private static DateOnly? ParseDate(PlanningTableRow? row, string header, ICollection<ImportWarning> warnings)
     {
         var raw = Cell(row, header);
         if (string.IsNullOrWhiteSpace(raw))
@@ -488,9 +676,32 @@ public sealed class IdeaEngineeringExtractor
             return null;
         }
 
-        if (DateOnly.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        var value = raw.Trim().Trim('`');
+        if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            || DateOnly.TryParseExact(value, "d/M/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+            || DateOnly.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
         {
             return date;
+        }
+
+        var shortDate = Regex.Match(value, @"^(?<day>\d{1,2})/(?<month>\d{1,2})(?:/(?<year>\d{4}))?$", RegexOptions.IgnoreCase);
+        if (shortDate.Success
+            && int.TryParse(shortDate.Groups["year"].Success ? shortDate.Groups["year"].Value : "2026", out var year)
+            && int.TryParse(shortDate.Groups["month"].Value, out var month)
+            && int.TryParse(shortDate.Groups["day"].Value, out var day)
+            && DateOnly.TryParse($"{year:D4}-{month:D2}-{day:D2}", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+        {
+            return date;
+        }
+
+        if (DateOnly.TryParseExact($"{value} 2026", "d MMMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+        {
+            return date;
+        }
+
+        if (row is null)
+        {
+            return null;
         }
 
         warnings.Add(new ImportWarning
@@ -504,6 +715,28 @@ public sealed class IdeaEngineeringExtractor
         return null;
     }
 
+    private static (DateOnly? Start, string? StartMarker, DateOnly? Finish, string? FinishMarker) ParseDateRange(PlanningTableRow row, ICollection<ImportWarning> warnings)
+    {
+        var raw = Cell(row, "Thời gian");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            var start = ParseDateToken(row, "Start", warnings);
+            var finish = ParseDateToken(row, "Finish", warnings);
+            return (start.Date, start.Marker, finish.Date, finish.Marker);
+        }
+
+        var normalized = raw.Trim().Replace('–', '-').Replace('—', '-');
+        var parts = normalized.Split('-', 2, StringSplitOptions.TrimEntries);
+        var first = ParseDateText(parts[0], row, warnings);
+        if (parts.Length == 1)
+        {
+            return (first.Date, first.Marker, first.Date, first.Marker);
+        }
+
+        var second = ParseDateText(parts[1], row, warnings);
+        return (first.Date, first.Marker, second.Date, second.Marker);
+    }
+
     private static (DateOnly? Date, string? Marker) ParseDateToken(PlanningTableRow row, string header, ICollection<ImportWarning> warnings)
     {
         var raw = Cell(row, header);
@@ -513,7 +746,7 @@ public sealed class IdeaEngineeringExtractor
         }
 
         var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length is < 1 or > 2 || !DateOnly.TryParseExact(parts[0], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        if (parts.Length is < 1 or > 2)
         {
             warnings.Add(new ImportWarning
             {
@@ -540,10 +773,70 @@ public sealed class IdeaEngineeringExtractor
             return (null, null);
         }
 
+        var date = ParseDateText(parts[0], row, warnings);
+        return (date.Date, marker);
+    }
+
+    private static (DateOnly? Date, string? Marker) ParseDateText(string? raw, PlanningTableRow row, ICollection<ImportWarning> warnings)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return (null, null);
+        }
+
+        var value = raw.Trim().Trim('`');
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var marker = parts.LastOrDefault()?.ToUpperInvariant() is "AM" or "PM" ? parts[^1].ToUpperInvariant() : null;
+        var dateText = marker is null ? value : string.Join(' ', parts[..^1]);
+        var date = ParseDateValue(dateText, row, warnings);
         return (date, marker);
     }
 
-    private static decimal? ParseDecimal(PlanningTableRow row, string header, ICollection<ImportWarning> warnings)
+    private static DateOnly? ParseDateValue(string value, PlanningTableRow? row, ICollection<ImportWarning> warnings)
+    {
+        if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            || DateOnly.TryParseExact(value, "d/M/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+            || DateOnly.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+            || DateOnly.TryParseExact($"{value} 2026", "d MMMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+        {
+            return date;
+        }
+
+        var shortDate = Regex.Match(value, @"^(?<day>\d{1,2})/(?<month>\d{1,2})$", RegexOptions.IgnoreCase);
+        if (shortDate.Success
+            && int.TryParse(shortDate.Groups["month"].Value, out var month)
+            && int.TryParse(shortDate.Groups["day"].Value, out var day)
+            && DateOnly.TryParse($"2026-{month:D2}-{day:D2}", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+        {
+            return date;
+        }
+
+        var naturalDate = Regex.Match(value, @"(?<day>\d{1,2})\s+(?<month>January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+(?<year>\d{4}))?", RegexOptions.IgnoreCase);
+        if (naturalDate.Success
+            && int.TryParse(naturalDate.Groups["year"].Success ? naturalDate.Groups["year"].Value : "2026", out var naturalYear)
+            && int.TryParse(naturalDate.Groups["day"].Value, out var naturalDay)
+            && DateTime.TryParseExact($"{naturalDay} {naturalDate.Groups["month"].Value} {naturalYear}", "d MMMM yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var naturalDateTime))
+        {
+            return DateOnly.FromDateTime(naturalDateTime);
+        }
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        warnings.Add(new ImportWarning
+        {
+            Id = $"MALFORMED_DATE:{row.SourceRelativePath}:{row.SourceLine}:{value}",
+            Severity = WarningSeverity.Warning,
+            Code = "MALFORMED_DATE",
+            Message = $"Authored date '{value}' was not a safe supported date and was not guessed.",
+            SourceReferences = [row.SourceReference]
+        });
+        return null;
+    }
+
+    private static decimal? ParseDecimal(PlanningTableRow? row, string header, ICollection<ImportWarning> warnings)
     {
         var raw = Cell(row, header);
         if (string.IsNullOrWhiteSpace(raw))
@@ -555,6 +848,11 @@ public sealed class IdeaEngineeringExtractor
         if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var value))
         {
             return value;
+        }
+
+        if (row is null)
+        {
+            return null;
         }
 
         warnings.Add(new ImportWarning
@@ -575,7 +873,8 @@ public sealed class IdeaEngineeringExtractor
             return null;
         }
 
-        if (int.TryParse(fact.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+        var match = Regex.Match(fact.Value, @"\d+", RegexOptions.CultureInvariant);
+        if (match.Success && int.TryParse(match.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
         {
             return value;
         }
@@ -628,6 +927,47 @@ public sealed class IdeaEngineeringExtractor
         }
 
         return duration;
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildGateParents(AuthorityResolution resolution)
+    {
+        var parents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in resolution.PhaseRows)
+        {
+            var phase = NormalizePhaseId(Cell(row, "Phase ID", "Phase"));
+            if (phase is null)
+            {
+                continue;
+            }
+
+            var explicitGate = Cell(row, "Gate");
+            if (!string.IsNullOrWhiteSpace(explicitGate))
+            {
+                parents[NormalizeMilestoneId(explicitGate)] = phase;
+            }
+
+            var startsAfter = Cell(row, "Starts after");
+            var match = startsAfter is null ? null : Regex.Match(startsAfter, @"\b(?<id>D0|MS\d+)\b", RegexOptions.IgnoreCase);
+            if (match?.Success == true)
+            {
+                parents[NormalizeMilestoneId(match.Groups["id"].Value)] = phase;
+            }
+        }
+
+        var phases = resolution.PhaseRows
+            .Select(row => NormalizePhaseId(Cell(row, "Phase ID", "Phase")))
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        if (phases.Length > 0)
+        {
+            parents.TryAdd("G-D0", phases[0]);
+            parents.TryAdd("G-MS5", phases[^1]);
+        }
+
+        return parents;
     }
 
     private static ImportWarning MissingValue(PlanningTableRow row, string code, string field) => new()

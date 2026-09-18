@@ -35,12 +35,23 @@ public sealed record PlanningDocument
         _ => int.MaxValue
     };
 
-    public IReadOnlyList<string> RequiredHeadings => Kind switch
+    public IReadOnlyList<IReadOnlyList<string>> RequiredHeadingGroups => Kind switch
     {
-        PlanningDocumentKind.Doc07 => ["Source identity", "Phases"],
-        PlanningDocumentKind.AppendixA => ["Appendix A"],
-        PlanningDocumentKind.Kanban => ["Planning policy", "Delivery cards"],
-        _ => Array.Empty<string>()
+        PlanningDocumentKind.Doc07 =>
+        [
+            ["Source identity", "Control envelope"],
+            ["Phases", "Phase sequence"]
+        ],
+        PlanningDocumentKind.AppendixA =>
+        [
+            ["Appendix A", "Phụ lục A", "IDEA Engineering — Phụ lục A", "Work package theo thứ tự thực hiện"]
+        ],
+        PlanningDocumentKind.Kanban =>
+        [
+            ["Planning policy", "Cách dùng", "1. Cách dùng", "Cách dùng và chính sách"],
+            ["Delivery cards", "Danh sách 53 card", "2. Danh sách 53 card", "Danh sách 53 card thực hiện"]
+        ],
+        _ => Array.Empty<IReadOnlyList<string>>()
     };
 
     public static PlanningDocument Create(SourceDocument source)
@@ -340,7 +351,7 @@ internal static class PlanningParserSupport
             var normalizedKey = Normalize(key);
             if (normalizedKey is "PLANNING START" or "PLANNING FINISH" or "TARGET DATE")
             {
-                if (!IsIsoDate(semanticValue))
+                if (!IsAuthoredDate(semanticValue))
                 {
                     diagnostics.Add(Diagnostic("MALFORMED_DATE", document, row, $"The value '{semanticValue}' for '{key}' is not a supported ISO date."));
                 }
@@ -360,23 +371,35 @@ internal static class PlanningParserSupport
     public static IReadOnlyList<ImportWarning> MissingHeadings(PlanningDocument document, IEnumerable<string> headings)
     {
         var actual = headings.Select(Normalize).ToArray();
-        return document.RequiredHeadings
-            .Where(required => !actual.Any(candidate => candidate.Equals(Normalize(required), StringComparison.OrdinalIgnoreCase)
-                || candidate.StartsWith(Normalize(required) + " ", StringComparison.OrdinalIgnoreCase)))
-            .Select(required => new ImportWarning
+        return document.RequiredHeadingGroups
+            .Where(group => !group.Any(required => actual.Any(candidate => MatchesHeading(candidate, Normalize(required)))))
+            .Select(group => new ImportWarning
             {
-                Id = $"MISSING_REQUIRED_HEADING:{document.Source.RelativeFile}:{required}",
+                Id = $"MISSING_REQUIRED_HEADING:{document.Source.RelativeFile}:{group[0]}",
                 Severity = WarningSeverity.Error,
                 Code = "MISSING_REQUIRED_HEADING",
-                Message = $"Required heading '{required}' is missing from '{document.Source.RelativeFile}'.",
+                Message = $"One of the required headings '{string.Join("' or '", group)}' is missing from '{document.Source.RelativeFile}'.",
                 SourceReferences = [document.Source.SourceReference with
                 {
                     RelativeFile = document.Source.RelativeFile,
-                    Section = required,
+                    Section = group[0],
                     ExtractionRule = "idea-planning-required-heading"
                 }]
             })
             .ToArray();
+    }
+
+    private static bool MatchesHeading(string actual, string required)
+    {
+        if (actual.Equals(required, StringComparison.OrdinalIgnoreCase)
+            || actual.StartsWith(required + " ", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var withoutNumber = Regex.Replace(actual, @"^\d+\.\s+", string.Empty);
+        return withoutNumber.Equals(required, StringComparison.OrdinalIgnoreCase)
+            || withoutNumber.StartsWith(required + " ", StringComparison.OrdinalIgnoreCase);
     }
 
     public static ImportWarning Diagnostic(string code, PlanningDocument document, PlanningTableRow row, string message) => new()
@@ -394,21 +417,32 @@ internal static class PlanningParserSupport
         || header.Contains("CAPACITY", StringComparison.Ordinal)
         || header.Contains("RESERVE", StringComparison.Ordinal)
         || header.Contains("WIP", StringComparison.Ordinal)
+        || header.Contains("PLANNED WORK", StringComparison.Ordinal)
         || header.EndsWith(" HOURS", StringComparison.Ordinal)
         || header.EndsWith(" MINUTES", StringComparison.Ordinal);
 
     private static bool IsDateHeader(string header) =>
-        header.Contains("START", StringComparison.Ordinal)
-        || header.Contains("FINISH", StringComparison.Ordinal)
-        || header.EndsWith(" DATE", StringComparison.Ordinal)
-        || header == "DATE";
+        !header.StartsWith("ID /", StringComparison.Ordinal)
+        && ((header.Contains("START", StringComparison.Ordinal) && !header.StartsWith("STARTS AFTER", StringComparison.Ordinal))
+            || header.Contains("FINISH", StringComparison.Ordinal)
+            || header.EndsWith(" DATE", StringComparison.Ordinal)
+            || header == "DATE");
 
-    private static bool IsDate(string value) =>
-        DatePattern.Match(value) is { Success: true } match
-        && DateOnly.TryParseExact(match.Groups["date"].Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+    private static bool IsDate(string value) => IsAuthoredDate(value);
 
-    private static bool IsIsoDate(string value) =>
-        DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+    private static bool IsAuthoredDate(string value)
+    {
+        var trimmed = value.Trim().Trim('`');
+        if (DateOnly.TryParseExact(trimmed, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+            || DateOnly.TryParseExact(trimmed, "d/M/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+            || DateOnly.TryParseExact(trimmed, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            return true;
+        }
+
+        return Regex.IsMatch(trimmed, @"^\d{1,2}(?:/\d{1,2})?(?:/\d{4})?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+\d{4})?$", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(trimmed, @"^\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)$", RegexOptions.IgnoreCase);
+    }
 
     private static bool TryParseNumeric(string value, bool allowHoursSuffix, out decimal result)
     {
@@ -418,7 +452,14 @@ internal static class PlanningParserSupport
             normalized = Regex.Replace(normalized, @"\s+(?:hours?|h)$", string.Empty, RegexOptions.IgnoreCase);
         }
 
-        return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out result);
+        if (decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out result))
+        {
+            return true;
+        }
+
+        return !allowHoursSuffix
+            && Regex.IsMatch(normalized, @"^\d+\s*(?:implementation\s+cards?|card)?$", RegexOptions.IgnoreCase)
+            && decimal.TryParse(Regex.Match(normalized, @"\d+").Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
     }
 
     private static bool TryGetKeyValue(PlanningTableRow row, out string key, out string value)
@@ -432,7 +473,8 @@ internal static class PlanningParserSupport
 
         var firstHeader = Normalize(row.Headers[0]);
         var secondHeader = Normalize(row.Headers[1]);
-        if (firstHeader is not ("FIELD" or "POLICY") || secondHeader != "VALUE")
+        if (firstHeader is not ("FIELD" or "POLICY" or "ITEM")
+            || secondHeader is not ("VALUE" or "RECORDED VALUE" or "PLANNED HOURS / CONDITION"))
         {
             return false;
         }

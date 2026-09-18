@@ -247,8 +247,8 @@ public sealed class DependencyNetworkAnalyzer
         string Id,
         int? Duration,
         DataState DurationState,
-        DateOnly PlannedStart,
-        DateOnly PlannedFinish);
+        DateOnly? PlannedStart,
+        DateOnly? PlannedFinish);
 
     private readonly record struct GraphEdge(string PredecessorId, string SubjectId);
 }

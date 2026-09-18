@@ -28,8 +28,8 @@ public sealed class StatusAnalyzer
             var state = record?.ExecutionState ?? card.State;
             var actualStart = record?.ActualStart;
             var actualFinish = record?.ActualFinish;
-            var baselineStart = ValidDate(card.PlannedStart) ? (DateOnly?)card.PlannedStart : null;
-            var baselineFinish = ValidDate(card.PlannedFinish) ? (DateOnly?)card.PlannedFinish : null;
+            var baselineStart = ValidDate(card.PlannedStart) ? card.PlannedStart : null;
+            var baselineFinish = ValidDate(card.PlannedFinish) ? card.PlannedFinish : null;
             var startVariance = calendar.SignedWorkingMinutes(baselineStart, actualStart);
             var finishVariance = calendar.SignedWorkingMinutes(baselineFinish, actualFinish);
             variances.Add(new WorkItemVariance
@@ -239,5 +239,5 @@ public sealed class StatusAnalyzer
         };
     }
 
-    private static bool ValidDate(DateOnly date) => date != DateOnly.MinValue;
+    private static bool ValidDate(DateOnly? date) => date is not null && date != DateOnly.MinValue;
 }

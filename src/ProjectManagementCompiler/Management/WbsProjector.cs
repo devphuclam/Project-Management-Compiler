@@ -161,8 +161,8 @@ public sealed class WbsProjector
         WbsNodeKind kind,
         string? parentId,
         string? phaseId,
-        DateOnly plannedStart,
-        DateOnly plannedFinish,
+        DateOnly? plannedStart,
+        DateOnly? plannedFinish,
         decimal? plannedEffortHours,
         int? plannedDurationWorkingMinutes,
         ExecutionState? executionState,
@@ -193,5 +193,5 @@ public sealed class WbsProjector
         });
     }
 
-    private static bool ValidDate(DateOnly date) => date != DateOnly.MinValue;
+    private static bool ValidDate(DateOnly? date) => date is not null && date != DateOnly.MinValue;
 }

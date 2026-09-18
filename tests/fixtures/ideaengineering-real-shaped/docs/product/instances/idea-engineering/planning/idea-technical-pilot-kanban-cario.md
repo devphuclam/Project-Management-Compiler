@@ -35,7 +35,7 @@ assignment cho cùng một card.
 | --- | --- | ---: | --- | --- | --- |
 | P01 | Chốt mục tiêu phân tích | 8 | 18/09 | — | Evidence: mục tiêu |
 | P02 | Chốt vai trò và thuật ngữ | 8 | 21/09 | — | Evidence: vai trò |
-| P03 | Chốt phạm vi kỹ thuật | 8 | 22/09 | P01, P02 | Evidence: phạm vi |
+| P03 | Chốt phạm vi kỹ thuật | 8 | 22/09 | — | Evidence: phạm vi |
 | P04 | Chuẩn bị môi trường minh họa | 12 | 23/09 AM–24/09 AM | P03 | Evidence: môi trường |
 | P05 | Xác định dữ liệu đầu vào | 8 | 24/09 | P03 | Evidence: dữ liệu |
 | P06 | Xác định tiêu chí kiểm chứng | 12 | 25/09 | P04 | Evidence: tiêu chí |

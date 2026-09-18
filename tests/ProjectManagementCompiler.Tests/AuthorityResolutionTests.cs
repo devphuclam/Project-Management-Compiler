@@ -414,7 +414,7 @@ internal static class AuthorityResolutionTests
         });
 
         TestAssert.True(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "UNMATCHED_HTML_CLOSING_TAG" && diagnostic.Severity == WarningSeverity.Error), "Malformed HTML must remain an explicit Error in authority resolution.");
-        TestAssert.False(resolution.HasCanonicalBaseline, "Malformed HTML in any recognized source must fail the global authority gate.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "Malformed subordinate Gantt HTML must not destroy a valid DOC-07 plus Appendix baseline.");
     }
 
     public static void ControlledFixtureResolvesBaselinePhasesAndPolicyFacts()
