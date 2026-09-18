@@ -128,6 +128,53 @@ internal static class ExtractionParserTests
         TestAssert.False(result.Diagnostics.Any(d => d.Code == "TABLE_CELL_COUNT_MISMATCH"), "Escaped pipes must not produce a cell-count diagnostic.");
     }
 
+    public static void MarkdownParserStopsAdjacentTablesBeforeNextHeader()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n## Source identity\n\n"
+            + "| Field | Value |\n|---|---|\n| Project ID | project |\n| First | one |\n| Second | two |\n"
+            + "| ID | Name |\n|---|---|\n| A01 | Next table |\n"
+            + "## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Real phase |");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.Equal(5, result.Rows.Count, "Adjacent Markdown tables must retain all rows without merging them.");
+        var nextTableRow = result.Rows.Single(row => row.Cells.TryGetValue("ID", out var id) && id == "A01");
+        TestAssert.Equal(2, nextTableRow.TableIndex, "The adjacent table must receive the next stable table index.");
+        TestAssert.Equal(1, nextTableRow.RowIndex, "The adjacent table row order must restart at one.");
+        var phaseRow = result.Rows.Single(row => row.Cells.TryGetValue("Phase ID", out var phase) && phase == "PH0");
+        TestAssert.Equal(3, phaseRow.TableIndex, "A later table must retain its stable index after an adjacent table.");
+        TestAssert.False(result.Diagnostics.Any(d => d.Code == "TABLE_CELL_COUNT_MISMATCH"), "A valid adjacent table must not create shape diagnostics.");
+    }
+
+    public static void MarkdownParserUsesBackslashParityForEscapedPipes()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n| ID | Literal | Backslashes | Tail |\n|---|---|---|---|\n"
+            + "| A01 | one \\| two | path \\\\|tail |");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "Odd and even backslash runs must produce the intended four-cell row.");
+        TestAssert.Equal("one | two", result.Rows[0].Cells["Literal"], "An odd backslash run must escape the pipe and remove only its escaping slash.");
+        TestAssert.Equal("path \\\\", result.Rows[0].Cells["Backslashes"], "An even backslash run must remain content before the delimiter.");
+        TestAssert.Equal("tail", result.Rows[0].Cells["Tail"], "The pipe after an even backslash run must remain a delimiter.");
+    }
+
+    public static void MarkdownParserDiagnosesEvenBackslashPipeShapeMismatch()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n| ID | Name |\n|---|---|\n| A01 | path \\\\| next |");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.Equal(0, result.Rows.Count, "An even backslash before a pipe must expose the delimiter-induced shape mismatch.");
+        TestAssert.True(result.Diagnostics.Any(d => d.Code == "TABLE_CELL_COUNT_MISMATCH" && d.Severity == WarningSeverity.Error), "Delimiter-induced cell-count mismatches must remain explicit Error diagnostics.");
+    }
+
     public static void HtmlParserRejectsDuplicateHeadersAndWrongCellCounts()
     {
         var document = Document(
@@ -152,6 +199,19 @@ internal static class ExtractionParserTests
 
         TestAssert.True(result.Diagnostics.Any(d => d.Code == "MISSING_TABLE_HEADER" && d.Severity == WarningSeverity.Error), "HTML tables without a th header row must be explicit errors.");
         TestAssert.Equal(0, result.Rows.Count, "HTML data rows must not be guessed into headers or emitted without a th header row.");
+    }
+
+    public static void HtmlParserDiagnosesUnclosedTables()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr><tr><td>A01</td><td>Missing close</td></tr>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(0, result.Rows.Count, "An unclosed HTML table must not silently appear to have no parsed rows.");
+        var diagnostic = result.Diagnostics.Single(d => d.Code == "UNCLOSED_HTML_TABLE");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "An unclosed HTML table must be an explicit Error diagnostic.");
     }
 
     public static void DiscoveryIgnoresUnrecognizedCapturedDocuments()

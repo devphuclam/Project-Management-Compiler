@@ -233,6 +233,55 @@ internal static class AuthorityResolutionTests
         TestAssert.False(resolution.HasCanonicalBaseline, "Any Error diagnostic, including a subordinate control-envelope error, must disable canonical baseline status.");
     }
 
+    public static void FencedSubordinateControlEnvelopeReferencesAreIgnored()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |\n\n```text\nDOC-07@999.999\n```")
+            ]
+        });
+
+        TestAssert.False(resolution.Diagnostics.Any(d => d.Code is "STALE_SUBORDINATE_REFERENCE" or "FUTURE_SUBORDINATE_REFERENCE" or "MALFORMED_CONTROL_ENVELOPE_REFERENCE"), "DOC-07 references inside Markdown fences must not be scanned.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "Ignoring a fenced subordinate reference must preserve canonical baseline status.");
+    }
+
+    public static void ConflictingAuthorityControlEnvelopeReferencesAreErrors()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14\nDOC-07@0.15"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.Equal("0.14", resolution.BaselineVersion, "The first normalized authority envelope version must remain current.");
+        TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "CONFLICTING_AUTHORITY_CONTROL_ENVELOPE" && d.Severity == WarningSeverity.Error), "Semantically different authority envelope versions must be explicit Error diagnostics.");
+        TestAssert.False(resolution.HasCanonicalBaseline, "A conflicting authority envelope must fail the global Error gate.");
+    }
+
+    public static void EquivalentAuthorityControlEnvelopeReferencesAreSafe()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14\nDOC-07@0.14.0"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.False(resolution.Diagnostics.Any(d => d.Code == "CONFLICTING_AUTHORITY_CONTROL_ENVELOPE"), "Equivalent dotted authority envelope versions must not conflict.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "Equivalent authority envelope versions must preserve canonical baseline status.");
+    }
+
     public static void UnterminatedMarkdownFenceDisablesCanonicalBaseline()
     {
         var resolution = AuthorityResolution.Resolve(new RepositorySnapshot

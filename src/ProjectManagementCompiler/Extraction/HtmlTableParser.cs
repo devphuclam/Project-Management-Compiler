@@ -7,7 +7,8 @@ namespace ProjectManagementCompiler.Extraction;
 public static class HtmlTableParser
 {
     private static readonly Regex HeadingPattern = new(@"<h[1-6][^>]*>(?<text>.*?)</h[1-6]>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-    private static readonly Regex TablePattern = new(@"<table\b[^>]*>(?<body>.*?)</table>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex TablePattern = new(@"<table\b[^>]*>(?<body>(?:(?!<table\b).)*?)</table>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex TableTagPattern = new(@"</?table\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex RowPattern = new(@"<tr\b(?<attributes>[^>]*)>(?<body>.*?)</tr>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex CellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</\k<kind>>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex AnyCellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</(?<close>th|td)>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -40,6 +41,8 @@ public static class HtmlTableParser
         var rows = new List<PlanningTableRow>();
         var diagnostics = new List<ImportWarning>();
         var tableIndex = 0;
+
+        diagnostics.AddRange(UnclosedTableDiagnostics(document, content));
 
         foreach (Match tableMatch in TablePattern.Matches(content))
         {
@@ -154,6 +157,45 @@ public static class HtmlTableParser
 
         diagnostics.InsertRange(0, PlanningParserSupport.MissingHeadings(document, headings.Select(heading => heading.Text)));
         return new PlanningParseResult { Rows = rows, Diagnostics = diagnostics };
+    }
+
+    private static IReadOnlyList<ImportWarning> UnclosedTableDiagnostics(PlanningDocument document, string content)
+    {
+        var openTables = new Stack<(int TableIndex, int SourceLine)>();
+        var tableIndex = 0;
+        foreach (Match tag in TableTagPattern.Matches(content))
+        {
+            if (tag.Value.StartsWith("</", StringComparison.Ordinal))
+            {
+                if (openTables.Count > 0)
+                {
+                    openTables.Pop();
+                }
+
+                continue;
+            }
+
+            tableIndex++;
+            openTables.Push((tableIndex, content[..tag.Index].Count(character => character == '\n') + 1));
+        }
+
+        return openTables
+            .Reverse()
+            .Select(unclosed => new ImportWarning
+            {
+                Id = $"UNCLOSED_HTML_TABLE:{document.Source.RelativeFile}:{unclosed.TableIndex}",
+                Severity = WarningSeverity.Error,
+                Code = "UNCLOSED_HTML_TABLE",
+                Message = $"HTML table {unclosed.TableIndex} in '{document.Source.RelativeFile}' is not closed; its rows were not parsed.",
+                SourceReferences = [document.Source.SourceReference with
+                {
+                    RelativeFile = document.Source.RelativeFile,
+                    Table = $"table-{unclosed.TableIndex:D2}",
+                    Item = $"line-{unclosed.SourceLine:D4}",
+                    ExtractionRule = "idea-planning-html-table-shape"
+                }]
+            })
+            .ToArray();
     }
 
     private static IReadOnlyList<string> Cells(string html) =>

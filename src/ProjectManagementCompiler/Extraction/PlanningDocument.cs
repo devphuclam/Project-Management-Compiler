@@ -148,12 +148,32 @@ internal static class PlanningParserSupport
 
         var cells = new List<string>();
         var cell = new StringBuilder();
-        for (var index = 0; index < value.Length; index++)
+        for (var index = 0; index < value.Length;)
         {
-            if (value[index] == '\\' && index + 1 < value.Length && value[index + 1] == '|')
+            if (value[index] == '\\')
             {
-                cell.Append('|');
-                index++;
+                var runStart = index;
+                while (index < value.Length && value[index] == '\\')
+                {
+                    index++;
+                }
+
+                var backslashCount = index - runStart;
+                if (index < value.Length && value[index] == '|')
+                {
+                    if (backslashCount % 2 == 1)
+                    {
+                        cell.Append('\\', backslashCount - 1);
+                        cell.Append('|');
+                        index++;
+                        continue;
+                    }
+
+                    cell.Append('\\', backslashCount);
+                    continue;
+                }
+
+                cell.Append('\\', backslashCount);
                 continue;
             }
 
@@ -161,10 +181,12 @@ internal static class PlanningParserSupport
             {
                 cells.Add(cell.ToString().Trim());
                 cell.Clear();
+                index++;
                 continue;
             }
 
             cell.Append(value[index]);
+            index++;
         }
 
         cells.Add(cell.ToString().Trim());

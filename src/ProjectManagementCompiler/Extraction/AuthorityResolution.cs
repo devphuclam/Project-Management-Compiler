@@ -360,13 +360,21 @@ public sealed record AuthorityResolution
     private static IReadOnlyList<ImportWarning> FindSubordinateReferences(PlanningDocument authority, IReadOnlyList<PlanningDocument> documents)
     {
         var warnings = new List<ImportWarning>();
-        var authorityReferences = ControlEnvelopeReferences(authority.Source.Content);
-        var current = string.Empty;
+        var authorityReferences = ControlEnvelopeReferences(authority);
+        string? current = null;
         foreach (var reference in authorityReferences)
         {
             if (TryNormalizeControlEnvelopeVersion(reference, out var normalized))
             {
-                current = normalized;
+                if (current is null)
+                {
+                    current = normalized;
+                }
+                else if (CompareDottedVersions(normalized, current) != 0)
+                {
+                    warnings.Add(ConflictingAuthorityControlEnvelopeDiagnostic(authority, current, normalized));
+                }
+
                 continue;
             }
 
@@ -380,7 +388,7 @@ public sealed record AuthorityResolution
 
         foreach (var document in documents.Where(document => document.AuthorityRank > authority.AuthorityRank))
         {
-            foreach (var reference in ControlEnvelopeReferences(document.Source.Content))
+            foreach (var reference in ControlEnvelopeReferences(document))
             {
                 if (!TryNormalizeControlEnvelopeVersion(reference, out var subordinate))
                 {
@@ -433,11 +441,25 @@ public sealed record AuthorityResolution
         return 0;
     }
 
-    private static IReadOnlyList<string> ControlEnvelopeReferences(string content) =>
-        Regex.Matches(content, @"DOC-07@(?<version>[^\s<>""',;)\]}]+)", RegexOptions.IgnoreCase)
+    private static IReadOnlyList<string> ControlEnvelopeReferences(PlanningDocument document)
+    {
+        var content = document.Source.Format == SourceDocumentFormat.Markdown
+            ? MarkdownTableParser.ContentOutsideFences(document.Source.Content)
+            : document.Source.Content;
+        return Regex.Matches(content, @"DOC-07@(?<version>[^\s<>""',;)\]}]+)", RegexOptions.IgnoreCase)
             .Cast<Match>()
             .Select(match => match.Groups["version"].Value)
             .ToArray();
+    }
+
+    private static ImportWarning ConflictingAuthorityControlEnvelopeDiagnostic(PlanningDocument authority, string current, string conflicting) => new()
+    {
+        Id = $"CONFLICTING_AUTHORITY_CONTROL_ENVELOPE:{authority.Source.RelativeFile}:{conflicting}",
+        Severity = WarningSeverity.Error,
+        Code = "CONFLICTING_AUTHORITY_CONTROL_ENVELOPE",
+        Message = $"'{authority.Source.RelativeFile}' contains semantically different valid DOC-07 control-envelope versions: DOC-07@{current} and DOC-07@{conflicting}. The first normalized version remains current.",
+        SourceReferences = [authority.Source.SourceReference]
+    };
 
     private static bool TryNormalizeControlEnvelopeVersion(string raw, out string normalized)
     {

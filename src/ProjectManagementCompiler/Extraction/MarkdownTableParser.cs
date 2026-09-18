@@ -72,6 +72,11 @@ public static class MarkdownTableParser
             lineIndex += 2;
             for (; lineIndex < lines.Length && lines[lineIndex].Contains('|'); lineIndex++)
             {
+                if (lineIndex + 1 < lines.Length && PlanningParserSupport.IsSeparator(lines[lineIndex + 1]))
+                {
+                    break;
+                }
+
                 if (PlanningParserSupport.IsSeparator(lines[lineIndex]))
                 {
                     continue;
@@ -119,6 +124,38 @@ public static class MarkdownTableParser
 
         diagnostics.InsertRange(0, PlanningParserSupport.MissingHeadings(document, headings));
         return new PlanningParseResult { Rows = rows, Diagnostics = diagnostics };
+    }
+
+    internal static string ContentOutsideFences(string content)
+    {
+        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var visibleLines = new List<string>();
+        var inFence = false;
+        var fenceMarker = '\0';
+        var fenceLength = 0;
+
+        foreach (var line in lines)
+        {
+            if (inFence)
+            {
+                if (IsClosingFence(line, fenceMarker, fenceLength))
+                {
+                    inFence = false;
+                }
+
+                continue;
+            }
+
+            if (TryGetFence(line, out fenceMarker, out fenceLength))
+            {
+                inFence = true;
+                continue;
+            }
+
+            visibleLines.Add(line);
+        }
+
+        return string.Join('\n', visibleLines);
     }
 
     private static bool TryGetFence(string line, out char marker, out int length)
