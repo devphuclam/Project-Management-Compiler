@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 using ProjectManagementCompiler.Domain;
@@ -36,6 +37,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         var capturedAtUtc = DateTimeOffset.UtcNow;
         var diagnostics = new List<ImportWarning>();
         var documents = new List<SourceDocument>();
+        var sourceId = SafeRepositoryId(request.Location);
         string root;
         try
         {
@@ -139,7 +141,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
                 Content = read.Content,
                 SourceReference = new SourceReference
                 {
-                    SourceId = "local-repository",
+                    SourceId = sourceId,
                     Repository = "local-repository",
                     ResolvedRef = request.Ref,
                     RelativeFile = relativePath,
@@ -154,7 +156,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         var state = blocked ? CaptureState.Blocked : CaptureState.Known;
         var snapshot = new RepositorySnapshot
         {
-            RepositoryId = "local-repository",
+            RepositoryId = sourceId,
             RepositoryLabel = "local-repository",
             LocationLabel = "local-repository",
             ResolvedRef = request.Ref,
@@ -179,7 +181,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         Message = message,
         SourceReferences = [new SourceReference
         {
-            SourceId = "local-repository",
+            SourceId = SafeRepositoryId(resolvedRef ?? "local-source"),
             Repository = "local-repository",
             ResolvedRef = resolvedRef,
             RelativeFile = relativePath,
@@ -189,7 +191,7 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
 
     private static RepositorySnapshot FailedSnapshot(string? resolvedRef, DateTimeOffset capturedAtUtc, string code, string message) => new()
     {
-        RepositoryId = "local-repository",
+        RepositoryId = SafeRepositoryId(resolvedRef ?? "local-source"),
         RepositoryLabel = "local-repository",
         LocationLabel = "local-repository",
         ResolvedRef = resolvedRef,
@@ -197,6 +199,22 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         CaptureState = CaptureState.Blocked,
         Diagnostics = [Diagnostic(code, string.Empty, message, resolvedRef)]
     };
+
+    private static string SafeRepositoryId(string location)
+    {
+        var normalized = location;
+        try
+        {
+            normalized = SourcePathPolicy.NormalizeRoot(location);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or IOException)
+        {
+            normalized = location.Trim();
+        }
+
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant()));
+        return $"local-{Convert.ToHexString(digest)[..16].ToLowerInvariant()}";
+    }
 
     private sealed class PhysicalRepositoryFileSystem : IRepositoryFileSystem
     {

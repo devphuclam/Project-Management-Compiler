@@ -79,3 +79,60 @@ _Avoid_: overdue state
 **Overdue**:
 A derived display condition: the current date is after the deadline and the execution state is neither completed nor cancelled.
 _Avoid_: authored workflow state
+
+## Execution overlay amendment
+
+**Execution Overlay**:
+Mutable manual evidence maintained by the Compiler for an executable delivery card. It is keyed by canonical work-item ID and never replaces or edits the source baseline.
+_Avoid_: actual task copy, second task store
+
+**Variance**:
+Calculated information comparing actual or derived schedule information with the immutable baseline. Variance does not change execution state.
+_Avoid_: revised baseline, forecast state
+
+**Alert**:
+A structured derived management condition such as `START_DELAY`, `OVERDUE`, `COMPLETED_LATE`, `AT_RISK`, `SUSPENDED`, or `CANCELLED`. It is not an execution state, task, dependency, or source authority.
+_Avoid_: persisted status, work item
+
+**As-of Date**:
+The explicit date supplied to analysis for late-start, active-overdue, and in-progress actual-lane calculations. Analysis never silently substitutes wall-clock time.
+_Avoid_: implicit current date
+
+Execution overlay, actual, and forecast remain separate from plan. Planned and actual effort remain separate from planned and actual working duration. CARIO output stays plan-focused: planned start and deadline are never replaced with actual dates.
+
+**Field-level Authority**:
+Authority is assigned per semantic field, not by a blind document rank. DOC-07
+owns planning control, baseline, phase and gate policy; Appendix A owns work
+packages; the Kanban/CARIO register owns delivery cards and responsibility
+matrices; Gantt cross-checks; README discovers.
+
+**Unknown Authored Date**:
+A missing or unsafe source date is null with an explicit state/diagnostic. It is
+never represented by `DateOnly.MinValue` or `0001-01-01`.
+
+**Unknown Authored State**:
+An absent or unrecognized source execution state is not `NOT_STARTED`. Explicit
+`NOT_STARTED`, `NOT-RUN`, missing, and extraction failure remain distinguishable.
+
+**Work-Package Dependency Graph**:
+Appendix-owned predecessor evidence retained for traceability. It is separate
+from the delivery-card/milestone execution graph and is not double-fed into CPM.
+
+**Rendition Validity**:
+The validity of a subordinate Gantt or Kanban rendition is reported separately
+from DOC-07 baseline validity and Appendix work-package validity.
+
+**Authored Schedule Boundary**:
+In the IDEAEngineering Kanban notation, a missing start-side AM/PM marker means
+the start of that working day and a missing finish-side marker means the end of
+that working day. An unrecognized marker leaves duration unknown.
+
+**Effort/Duration Mismatch**:
+An authored effort value and normalized working duration are independent facts.
+When they differ, the compiler retains both and emits a warning; it does not
+rewrite either value.
+
+**Gate Dependency**:
+A dependency from a known milestone/gate to a delivery card or later gate is a
+valid execution-graph edge. Appendix work-package predecessor evidence remains
+separate traceability data and is not double-fed into CPM.

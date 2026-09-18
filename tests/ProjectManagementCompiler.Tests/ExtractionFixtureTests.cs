@@ -48,6 +48,33 @@ internal static class ExtractionFixtureTests
         TestAssert.True(missing.SourceReferences.Count > 0, "Invalid dependency evidence must retain its source reference.");
     }
 
+    public static void UnknownAuthoredExecutionStateRemainsUnknown()
+    {
+        var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");
+        var captured = new LocalRepositorySourceAdapter()
+            .CaptureAsync(new SourceRequest { Location = root }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        var kanban = captured.Documents.Single(document => document.RelativeFile.EndsWith("idea-technical-pilot-kanban-cario.md", StringComparison.Ordinal));
+        var rowStart = kanban.Content.IndexOf("| P01-A |", StringComparison.Ordinal);
+        TestAssert.True(rowStart >= 0, "The controlled fixture must contain the selected card row.");
+        var rowEnd = kanban.Content.IndexOf('\n', rowStart);
+        var row = kanban.Content[rowStart..(rowEnd < 0 ? kanban.Content.Length : rowEnd)];
+        var mutatedRow = row.Replace("| NOT_STARTED |", "| SOURCE_STATE_NOT_RECOGNIZED |", StringComparison.Ordinal);
+        var mutatedSnapshot = captured with
+        {
+            Documents = captured.Documents
+                .Select(document => document == kanban ? document with { Content = kanban.Content.Replace(row, mutatedRow, StringComparison.Ordinal) } : document)
+                .ToArray()
+        };
+
+        var plan = new IdeaEngineeringExtractor().Extract(AuthorityResolution.Resolve(mutatedSnapshot));
+        var card = plan.DeliveryCards.Single(candidate => candidate.Id == "P01-A");
+
+        TestAssert.Equal(null, card.State, "An unrecognized authored state must remain unknown rather than becoming NOT_STARTED.");
+        TestAssert.True(plan.Warnings.Any(warning => warning.Code == "UNKNOWN_EXECUTION_STATE"), "An unrecognized authored state must remain diagnosable.");
+    }
+
     private static AuthorityResolution CaptureFixture()
     {
         var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");

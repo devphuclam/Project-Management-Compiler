@@ -41,8 +41,8 @@ public abstract record PlannedEntity
     public string Name { get; init; } = string.Empty;
     public string? ParentId { get; init; }
     public string PhaseId { get; init; } = string.Empty;
-    public DateOnly PlannedStart { get; init; }
-    public DateOnly PlannedFinish { get; init; }
+    public DateOnly? PlannedStart { get; init; }
+    public DateOnly? PlannedFinish { get; init; }
     public decimal? PlannedEffortHours { get; init; }
     public DataState PlannedEffortState { get; init; } = DataState.Unknown;
     public int? PlannedDurationWorkingMinutes { get; init; }
@@ -66,7 +66,7 @@ public sealed record WorkPackage : PlannedEntity
 public sealed record DeliveryCard : PlannedEntity
 {
     public string WorkPackageId { get; init; } = string.Empty;
-    public ExecutionState State { get; init; } = ExecutionState.NotStarted;
+    public ExecutionState? State { get; init; }
     public IReadOnlyList<string> RoleAssignmentIds { get; init; } = Array.Empty<string>();
 }
 
@@ -76,8 +76,8 @@ public sealed record MilestoneDecision
     public MilestoneKind Kind { get; init; }
     public string? ParentId { get; init; }
     public string Name { get; init; } = string.Empty;
-    public DateOnly PlannedDate { get; init; }
-    public ExecutionState State { get; init; } = ExecutionState.NotStarted;
+    public DateOnly? PlannedDate { get; init; }
+    public ExecutionState? State { get; init; }
     public IReadOnlyList<string> DependencyIds { get; init; } = Array.Empty<string>();
     public decimal? PlannedEffortHours { get; init; }
     public int? PlannedDurationWorkingMinutes { get; init; }
@@ -133,7 +133,7 @@ public sealed record Assignment
 public sealed record CapacityPlan
 {
     public decimal? CapacityHours { get; init; }
-    public string SourceResourcePolicy { get; init; } = string.Empty;
+    public string? SourceResourcePolicy { get; init; }
     public string? ResourceLogicalRole { get; init; }
     public string EffortAccountingLevel { get; init; } = string.Empty;
     public CalendarDefinition Calendar { get; init; } = new();

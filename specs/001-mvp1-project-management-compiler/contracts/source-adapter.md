@@ -46,8 +46,15 @@ diagnostics: ImportWarning[]
 ```
 
 `SourceDocument` contains a repository-relative path, format (`markdown`,
-`html`, or `text`), content, and source-reference metadata. It does not contain
+`html`, or `text`), runtime capture content, a size, an optional content digest,
+and source-reference metadata. Runtime content is available to extraction but
+is excluded from persisted canonical JSON by default. It does not contain
 `GitHubIssue`, `GitHubMilestone`, or other provider-domain records.
+
+Local capture preserves `capturedAtUtc`, resolved ref, capture state, and a safe
+repository identity. The identity may include a display name and deterministic
+non-secret key/hash, but never an absolute local path, username, credential, or
+token. Two distinct local sources must remain distinguishable.
 
 ## MVP1 discovery convention
 
@@ -92,6 +99,11 @@ safe defaults.
 AuthorityResolution Resolve(RepositorySnapshot snapshot);
 ```
 
-The resolver applies DOC-07 > Appendix A > Gantt > Kanban > README precedence,
-records the selected baseline, and returns conflicts and stale subordinate
-references as diagnostics. The resolver never modifies source documents.
+The resolver applies field-level ownership: DOC-07 controls planning authority,
+baseline, phase/gate/policy fields; Appendix A controls work packages; Kanban
+controls delivery cards and CARIO assignments; Gantt cross-checks; README only
+supports discovery. It records conflicts and stale subordinate references as
+provenance-rich diagnostics. Baseline validity, work-package validity,
+delivery-card completeness, rendition validity, dependency-analysis validity,
+and output readiness are separate results. A malformed subordinate rendition
+does not invalidate an otherwise valid required authority baseline.

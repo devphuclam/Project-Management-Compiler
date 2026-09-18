@@ -1,6 +1,6 @@
 # Project Management Compiler — MVP1 Architecture and Design
 
-**Status:** Approved architecture; written design pending human review  
+**Status:** Approved architecture and MVP1 scope; corrective source-contract remediation in progress  
 **Date:** 2026-09-17  
 **Scope:** MVP1 compiler for the IDEAEngineering repository planning conventions  
 **Target:** local, loopback-only browser application and dependency-free export pipeline
@@ -227,6 +227,7 @@ CanonicalProjectDocument
 ├── capacity
 ├── reserve
 ├── policies
+├── executionOverlay
 ├── provenance[]
 ├── warnings[]
 └── analysis
@@ -246,6 +247,11 @@ semantic-equivalence and canonical-content digest comparisons.
 source document references, baseline status, planning window, target date,
 capacity, reserve policy, and a `validationState`. It is immutable within one
 compilation result.
+
+`ExecutionOverlay` is a separate mutable collection keyed by executable
+delivery-card ID. It holds explicit manual execution evidence without changing
+the baseline record or its provenance. A planning-only source therefore has an
+empty overlay with actual and remaining values explicitly unknown.
 
 The first baseline name is `IDEA DDM — Technical Pilot 2026`, as authored by the
 Kanban planning document. The provisional product name “Project Management
@@ -331,6 +337,20 @@ Each delivery card and work package has an `Estimate` containing:
 No completion percentage is derived from commits, files, issues, elapsed time,
 or repository activity.
 
+### 5.4A Execution overlay
+
+Each overlay record contains `workItemId`, authored `executionState`,
+`actualStart`, `actualFinish`, `actualEffortHours`, `remainingEffortHours`,
+`lastUpdatedAt`, and an optional note/evidence reference. Date ordering and
+non-negative effort values are validated at the manual-update seam. A completed
+record requires actual finish and an in-progress record requires actual start;
+no missing value is guessed.
+
+Actual effort is not actual duration. Actual duration is calculated from actual
+dates and the working calendar, or from actual start through an explicit as-of
+date for an in-progress record. `OVERDUE` and `AT_RISK` remain derived analysis
+conditions and are never execution states.
+
 ### 5.5 Responsibility, capacity, and reserve
 
 `ResponsibilityRole` stores source-defined logical role codes and meanings. MVP1
@@ -369,8 +389,10 @@ Core authored execution states are:
 NOT_STARTED, IN_PROGRESS, COMPLETED, SUSPENDED, CANCELLED
 ```
 
-All imported IDEAEngineering cards begin as `NOT_STARTED`, as the source
-requires. `OVERDUE` is a derived view state:
+An IDEAEngineering card receives an authored execution state only when the
+source explicitly provides a recognized value. Missing or unrecognized source
+states remain null/unknown with a diagnostic; they are never silently changed
+to `NOT_STARTED`. `OVERDUE` is a derived view state:
 
 ```text
 currentDate > deadline
@@ -403,10 +425,15 @@ The CPM module calculates dependency-network results only when supported
 Finish-to-Start edges and normalized card/milestone durations are available. It
 calculates earliest start/finish, latest start/finish, total float, and the
 dependency critical path. CPM consumes `plannedDurationWorkingMinutes`, not raw
-effort. For IDEAEngineering, date ranges and explicit AM/PM half-day markers are
-normalized through the authored Monday–Friday calendar; effort is used for
-capacity/load only. If the source does not make a duration safe to normalize,
-CPM is unknown rather than deriving a duration from effort.
+effort. For IDEAEngineering, date ranges and AM/PM half-day markers are
+normalized through the authored Monday–Friday calendar; an omitted start marker
+means the start of that working day and an omitted finish marker means the end
+of that working day. This supports the source's one-sided marker notation
+without using effort to fill a schedule. Effort is used for capacity/load only;
+an effort/duration mismatch is retained as a warning. Known milestone/gate IDs
+are valid predecessors for cards and gates. If the source does not make a
+duration safe to normalize, CPM is unknown rather than deriving a duration from
+effort.
 
 The algorithm is:
 
@@ -440,6 +467,10 @@ The analysis reports:
 - calculated CPM earliest/latest start/finish;
 - calculated dependency finish;
 - baseline-vs-calculated variance;
+- actual start variance and actual finish variance in working minutes;
+- active overdue and late-start conditions derived from an explicit as-of date;
+- completed-on-time, completed-late, suspended, cancelled, and conservative
+  dependency-risk alerts;
 - forecast finish when actual/remaining evidence is sufficient.
 
 For the initial IDEAEngineering baseline, actual and remaining estimates are
@@ -461,9 +492,17 @@ without presenting them as extra executable tasks.
 
 The Gantt view includes hierarchy, source baseline start/finish, duration,
 dependency summary, milestone markers, status, logical owner, and dependency
-critical-path highlighting where calculated. It renders a baseline bar for
-known baseline data. Actual and forecast bars are represented in the view
-contract but omitted or marked unknown when no evidence exists.
+critical-path highlighting where calculated. Each delivery card is projected
+with three lanes using the same canonical ID:
+
+- `PLAN`: the immutable source baseline bar from planned start/finish;
+- `ACTUAL`: actual start through actual finish, or through the explicit as-of
+  date while in progress, with no fabricated future duration;
+- `ALERT`: structured derived variance/risk information, not another task or
+  schedule baseline.
+
+The plan bar never moves when execution slips. Actual and forecast bars are
+omitted or marked unknown when evidence is insufficient.
 
 ### Kanban
 
@@ -477,7 +516,9 @@ The Kanban view groups the same delivery cards by the source-compatible states:
 
 It applies the source WIP policy as project policy metadata (`maxActiveItems: 1`)
 for IDEAEngineering. It derives `Quá hạn` from date and state; it does not add a
-manual overdue column to the canonical state machine.
+manual overdue column to the canonical state machine. The overlay may change the
+effective authored state for management views, but `OVERDUE` and `AT_RISK` are
+never persisted as states.
 
 ### Critical path
 
@@ -493,8 +534,13 @@ Dashboard indicators use documented rules:
 |---|---|
 | Delivery cards completed | Explicit count shown as `0 / 53` for the untouched source baseline; this is a card-completion indicator, not universal project percent complete |
 | In progress | Count of explicit `IN_PROGRESS` cards |
+| Not started | Count of explicit `NOT_STARTED` cards |
 | Suspended/blocked | Count of suspended cards plus blocking diagnostics |
+| Cancelled | Count of explicit `CANCELLED` cards |
 | Overdue | Derived from as-of date, deadline, and state |
+| Late to start | Derived from a late as-of date or actual start after baseline start |
+| Completed late | Count of completed cards whose actual finish exceeds baseline finish |
+| At risk | Conservative downstream dependency-risk alerts only |
 | Planned effort | Sum of authoritative work-package effort, 512 h |
 | Reserve | Initial reserve is 88 h known; consumed and remaining are `NOT-RUN`/`UNKNOWN` because source planning does not prove execution consumption |
 | Actual effort | `UNKNOWN` until actual evidence exists |
@@ -560,6 +606,13 @@ The canonical JSON is a deliberate persisted snapshot. The UI supports:
   export pipeline without running extraction again, when the schema version is
   supported.
 
+Schema `1.0` remains compatible with the amendment as an additive change:
+new snapshots emit `executionOverlay.records`; readers treat the field as an
+empty overlay when it is absent from an older 1.0 snapshot. A present overlay
+is validated strictly. Reopen preserves both baseline and overlay, while alerts,
+variance, and other calculated analysis are recomputed from an explicit as-of
+date.
+
 Reopen validates the schema version, required fields, global/collection ID
 uniqueness, parent and phase ownership, work-package/card hierarchy, assignment
 targets, baseline shape, and canonical field types. These structural invariant
@@ -590,6 +643,9 @@ after the user sees the diagnostics.
 
 No UI code performs CPM, hierarchy construction, source parsing, or CARIO
 mapping. It renders application view models returned by the compilation service.
+The UI also provides a manual execution-update form for a selected delivery
+card. It submits overlay changes through the application seam and refreshes the
+shared analysis/Gantt/Kanban/dashboard projections.
 
 ## 11. Error and warning model
 
@@ -608,13 +664,21 @@ Representative codes are:
 | `STALE_SUBORDINATE_REFERENCE` | Appendix/rendition names a stale authority version | Use higher-ranked current authority and surface variance |
 | `CONFLICTING_BASELINE` | Sources disagree on an authoritative field | Keep the authority-ranked value and mark conflict for review |
 | `AMBIGUOUS_DATE` | A date cannot be resolved safely | Keep date unknown and warn |
+| `AUTHORED_SCHEDULE_AMBIGUOUS` | A schedule marker is missing or unrecognized in a way that cannot be normalized | Keep duration unknown and warn |
 | `MISSING_DEPENDENCY_TARGET` | A dependency names no known item | Exclude edge from CPM and warn |
 | `UNSUPPORTED_DEPENDENCY_TYPE` | Dependency is not Finish-to-Start | Preserve source edge, mark CPM ineligible, warn |
 | `DEPENDENCY_CYCLE` | CPM graph contains a cycle | Return CPM unknown; do not mutate baseline |
 | `EFFORT_RECONCILIATION` | Child card hours differ from parent work-package hours | Preserve both levels and warn about accounting variance |
+| `EFFORT_DURATION_MISMATCH` | Authored effort differs from normalized schedule duration | Preserve both values and warn; do not rewrite either |
+| `UNKNOWN_EXECUTION_STATE` | Source state is absent or unrecognized | Preserve null/unknown state and warn |
 | `MISSING_CARIO_MAPPING` | Logical role has no configured concrete identity | Leave field blank and add workbook warning |
 | `MISSING_ORGANIZATION_MAPPING` | Department/team is not authored or configured | Leave field blank and warn |
 | `UNKNOWN_ACTUALS` | Source contains planning only | Show actual/forecast as unknown |
+| `INVALID_EXECUTION_UPDATE` | Manual actual/state evidence is internally inconsistent | Reject update; keep baseline and prior overlay |
+| `START_DELAY` | Unstarted work is past planned start | Derive alert; do not change execution state |
+| `OVERDUE` | In-progress work is past planned finish without actual finish | Derive alert; do not change execution state |
+| `COMPLETED_LATE` | Actual finish exceeds planned finish | Derive variance/alert |
+| `AT_RISK` | Valid late predecessor exposes an unstarted successor | Derive conservative downstream risk only |
 | `SOURCE_CAPTURE_FAILED` | Local path, Git, or optional network capture failed | Stop source capture with actionable diagnostic |
 
 Errors that invalidate the canonical baseline prevent normal exports. Warnings
@@ -643,6 +707,8 @@ Tests cross the deepest useful interfaces:
 | CPM | Earliest/latest times, float, and dependency critical path consume normalized duration rather than effort; baseline dates remain unchanged |
 | Baseline | Baseline dates remain unchanged when calculated schedule differs |
 | Status | Initial states, completion counts, and derived overdue semantics are correct |
+| Execution overlay | Manual updates validate and persist actual state/date/effort separately from the baseline |
+| Variance and alerts | Fixed as-of tests cover working-calendar variance, overdue, late completion, suspension, cancellation, and dependency risk |
 | Policy | WIP=1 is imported as project policy, not a global constant |
 | CARIO | Role meanings and logical role assignments are preserved; missing concrete mappings warn |
 | JSON | Schema version, deliberate field names, provenance, and deterministic equivalent reruns |
@@ -666,7 +732,8 @@ that wall-clock time cannot make the suite nondeterministic.
 | WBS, Gantt, Kanban, critical path, dashboard | Required views from one model |
 | Evidence, source reference, import warning | Required |
 | Risk and blocker records | Minimal diagnostic/blocker representation; full risk register deferred |
-| Baseline/actual/forecast comparison | Baseline and calculated analysis required; actual/forecast deferred to explicit evidence |
+| Baseline/actual/forecast comparison | Baseline and manual execution overlay required; forecast remains unknown unless evidence is sufficient |
+| Manual execution overlay and three-lane Gantt | Required; actual updates are local, explicit, and recalculable |
 | Resource leveling optimizer / Critical Chain | Deferred |
 | Full dependency type set | Deferred; MVP1 supports FS only |
 | Multi-source merge | Future extension; model keeps source and baseline provenance ready |
@@ -697,6 +764,11 @@ ambiguous terms are resolved explicitly:
   means the comparison between baseline and calculated/forecast values.
 - “Forecast” is not baseline and is `UNKNOWN` without actual/remaining evidence.
 - “Effort” is work consumed; “duration” is elapsed working time. CPM uses normalized duration and capacity uses effort.
+- “Execution overlay” is mutable actual evidence keyed by canonical work-item ID;
+  it never mutates source baseline.
+- “Alert” is derived management information, not an authored execution state;
+  `OVERDUE` and `AT_RISK` are never persisted as states.
+- “As-of date” is explicit analysis input, not implicit wall-clock state.
 - “CARIO export” means a human-assisted workbook, not a claimed native import.
 - “Project name” in the source model is the source project identity, not the
   provisional compiler product name.

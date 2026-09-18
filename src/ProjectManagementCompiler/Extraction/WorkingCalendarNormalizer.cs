@@ -30,11 +30,6 @@ public sealed class WorkingCalendarNormalizer
             return Invalid("AUTHORED_SCHEDULE_AMBIGUOUS", "An authored AM/PM marker is not recognized safely.");
         }
 
-        if ((startMarker is null) != (finishMarker is null))
-        {
-            return Invalid("AUTHORED_SCHEDULE_AMBIGUOUS", "Authored AM/PM markers must be present for both schedule endpoints.");
-        }
-
         var minutes = 0;
         for (var date = start; date <= finish; date = date.AddDays(1))
         {

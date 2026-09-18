@@ -251,6 +251,23 @@ internal static class AuthorityResolutionTests
         TestAssert.False(resolution.HasCanonicalBaseline, "Conflicting authority-envelope evidence must fail the global Error gate.");
     }
 
+    public static void HistoricalAuthorityEnvelopeReferencesUseDocumentVersionAndDoNotConflict()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Control envelope\n\n| Field | Recorded value |\n|---|---|\n| Stable Document ID | project |\n| Document Version | 0.14 |\n| Document Status | Draft |\n| Target date | 2026-09-25 |\n| Change Record | predecessor DOC-07@0.12 |\n| Supersedes / Superseded by | Supersedes DOC-07@0.13 |\n\n## Technical Pilot schedule\n\nSchedule baseline: `baseline@0.1`\n\n| Item | Planned hours / condition |\n|---|---|\n| Planning window | 18 September–25 September 2026 |\n| Planned phase work | 16 hours |\n\n## Phase sequence\n\n| Phase | Work-package range | Planned start | Planned finish |\n|---|---|---|---|\n| PH0 | P01 | 2026-09-18 | 2026-09-25 |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.Equal("0.1", resolution.BaselineVersion, "Schedule baseline version must remain separate from the DOC-07 document version.");
+        TestAssert.False(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "CONFLICTING_AUTHORITY_CONTROL_ENVELOPE"), "Historical change/supersedes references must not be treated as current authority conflicts.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "A valid DOC-07 and Appendix pair with historical envelope references must remain canonical.");
+    }
+
     public static void FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison()
     {
         var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
@@ -414,7 +431,7 @@ internal static class AuthorityResolutionTests
         });
 
         TestAssert.True(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "UNMATCHED_HTML_CLOSING_TAG" && diagnostic.Severity == WarningSeverity.Error), "Malformed HTML must remain an explicit Error in authority resolution.");
-        TestAssert.False(resolution.HasCanonicalBaseline, "Malformed HTML in any recognized source must fail the global authority gate.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "Malformed subordinate Gantt HTML must not destroy a valid DOC-07 plus Appendix baseline.");
     }
 
     public static void ControlledFixtureResolvesBaselinePhasesAndPolicyFacts()

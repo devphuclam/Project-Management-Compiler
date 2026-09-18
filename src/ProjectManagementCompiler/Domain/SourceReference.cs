@@ -1,11 +1,14 @@
 namespace ProjectManagementCompiler.Domain;
 
+using System.Text.Json.Serialization;
+
 public sealed record SourceDocument
 {
     public string Id { get; init; } = string.Empty;
     public string RelativeFile { get; init; } = string.Empty;
     public SourceDocumentFormat Format { get; init; }
     public long SizeBytes { get; init; }
+    [JsonIgnore]
     public string Content { get; init; } = string.Empty;
     public SourceReference SourceReference { get; init; } = new();
 }

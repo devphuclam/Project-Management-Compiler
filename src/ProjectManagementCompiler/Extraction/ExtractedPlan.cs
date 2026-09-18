@@ -16,6 +16,15 @@ public sealed record ExtractedCardEvidence
     public string CarioRoleCode { get; init; } = string.Empty;
     public string? PredecessorId { get; init; }
     public SourceReference SourceReference { get; init; } = new();
+    public IReadOnlyList<ExtractedRoleAssignmentEvidence> RoleAssignments { get; init; } = Array.Empty<ExtractedRoleAssignmentEvidence>();
+}
+
+public sealed record ExtractedRoleAssignmentEvidence
+{
+    public string CardId { get; init; } = string.Empty;
+    public string LogicalRoleCode { get; init; } = string.Empty;
+    public string CarioRoleCode { get; init; } = string.Empty;
+    public SourceReference SourceReference { get; init; } = new();
 }
 
 public sealed record ExtractedPlan

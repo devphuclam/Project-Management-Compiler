@@ -50,7 +50,11 @@ Mapping Status
 Source Reference
 ```
 
-Blank concrete identities are valid output when configuration is absent.
+Blank concrete identities are valid output when configuration is absent. The
+rows are many-to-many: every populated `(work item, logical role, CARIO role)`
+cell becomes one assignment row, and comma-separated logical roles in one cell
+become separate rows. The source codes are exactly `A`, `R+`, `R`, `C`, `I`, and
+`O`; no concrete employee is fabricated.
 
 ### 03_CHILDREN_MILESTONES
 
@@ -104,6 +108,12 @@ Source Reference
 - person, department, team, and priority fields remain blank without explicit
   configuration;
 - unresolved mappings create warning rows;
+- `Ngày bắt đầu dự kiến` and `Deadline` always use baseline planned dates;
+  manual actual dates, alerts, and variance never replace or rename those
+  planning fields;
+- the workbook remains plan-focused even when an execution overlay exists;
+  execution data may appear only in clearly separate analysis/project-info
+  fields and must not be presented as CARIO planned input;
 - Vietnamese text is encoded in valid UTF-8 XML parts;
 - workbook generation does not require Microsoft Excel or Office COM;
 - simple readable header formatting is permitted but not required to change the
