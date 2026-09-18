@@ -40,6 +40,42 @@ internal static class ExtractionParserTests
         TestAssert.Equal(2, result.Rows[1].RowIndex, "HTML row order should be stable.");
     }
 
+    public static void HtmlParserRejectsDuplicateDataAttributesWithoutThrowing()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr data-phase=\"PH0\" data-phase=\"duplicate\"><td>A01</td><td>Malformed</td></tr>"
+            + "<tr data-z=\"last\" data-a=\"first\"><td>A02</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "Rows with duplicate data-* attributes must be skipped safely.");
+        TestAssert.Equal("A02", result.Rows[0].Cells["ID"], "A valid row after a malformed row must still be emitted.");
+        TestAssert.Equal("data-z,data-a", string.Join(",", result.Rows[0].DataAttributes.Keys), "Valid data attributes must preserve source order.");
+        var diagnostic = result.Diagnostics.Single(d => d.Code == "DUPLICATE_DATA_ATTRIBUTE");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Duplicate data-* attributes must be an Error diagnostic.");
+        TestAssert.Equal(document.Source.RelativeFile, diagnostic.SourceReferences.Single().RelativeFile, "Duplicate attribute diagnostics must retain source metadata.");
+        TestAssert.Equal("table-01", diagnostic.SourceReferences.Single().Table, "Duplicate attribute diagnostics must identify the source table.");
+    }
+
+    public static void HtmlParserRejectsMismatchedCellTagsWithoutGuessingRows()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr><td>A01</th><td>Malformed</td></tr>"
+            + "<tr><td>A02</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "Mismatched HTML cell tags must not produce a guessed row.");
+        TestAssert.Equal("A02", result.Rows[0].Cells["ID"], "Valid HTML rows after a malformed row must still be emitted.");
+        var diagnostic = result.Diagnostics.Single(d => d.Code == "MISMATCHED_HTML_CELL_TAG");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Mismatched HTML cell tags must be explicit errors.");
+        TestAssert.Equal(document.Source.RelativeFile, diagnostic.SourceReferences.Single().RelativeFile, "Mismatched-cell diagnostics must retain source metadata.");
+    }
+
     public static void ParsersDiagnoseMissingHeadingsAndMalformedCells()
     {
         var document = Document(
@@ -64,6 +100,32 @@ internal static class ExtractionParserTests
         TestAssert.True(result.Diagnostics.Any(d => d.Code == "DUPLICATE_TABLE_HEADER" && d.Severity == WarningSeverity.Error), "Duplicate Markdown headers must be explicit errors.");
         TestAssert.True(result.Diagnostics.Count(d => d.Code == "TABLE_CELL_COUNT_MISMATCH" && d.Severity == WarningSeverity.Error) >= 2, "Too few and too many Markdown cells must be explicit errors.");
         TestAssert.Equal(0, result.Rows.Count, "Malformed Markdown rows must not be padded, truncated, or dictionary-overwritten.");
+    }
+
+    public static void MarkdownParserIgnoresBacktickAndTildeFencedContent()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n\n```markdown\n# Fake heading\n\n| Fake | Value |\n|---|---|\n| F01 | Do not parse |\n```\n\n~~~text\n## Fake phases\n\n| Phase ID | Name |\n|---|---|\n| FAKE | Do not parse |\n~~~\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Real phase |");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.Equal(2, result.Rows.Count, "Markdown headings and tables inside fences must be ignored.");
+        TestAssert.True(result.Rows.All(row => !row.Cells.Values.Contains("Do not parse")), "Fenced table rows must not be emitted.");
+        TestAssert.False(result.Diagnostics.Any(d => d.Code == "MISSING_REQUIRED_HEADING"), "Fenced headings must not interfere with valid heading detection.");
+    }
+
+    public static void MarkdownParserPreservesEscapedPipesAsCellContent()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md",
+            "# Source plan\n\n| ID | Name |\n|---|---|\n| A01 | Text with \\| pipe |");
+
+        var result = MarkdownTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "An escaped pipe must not create an extra Markdown cell.");
+        TestAssert.Equal("Text with | pipe", result.Rows[0].Cells["Name"], "Escaped pipes must be preserved as literal pipe content.");
+        TestAssert.False(result.Diagnostics.Any(d => d.Code == "TABLE_CELL_COUNT_MISMATCH"), "Escaped pipes must not produce a cell-count diagnostic.");
     }
 
     public static void HtmlParserRejectsDuplicateHeadersAndWrongCellCounts()

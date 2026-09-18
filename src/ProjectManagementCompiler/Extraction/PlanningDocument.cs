@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using ProjectManagementCompiler.Domain;
 using ProjectManagementCompiler.Sources;
@@ -140,12 +141,45 @@ internal static class PlanningParserSupport
             value = value[1..];
         }
 
-        if (value.EndsWith('|'))
+        if (value.EndsWith('|') && !IsEscapedPipe(value, value.Length - 1))
         {
             value = value[..^1];
         }
 
-        return value.Split('|').Select(cell => cell.Trim()).ToArray();
+        var cells = new List<string>();
+        var cell = new StringBuilder();
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (value[index] == '\\' && index + 1 < value.Length && value[index + 1] == '|')
+            {
+                cell.Append('|');
+                index++;
+                continue;
+            }
+
+            if (value[index] == '|')
+            {
+                cells.Add(cell.ToString().Trim());
+                cell.Clear();
+                continue;
+            }
+
+            cell.Append(value[index]);
+        }
+
+        cells.Add(cell.ToString().Trim());
+        return cells;
+    }
+
+    private static bool IsEscapedPipe(string value, int pipeIndex)
+    {
+        var backslashes = 0;
+        for (var index = pipeIndex - 1; index >= 0 && value[index] == '\\'; index--)
+        {
+            backslashes++;
+        }
+
+        return backslashes % 2 == 1;
     }
 
     public static string Normalize(string value) =>

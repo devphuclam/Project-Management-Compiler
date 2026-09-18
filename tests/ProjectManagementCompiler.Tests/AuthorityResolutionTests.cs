@@ -17,7 +17,7 @@ internal static class AuthorityResolutionTests
                 Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | authoritative-project |\n| Baseline ID | baseline-01 |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name | Start | Finish | Gate |\n|---|---|---|---|---|\n| PH0 | Khởi động | 2026-09-18 | 2026-09-25 | G-D0 |"),
                 Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Phase | Start | Finish | Effort | Duration | Completion condition |\n|---|---|---|---|---|---:|---:|---|\n| P01 | Gói P01 | PH0 | 2026-09-18 | 2026-09-18 | 16 | 480 | Reviewed |"),
                 Document("docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html", "<h1>Gantt</h1><table><tr><th>Phase</th><th>Name</th></tr><tr data-phase=\"PH0\"><td>PH0</td><td>Gantt</td></tr></table>"),
-                Document("docs/product/instances/idea-engineering/planning/idea-technical-pilot-kanban-cario.md", "# Kanban\n\n## Planning policy\n\n| Policy | Value |\n|---|---|\n| WIP policy | 1 |")
+                Document("docs/product/instances/idea-engineering/planning/idea-technical-pilot-kanban-cario.md", "# Kanban\n\n## Planning policy\n\n| Policy | Value |\n|---|---|\n| WIP policy | 1 |\n\n## Delivery cards")
             ]
         };
 
@@ -187,7 +187,7 @@ internal static class AuthorityResolutionTests
             RepositoryId = "fixture",
             Documents =
             [
-                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n\nDOC-07@0.14"),
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14"),
                 Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\nThis appendix references DOC-07@0.13.\n\n| ID | Name | Phase | Start | Finish | Effort | Duration | Completion condition |\n|---|---|---|---|---|---:|---:|---|\n| P01 | Gói P01 | PH0 | 2026-09-18 | 2026-09-18 | 16 | 480 | Reviewed |")
             ]
         };
@@ -196,6 +196,7 @@ internal static class AuthorityResolutionTests
 
         TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "STALE_SUBORDINATE_REFERENCE"), "A stale Appendix control-envelope reference must be visible.");
         TestAssert.Equal("0.14", resolution.BaselineVersion, "The current DOC-07 authority must be retained.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "A warning-only stale subordinate reference must preserve canonical baseline status.");
     }
 
     public static void FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison()
@@ -205,13 +206,14 @@ internal static class AuthorityResolutionTests
             RepositoryId = "fixture",
             Documents =
             [
-                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.9 |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.9"),
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.9 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.9"),
                 Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\nDOC-07@0.10\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
             ]
         });
 
         TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "FUTURE_SUBORDINATE_REFERENCE"), "A numerically newer subordinate version must produce a distinct warning.");
         TestAssert.False(resolution.Diagnostics.Any(d => d.Code == "STALE_SUBORDINATE_REFERENCE"), "A numerically newer subordinate version must not be classified as stale.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "A warning-only future subordinate reference must preserve canonical baseline status.");
     }
 
     public static void MalformedSubordinateControlEnvelopeReferencesAreErrorsAndDoNotThrow()
@@ -221,13 +223,30 @@ internal static class AuthorityResolutionTests
             RepositoryId = "fixture",
             Documents =
             [
-                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14"),
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14"),
                 Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\nDOC-07@999999999999999999999.1 and DOC-07@1.bad\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
             ]
         });
 
         TestAssert.True(resolution.Diagnostics.Count(d => d.Code == "MALFORMED_CONTROL_ENVELOPE_REFERENCE" && d.Severity == WarningSeverity.Error) >= 2, "Overflow and malformed control-envelope versions must produce explicit Error diagnostics.");
         TestAssert.False(resolution.Diagnostics.Any(d => d.Code is "STALE_SUBORDINATE_REFERENCE" or "FUTURE_SUBORDINATE_REFERENCE"), "Malformed versions must not be classified as stale or future.");
+        TestAssert.False(resolution.HasCanonicalBaseline, "Any Error diagnostic, including a subordinate control-envelope error, must disable canonical baseline status.");
+    }
+
+    public static void UnterminatedMarkdownFenceDisablesCanonicalBaseline()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |\n\n```markdown\n| Fake | Value |\n|---|---|\n| F01 | Do not parse |")
+            ]
+        });
+
+        TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "UNTERMINATED_MARKDOWN_FENCE" && d.Severity == WarningSeverity.Error), "An unterminated Markdown fence must be an explicit Error diagnostic.");
+        TestAssert.False(resolution.HasCanonicalBaseline, "An unterminated Markdown fence must fail canonical status through the complete error rule.");
     }
 
     public static void ControlledFixtureResolvesBaselinePhasesAndPolicyFacts()

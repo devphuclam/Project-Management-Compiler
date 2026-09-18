@@ -173,7 +173,8 @@ public sealed record AuthorityResolution
                 && IsValidRequiredDocument(authority, parsed)
                 && IsValidRequiredDocument(appendix, parsed)
                 && !requiredBaselineDiagnostics
-                    .Any(diagnostic => diagnostic.Severity == WarningSeverity.Error),
+                    .Any(diagnostic => diagnostic.Severity == WarningSeverity.Error)
+                && !diagnostics.Any(diagnostic => diagnostic.Severity == WarningSeverity.Error),
             AuthorityDocument = authority,
             Baseline = baseline,
             Documents = documents,

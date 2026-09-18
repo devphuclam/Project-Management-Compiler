@@ -28,9 +28,30 @@ public static class MarkdownTableParser
         var headings = new List<string>();
         string? section = null;
         var tableIndex = 0;
+        var inFence = false;
+        var fenceMarker = '\0';
+        var fenceLength = 0;
+        var fenceStartLine = 0;
 
         for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
         {
+            if (inFence)
+            {
+                if (IsClosingFence(lines[lineIndex], fenceMarker, fenceLength))
+                {
+                    inFence = false;
+                }
+
+                continue;
+            }
+
+            if (TryGetFence(lines[lineIndex], out fenceMarker, out fenceLength))
+            {
+                inFence = true;
+                fenceStartLine = lineIndex + 1;
+                continue;
+            }
+
             var heading = PlanningParserSupport.MarkdownHeading(lines[lineIndex]);
             if (heading is not null)
             {
@@ -79,7 +100,63 @@ public static class MarkdownTableParser
             lineIndex--;
         }
 
+        if (inFence)
+        {
+            diagnostics.Add(new ImportWarning
+            {
+                Id = $"UNTERMINATED_MARKDOWN_FENCE:{document.Source.RelativeFile}:{fenceStartLine}",
+                Severity = WarningSeverity.Error,
+                Code = "UNTERMINATED_MARKDOWN_FENCE",
+                Message = $"Markdown fence opened at line {fenceStartLine} in '{document.Source.RelativeFile}' is not closed; fenced content was ignored.",
+                SourceReferences = [document.Source.SourceReference with
+                {
+                    RelativeFile = document.Source.RelativeFile,
+                    Item = $"line-{fenceStartLine:D4}",
+                    ExtractionRule = "idea-planning-markdown-fence"
+                }]
+            });
+        }
+
         diagnostics.InsertRange(0, PlanningParserSupport.MissingHeadings(document, headings));
         return new PlanningParseResult { Rows = rows, Diagnostics = diagnostics };
+    }
+
+    private static bool TryGetFence(string line, out char marker, out int length)
+    {
+        marker = '\0';
+        length = 0;
+        var leadingSpaces = line.Length - line.TrimStart(' ').Length;
+        if (leadingSpaces > 3)
+        {
+            return false;
+        }
+
+        var candidate = line[leadingSpaces..];
+        if (candidate.Length == 0 || candidate[0] is not ('`' or '~'))
+        {
+            return false;
+        }
+
+        marker = candidate[0];
+        while (length < candidate.Length && candidate[length] == marker)
+        {
+            length++;
+        }
+
+        return length >= 3;
+    }
+
+    private static bool IsClosingFence(string line, char marker, int openingLength)
+    {
+        if (!TryGetFence(line, out var closingMarker, out var closingLength)
+            || closingMarker != marker
+            || closingLength < openingLength)
+        {
+            return false;
+        }
+
+        var leadingSpaces = line.Length - line.TrimStart(' ').Length;
+        var remainder = line[(leadingSpaces + closingLength)..];
+        return string.IsNullOrWhiteSpace(remainder);
     }
 }

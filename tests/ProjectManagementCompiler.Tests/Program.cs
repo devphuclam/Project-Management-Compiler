@@ -38,8 +38,12 @@ internal static class Program
         ("LocalFixtureCaptureRemainsAvailableThroughAdapter", HttpsCapabilityTests.LocalFixtureCaptureRemainsAvailableThroughAdapter)
         ,("MarkdownParserPreservesVietnameseAndStableSourceMetadata", ExtractionParserTests.MarkdownParserPreservesVietnameseAndStableSourceMetadata)
         ,("HtmlParserReadsTablesAndDataAttributesInStableOrder", ExtractionParserTests.HtmlParserReadsTablesAndDataAttributesInStableOrder)
+        ,("HtmlParserRejectsDuplicateDataAttributesWithoutThrowing", ExtractionParserTests.HtmlParserRejectsDuplicateDataAttributesWithoutThrowing)
+        ,("HtmlParserRejectsMismatchedCellTagsWithoutGuessingRows", ExtractionParserTests.HtmlParserRejectsMismatchedCellTagsWithoutGuessingRows)
         ,("ParsersDiagnoseMissingHeadingsAndMalformedCells", ExtractionParserTests.ParsersDiagnoseMissingHeadingsAndMalformedCells)
         ,("MarkdownParserRejectsDuplicateHeadersAndWrongCellCounts", ExtractionParserTests.MarkdownParserRejectsDuplicateHeadersAndWrongCellCounts)
+        ,("MarkdownParserIgnoresBacktickAndTildeFencedContent", ExtractionParserTests.MarkdownParserIgnoresBacktickAndTildeFencedContent)
+        ,("MarkdownParserPreservesEscapedPipesAsCellContent", ExtractionParserTests.MarkdownParserPreservesEscapedPipesAsCellContent)
         ,("HtmlParserRejectsDuplicateHeadersAndWrongCellCounts", ExtractionParserTests.HtmlParserRejectsDuplicateHeadersAndWrongCellCounts)
         ,("HtmlParserRejectsTablesWithoutHeaderRows", ExtractionParserTests.HtmlParserRejectsTablesWithoutHeaderRows)
         ,("DiscoveryIgnoresUnrecognizedCapturedDocuments", ExtractionParserTests.DiscoveryIgnoresUnrecognizedCapturedDocuments)
@@ -55,6 +59,7 @@ internal static class Program
         ,("StaleAppendixControlEnvelopeReferenceIsWarning", AuthorityResolutionTests.StaleAppendixControlEnvelopeReferenceIsWarning)
         ,("FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison", AuthorityResolutionTests.FutureSubordinateControlEnvelopeReferenceUsesNumericVersionComparison)
         ,("MalformedSubordinateControlEnvelopeReferencesAreErrorsAndDoNotThrow", AuthorityResolutionTests.MalformedSubordinateControlEnvelopeReferencesAreErrorsAndDoNotThrow)
+        ,("UnterminatedMarkdownFenceDisablesCanonicalBaseline", AuthorityResolutionTests.UnterminatedMarkdownFenceDisablesCanonicalBaseline)
         ,("ControlledFixtureResolvesBaselinePhasesAndPolicyFacts", AuthorityResolutionTests.ControlledFixtureResolvesBaselinePhasesAndPolicyFacts)
     ];
 

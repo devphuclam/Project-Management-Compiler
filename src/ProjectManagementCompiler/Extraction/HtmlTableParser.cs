@@ -9,7 +9,8 @@ public static class HtmlTableParser
     private static readonly Regex HeadingPattern = new(@"<h[1-6][^>]*>(?<text>.*?)</h[1-6]>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex TablePattern = new(@"<table\b[^>]*>(?<body>.*?)</table>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex RowPattern = new(@"<tr\b(?<attributes>[^>]*)>(?<body>.*?)</tr>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-    private static readonly Regex CellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</(?<close>th|td)>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex CellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</\k<kind>>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex AnyCellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</(?<close>th|td)>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex DataAttributePattern = new(@"(?<name>data-[A-Za-z0-9_-]+)\s*=\s*[""'](?<value>.*?)[""']", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled | RegexOptions.Singleline);
 
@@ -81,18 +82,70 @@ public static class HtmlTableParser
             for (var index = headerPosition + 1; index < tableRows.Length; index++)
             {
                 var rowMatch = tableRows[index];
-                var values = Cells(rowMatch.Groups["body"].Value);
                 rowIndex++;
                 var sourceLine = content[..(tableMatch.Groups["body"].Index + rowMatch.Index)].Count(character => character == '\n') + 1;
+                var cellShape = AnyCellPattern.Matches(rowMatch.Groups["body"].Value)
+                    .Cast<Match>()
+                    .Where(match => !match.Groups["kind"].Value.Equals(match.Groups["close"].Value, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                if (cellShape.Length > 0)
+                {
+                    diagnostics.Add(new ImportWarning
+                    {
+                        Id = $"MISMATCHED_HTML_CELL_TAG:{document.Source.RelativeFile}:{tableIndex}:{rowIndex}",
+                        Severity = WarningSeverity.Error,
+                        Code = "MISMATCHED_HTML_CELL_TAG",
+                        Message = $"HTML table {tableIndex} row {rowIndex} in '{document.Source.RelativeFile}' contains mismatched opening and closing cell tags; the row was skipped.",
+                        SourceReferences = [document.Source.SourceReference with
+                        {
+                            RelativeFile = document.Source.RelativeFile,
+                            Table = $"table-{tableIndex:D2}",
+                            Item = $"row-{rowIndex:D3}",
+                            ExtractionRule = "idea-planning-html-cell-shape"
+                        }]
+                    });
+                    continue;
+                }
+
+                var values = Cells(rowMatch.Groups["body"].Value);
                 diagnostics.AddRange(PlanningParserSupport.ValidateTableShape(document, tableIndex, rowIndex, sourceLine, headers, values));
                 if (headers.Count != values.Count || headers.GroupBy(PlanningParserSupport.Normalize, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
                 {
                     continue;
                 }
 
-                var attributes = DataAttributePattern.Matches(rowMatch.Groups["attributes"].Value)
+                var dataAttributes = DataAttributePattern.Matches(rowMatch.Groups["attributes"].Value)
                     .Cast<Match>()
-                    .ToDictionary(match => match.Groups["name"].Value, match => WebUtility.HtmlDecode(match.Groups["value"].Value), StringComparer.OrdinalIgnoreCase);
+                    .ToArray();
+                var duplicateAttributes = dataAttributes
+                    .GroupBy(match => match.Groups["name"].Value, StringComparer.OrdinalIgnoreCase)
+                    .Where(group => group.Count() > 1)
+                    .Select(group => group.Key)
+                    .ToArray();
+                if (duplicateAttributes.Length > 0)
+                {
+                    diagnostics.Add(new ImportWarning
+                    {
+                        Id = $"DUPLICATE_DATA_ATTRIBUTE:{document.Source.RelativeFile}:{tableIndex}:{rowIndex}",
+                        Severity = WarningSeverity.Error,
+                        Code = "DUPLICATE_DATA_ATTRIBUTE",
+                        Message = $"HTML table {tableIndex} row {rowIndex} in '{document.Source.RelativeFile}' contains duplicate data-* attributes: {string.Join(", ", duplicateAttributes)}; the row was skipped.",
+                        SourceReferences = [document.Source.SourceReference with
+                        {
+                            RelativeFile = document.Source.RelativeFile,
+                            Table = $"table-{tableIndex:D2}",
+                            Item = $"row-{rowIndex:D3}",
+                            ExtractionRule = "idea-planning-html-data-attributes"
+                        }]
+                    });
+                    continue;
+                }
+
+                var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var attribute in dataAttributes)
+                {
+                    attributes.Add(attribute.Groups["name"].Value, WebUtility.HtmlDecode(attribute.Groups["value"].Value));
+                }
                 var row = PlanningParserSupport.CreateRow(document, section, tableIndex, rowIndex, sourceLine, headers, values, attributes);
                 rows.Add(row);
                 diagnostics.AddRange(PlanningParserSupport.Validate(document, row));
