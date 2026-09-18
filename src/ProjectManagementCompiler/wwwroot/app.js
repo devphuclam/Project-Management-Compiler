@@ -4,8 +4,9 @@
   function createGanttState() {
     return {
       projectId: null,
-      zoom: "month",
-      fit: true,
+      zoom: "week",
+      fit: false,
+      preset: "plan",
       expandedKeys: new Set(),
       expansionInitialized: false,
       phaseFilter: "ALL",
@@ -70,6 +71,21 @@
     body.hidden = collapsed;
     toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
     toggle.textContent = collapsed ? "Show setup" : "Hide setup";
+  }
+
+  function setExecutionPanelOpen(open, focusInput) {
+    const panel = byId("execution-panel");
+    const body = byId("execution-panel-body");
+    const toggle = byId("execution-panel-toggle");
+    if (!panel || !body || !toggle) return;
+    panel.classList.toggle("is-open", open);
+    body.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.textContent = open ? "Close updater" : "Open updater";
+    if (open && focusInput) {
+      const input = byId("execution-work-item");
+      if (input) input.focus();
+    }
   }
 
   function hasExecutionEvidence(summary) {
@@ -284,7 +300,7 @@
     panel.appendChild(mainGrid);
 
     const metrics = node("div", null, "summary-metric-grid");
-    [["Cards", dashboard.totalCards, ""], ["Recorded completed", executionValue(summary, dashboard.completed), "success"], ["Recorded in progress", executionValue(summary, dashboard.inProgress), "accent"], ["Overdue alerts", dashboard.overdue, "danger"], ["At-risk alerts", dashboard.atRisk, "warning"], ["Late starts", dashboard.lateToStart, "warning"]].forEach(([label, value, tone]) => {
+    [["Work items", dashboard.totalCards, ""], ["Recorded completion", executionValue(summary, dashboard.completed), "success"], ["Schedule alerts", overdue + atRisk, overdue + atRisk ? "danger" : ""], ["Late starts", dashboard.lateToStart, "warning"]].forEach(([label, value, tone]) => {
       const card = node("div", null, "summary-card " + tone);
       card.appendChild(node("span", label, "label"));
       card.appendChild(node("strong", value, "value"));
@@ -329,10 +345,12 @@
     heading.appendChild(node("h3", "Delivery pulse"));
     heading.appendChild(node("p", "A compact read on progress, schedule pressure, and the decisions that need a human next.", "muted"));
     fragment.appendChild(heading);
+    const baseline = summary && summary.baseline || {};
     const metrics = [
-      ["Recorded completed", executionValue(summary, view.completed), "success"], ["Recorded in progress", executionValue(summary, view.inProgress), "accent"], ["Recorded not started", executionValue(summary, view.notStarted), ""],
-      ["Late to start", view.lateToStart, "warning"], ["Overdue", view.overdue, "danger"], ["At risk", view.atRisk, "warning"],
-      ["Completed late", executionValue(summary, view.completedLate), "danger"], ["Recorded completion", hasExecutionEvidence(summary) ? view.completed + "/" + view.totalCards : "—", "accent"]
+      ["Planned effort", baseline.plannedEffortHours === null || baseline.plannedEffortHours === undefined ? "UNKNOWN" : baseline.plannedEffortHours + "h", "accent"],
+      ["Capacity", baseline.capacityHours === null || baseline.capacityHours === undefined ? "UNKNOWN" : baseline.capacityHours + "h", ""],
+      ["Reserve", baseline.reserveHours === null || baseline.reserveHours === undefined ? "UNKNOWN" : baseline.reserveHours + "h", "success"],
+      ["Execution evidence", hasExecutionEvidence(summary) ? "Recorded" : "Planning only", ""]
     ];
     const grid = node("div", null, "metric-grid");
     metrics.forEach(([label, value, tone]) => {
@@ -414,6 +432,11 @@
   function stateLabel(value) {
     if (!value) return "No state";
     return String(value).replace(/_/g, " ").toLowerCase().replace(/(^|\s)\S/g, letter => letter.toUpperCase());
+  }
+
+  function ganttStateLabel(row) {
+    if (row && row.state) return stateLabel(row.state);
+    return hasExecutionEvidence(currentSummary()) ? "Not recorded" : "Plan only";
   }
 
   function formatDate(value) {
@@ -510,6 +533,7 @@
         roles: item && item.logicalRoles || [],
         dependencyIds: item && item.dependencyIds || milestone && milestone.dependencyIds || [],
         plan: { start: planStart, finish: planFinish },
+        isDerivedPlan: false,
         actual: actualLane ? { start: actualLane.start || null, finish: actualLane.finish || null, state: actualLane.state } : null,
         alerts,
         childKeys: [],
@@ -526,7 +550,27 @@
       return row;
     }
 
+    function rollupSummaryPlans() {
+      const byKey = new Map(rows.map(row => [row.key, row]));
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
+        const row = rows[index];
+        if (!row.isSummary || !row.childKeys.length) continue;
+        const children = row.childKeys.map(key => byKey.get(key)).filter(Boolean);
+        const starts = children.map(child => parseDate(child.plan.start)).filter(timestamp => timestamp !== null);
+        const finishes = children.map(child => parseDate(child.plan.finish)).filter(timestamp => timestamp !== null);
+        if (!starts.length || !finishes.length) continue;
+        const derivedStart = new Date(Math.min(...starts)).toISOString().slice(0, 10);
+        const derivedFinish = new Date(Math.max(...finishes)).toISOString().slice(0, 10);
+        if (!row.plan.start || !row.plan.finish) {
+          // Use derived summary dates only for missing edges; source-authored dates remain authoritative.
+          row.plan = { start: row.plan.start || derivedStart, finish: row.plan.finish || derivedFinish };
+          row.isDerivedPlan = true;
+        }
+      }
+    }
+
     if (wbsRoot) addRow(wbsRoot, null, 0, null, null);
+    rollupSummaryPlans();
 
     for (const item of ganttView.items || []) {
       const key = typedKey("DeliveryCard", item.workItemId);
@@ -550,6 +594,7 @@
         roles: item.logicalRoles || [],
         dependencyIds: item.dependencyIds || [],
         plan: { start: planLane && planLane.start || null, finish: planLane && planLane.finish || null },
+        isDerivedPlan: false,
         actual: actualLane ? { start: actualLane.start || null, finish: actualLane.finish || null, state: actualLane.state } : null,
         alerts: laneEntries(item, "ALERT"),
         childKeys: [],
@@ -703,6 +748,7 @@
     timelineRow.dataset.rowKey = row.key;
     const planLane = node("div", null, "gantt-sub-lane gantt-plan-lane");
     const actualLane = node("div", null, "gantt-sub-lane gantt-actual-lane");
+    if (row.isDerivedPlan) planLane.classList.add("is-derived");
     const planLabel = row.isMilestone ? "PLAN milestone" : "PLAN";
     if (row.isMilestone && row.plan.start) {
       const milestone = node("button", null, "gantt-milestone" + (state.gantt.criticalPath && row.isCritical ? " gantt-critical-bar" : ""));
@@ -808,7 +854,7 @@
     taskRow.appendChild(identity);
 
     const status = node("div", null, "gantt-task-cell gantt-task-status");
-    status.appendChild(node("span", stateLabel(row.state), "gantt-state"));
+    status.appendChild(node("span", ganttStateLabel(row), "gantt-state" + (row.state ? "" : " is-neutral")));
     if (state.gantt.criticalPath && row.isCritical) status.appendChild(node("span", "Critical", "gantt-signal critical"));
     taskRow.appendChild(status);
 
@@ -869,6 +915,24 @@
     return related;
   }
 
+  function applyGanttPreset(preset) {
+    state.gantt.preset = preset;
+    state.gantt.phaseFilter = "ALL";
+    state.gantt.executionFilter = "ALL";
+    state.gantt.attentionOnly = false;
+    state.gantt.criticalOnly = false;
+    state.gantt.overdueOnly = false;
+    state.gantt.atRiskOnly = false;
+    state.gantt.lateStartOnly = false;
+    state.gantt.showDependencies = false;
+    state.gantt.criticalPath = false;
+    state.gantt.zoom = "week";
+    state.gantt.fit = false;
+    if (preset === "execution") state.gantt.executionFilter = "IN_PROGRESS";
+    if (preset === "risks") state.gantt.attentionOnly = true;
+    if (preset === "dependencies") state.gantt.showDependencies = true;
+  }
+
   function renderGanttToolbar(rows, range, analysis) {
     const toolbar = node("div", null, "gantt-toolbar");
     const toolbarTop = node("div", null, "gantt-toolbar-top");
@@ -897,6 +961,17 @@
     addAction("Show dependencies", "dependencies", state.gantt.showDependencies);
     toolbarTop.appendChild(actions);
     toolbar.appendChild(toolbarTop);
+
+    const presets = node("div", null, "gantt-preset-nav");
+    presets.appendChild(node("span", "View", "gantt-preset-label"));
+    [["plan", "Plan"], ["execution", "Execution"], ["risks", "Risks"], ["dependencies", "Dependencies"]].forEach(([value, label]) => {
+      const button = node("button", label, "secondary gantt-preset" + (state.gantt.preset === value ? " is-active" : ""));
+      button.type = "button";
+      button.dataset.ganttPreset = value;
+      button.setAttribute("aria-pressed", state.gantt.preset === value ? "true" : "false");
+      presets.appendChild(button);
+    });
+    toolbar.appendChild(presets);
 
     const filters = node("div", null, "gantt-filters");
     const phase = node("select");
@@ -979,7 +1054,7 @@
     panel.appendChild(heading);
     const fields = node("div", null, "gantt-detail-fields");
     appendDetailField(fields, "State", stateLabel(row.state));
-    appendDetailField(fields, "PLAN", formatDate(row.plan.start) + " → " + formatDate(row.plan.finish));
+    appendDetailField(fields, row.isDerivedPlan ? "PLAN · derived" : "PLAN", formatDate(row.plan.start) + " → " + formatDate(row.plan.finish));
     if (row.actual) {
       const actualFinish = row.actual.finish || (row.state === "IN_PROGRESS" ? analysis && analysis.asOfDate : null);
       appendDetailField(fields, "ACTUAL", formatDate(row.actual.start) + " → " + formatDate(actualFinish));
@@ -1107,8 +1182,14 @@
     shell.appendChild(workspace);
 
     shell.addEventListener("click", event => {
+      const presetTarget = event.target.closest("[data-gantt-preset]");
       const actionTarget = event.target.closest("[data-gantt-action]");
       const selectTarget = event.target.closest("[data-gantt-select]");
+      if (presetTarget) {
+        applyGanttPreset(presetTarget.dataset.ganttPreset);
+        renderActiveView();
+        return;
+      }
       if (actionTarget) {
         const action = actionTarget.dataset.ganttAction;
         if (action === "expand-all") {
@@ -1142,6 +1223,7 @@
             const form = byId("execution-form");
             const executionPanel = byId("execution-panel");
             if (executionPanel) executionPanel.classList.add("is-targeted");
+            setExecutionPanelOpen(true, false);
             if (form) form.scrollIntoView({ behavior: "smooth", block: "start" });
             input.focus();
           }
@@ -1292,6 +1374,7 @@
     state.views = summary.views;
     state.warnings = summary.warnings || [];
     setSourceIntakeCollapsed(true);
+    setExecutionPanelOpen(false, false);
     renderSummary(summary);
     renderActiveView();
   }
@@ -1393,6 +1476,10 @@
   byId("source-intake-toggle").addEventListener("click", () => {
     const panel = byId("source-intake-panel");
     setSourceIntakeCollapsed(!panel.classList.contains("is-collapsed"));
+  });
+  byId("execution-panel-toggle").addEventListener("click", () => {
+    const body = byId("execution-panel-body");
+    setExecutionPanelOpen(Boolean(body && body.hidden), false);
   });
   byId("analyze-button").addEventListener("click", analyze);
   byId("refresh-button").addEventListener("click", refresh);

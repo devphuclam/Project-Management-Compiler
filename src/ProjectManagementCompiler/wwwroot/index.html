@@ -8,16 +8,19 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="app-header-copy">
-      <p class="eyebrow">PROJECT CONTROL CENTER · LOCAL MVP1</p>
-      <h1>Project Management Compiler</h1>
-      <p class="header-description">Turn planning evidence into a calm, decision-ready view of delivery.</p>
-      <p id="connection-status" class="muted">Ready for a local source directory.</p>
+    <div class="app-header-brand">
+      <span class="brand-mark" aria-hidden="true">PM</span>
+      <div class="app-header-copy">
+        <p class="eyebrow">LOCAL PROJECT WORKSPACE</p>
+        <h1>Project Management Compiler</h1>
+        <p class="header-description">A clear place to read the plan, record execution, and decide what needs attention.</p>
+        <p id="connection-status" class="muted">Ready for a local source directory.</p>
+      </div>
     </div>
     <div class="header-actions">
-      <button id="refresh-button" class="secondary">Refresh analysis</button>
-      <button id="save-json-button" class="secondary">Save project JSON</button>
-      <button id="export-xlsx-button" class="primary">Export CARIO XLSX</button>
+      <button id="refresh-button" class="secondary">Refresh</button>
+      <button id="save-json-button" class="secondary">Save JSON</button>
+      <button id="export-xlsx-button" class="primary">Export XLSX</button>
     </div>
   </header>
 
@@ -101,27 +104,33 @@
         <div>
           <p class="eyebrow">EXECUTION OVERLAY</p>
           <h2>Record manual update</h2>
+          <p class="panel-subtitle">Open this updater only when you have a real delivery signal to record.</p>
         </div>
-        <span class="muted">Does not edit the baseline</span>
+        <div class="panel-heading-actions">
+          <span class="muted">Baseline stays immutable</span>
+          <button id="execution-panel-toggle" class="secondary compact-action" type="button" aria-expanded="false" aria-controls="execution-panel-body">Open updater</button>
+        </div>
       </div>
-      <form id="execution-form" class="execution-grid">
-        <label>Delivery card ID<input id="execution-work-item" required placeholder="P04-A"></label>
-        <label>State
-          <select id="execution-state">
-            <option value="NOT_STARTED">Not started</option>
-            <option value="IN_PROGRESS">In progress</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="SUSPENDED">Suspended</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-        </label>
-        <label>Actual start<input id="actual-start" type="date"></label>
-        <label>Actual finish<input id="actual-finish" type="date"></label>
-        <label>Actual effort (hours)<input id="actual-effort" type="number" min="0" step="0.25"></label>
-        <label>Remaining effort (hours)<input id="remaining-effort" type="number" min="0" step="0.25"></label>
-        <label class="wide">Note<textarea id="execution-note" rows="2"></textarea></label>
-        <div class="control-submit"><button class="primary" type="submit">Apply update</button></div>
-      </form>
+      <div id="execution-panel-body" class="execution-panel-body" hidden>
+        <form id="execution-form" class="execution-grid">
+          <label>Delivery card ID<input id="execution-work-item" required placeholder="P04-A"></label>
+          <label>State
+            <select id="execution-state">
+              <option value="NOT_STARTED">Not started</option>
+              <option value="IN_PROGRESS">In progress</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="SUSPENDED">Suspended</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </label>
+          <label>Actual start<input id="actual-start" type="date"></label>
+          <label>Actual finish<input id="actual-finish" type="date"></label>
+          <label>Actual effort (hours)<input id="actual-effort" type="number" min="0" step="0.25"></label>
+          <label>Remaining effort (hours)<input id="remaining-effort" type="number" min="0" step="0.25"></label>
+          <label class="wide">Note<textarea id="execution-note" rows="2"></textarea></label>
+          <div class="control-submit"><button class="primary" type="submit">Apply update</button></div>
+        </form>
+      </div>
     </section>
   </main>
 
