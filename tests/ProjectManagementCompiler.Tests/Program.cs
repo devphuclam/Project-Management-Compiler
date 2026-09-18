@@ -4,7 +4,8 @@ internal static class Program
 {
     private static readonly (string Name, Action Test)[] Tests =
     [
-        ("RunnerStarts", RunnerStarts)
+        ("RunnerStarts", RunnerStarts),
+        ("CanonicalProjectPreservesIndependentBaselineValues", DomainModelTests.CanonicalProjectPreservesIndependentBaselineValues)
     ];
 
     public static int Main()
