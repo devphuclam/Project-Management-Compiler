@@ -10,6 +10,45 @@ namespace ProjectManagementCompiler.Tests;
 
 internal static class CarioXlsxTests
 {
+    public static void CarioXlsxUsesTheApprovedContractHeadersAndRecordSemantics()
+    {
+        var project = CaptureCanonicalProject();
+        var model = new CarioMappingProjector().Build(project);
+        var bytes = new CarioXlsxExporter().Export(model);
+
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        TestAssert.Equal(
+            "Work Item Type|Task ID|Phase|Work Package|Nội dung công việc|Ngày bắt đầu dự kiến|Deadline|Mức độ ưu tiên|Đơn vị / Phòng ban|Ban|Ghi chú|Trạng thái ban đầu|Planned Effort (hours)|Baseline / Analysis State|Source Reference",
+            string.Join('|', ReadHeader(archive, "xl/worksheets/sheet1.xml")),
+            "01_TASKS must use the approved CARIO contract headers.");
+        TestAssert.Equal(
+            "Task ID|Project Logical Role|CARIO Person / Account|CARIO Role|Mapping Status|Source Reference",
+            string.Join('|', ReadHeader(archive, "xl/worksheets/sheet2.xml")),
+            "02_ASSIGNMENTS must use the approved CARIO contract headers.");
+        TestAssert.Equal(
+            "Parent ID|Child ID|Relationship Type|Child Type|Name|Planned Date / Deadline|Source Reference",
+            string.Join('|', ReadHeader(archive, "xl/worksheets/sheet3.xml")),
+            "03_CHILDREN_MILESTONES must use the approved CARIO contract headers.");
+        TestAssert.Equal(
+            "Task / Milestone ID|Depends On|Dependency Type|Analysis Eligibility|Validation State|Source Reference",
+            string.Join('|', ReadHeader(archive, "xl/worksheets/sheet4.xml")),
+            "04_DEPENDENCIES must use the approved CARIO contract headers.");
+        TestAssert.Equal(
+            "Field|Value|Data State|Source Reference",
+            string.Join('|', ReadHeader(archive, "xl/worksheets/sheet5.xml")),
+            "05_PROJECT_INFO must use the approved CARIO contract headers.");
+        TestAssert.Equal(
+            "Warning ID|Severity|Code|Message|Affected Item IDs|Source Reference",
+            string.Join('|', ReadHeader(archive, "xl/worksheets/sheet6.xml")),
+            "06_IMPORT_WARNINGS must use the approved CARIO contract headers.");
+
+        TestAssert.Equal(60, model.Tasks.Count, "CARIO task rows must include 53 cards and 7 decision/milestone records.");
+        TestAssert.Equal(60, model.ChildrenMilestones.Count, "The children/milestones sheet must preserve all card and milestone relationships.");
+        TestAssert.Equal(53, model.Tasks.Count(task => task.WorkItemType == "DeliveryCard"), "CARIO must preserve all 53 executable delivery-card rows.");
+        TestAssert.Equal(7, model.Tasks.Count(task => task.WorkItemType is "Decision" or "Milestone"), "CARIO must preserve all 7 decision/milestone rows.");
+        TestAssert.True(model.Tasks.All(task => !string.IsNullOrWhiteSpace(task.SourceReference)), "CARIO task rows must retain safe source provenance.");
+    }
+
     public static void CarioXlsxUsesSixExactSheetsAndBclPackageParts()
     {
         var project = CaptureCanonicalProject();
@@ -104,6 +143,21 @@ internal static class CarioXlsxTests
         using var stream = archive.GetEntry(entryName)!.Open();
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    private static IReadOnlyList<string> ReadHeader(ZipArchive archive, string entryName)
+    {
+        using var stream = archive.GetEntry(entryName)!.Open();
+        var document = XDocument.Load(stream);
+        var headerRow = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "row")
+            .First();
+        return headerRow
+            .Descendants()
+            .Where(element => element.Name.LocalName == "t")
+            .Select(element => element.Value)
+            .ToArray();
     }
 
     private static CanonicalProject CaptureCanonicalProject()

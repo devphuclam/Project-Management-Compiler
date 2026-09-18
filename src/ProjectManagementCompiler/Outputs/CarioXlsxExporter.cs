@@ -138,84 +138,92 @@ public sealed class CarioXlsxExporter
 
     private static void WriteTasks(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Task ID", "Task title", "Planned start", "Planned deadline", "Planned effort hours", "Priority", "Department", "Team", "Notes", "Mapping warning IDs"],
+        WriteWorksheet(writer, ["Work Item Type", "Task ID", "Phase", "Work Package", "Nội dung công việc", "Ngày bắt đầu dự kiến", "Deadline", "Mức độ ưu tiên", "Đơn vị / Phòng ban", "Ban", "Ghi chú", "Trạng thái ban đầu", "Planned Effort (hours)", "Baseline / Analysis State", "Source Reference"],
             model.Tasks.Select(task => new[]
             {
+                Cell.Text(task.WorkItemType),
                 Cell.Text(task.TaskId),
+                Cell.Text(task.PhaseId),
+                Cell.Text(task.WorkPackageId),
                 Cell.Text(task.Title),
                 Cell.Text(FormatDate(task.PlannedStart)),
                 Cell.Text(FormatDate(task.PlannedDeadline)),
-                Cell.Number(task.PlannedEffortHours),
                 Cell.Text(task.Priority),
                 Cell.Text(task.Department),
                 Cell.Text(task.Team),
                 Cell.Text(task.Notes),
-                Cell.Text(string.Join(",", task.MappingWarningIds))
+                Cell.Text(task.InitialState),
+                Cell.Number(task.PlannedEffortHours),
+                Cell.Text(task.BaselineAnalysisState),
+                Cell.Text(task.SourceReference)
             }));
     }
 
     private static void WriteAssignments(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Task ID", "Logical role", "CARIO role", "Concrete identity", "Mapping status"],
+        WriteWorksheet(writer, ["Task ID", "Project Logical Role", "CARIO Person / Account", "CARIO Role", "Mapping Status", "Source Reference"],
             model.Assignments.Select(assignment => new[]
             {
                 Cell.Text(assignment.TaskId),
                 Cell.Text(assignment.LogicalRole),
-                Cell.Text(assignment.CarioRoleCode),
                 Cell.Text(assignment.ConcreteIdentity),
-                Cell.Text(assignment.MappingStatus)
+                Cell.Text(assignment.CarioRoleCode),
+                Cell.Text(assignment.MappingStatus),
+                Cell.Text(assignment.SourceReference)
             }));
     }
 
     private static void WriteChildrenMilestones(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Parent WorkPackage", "Parent ID", "Parent kind", "Record type", "Record ID", "Name", "Planned date", "Relationship"],
+        WriteWorksheet(writer, ["Parent ID", "Child ID", "Relationship Type", "Child Type", "Name", "Planned Date / Deadline", "Source Reference"],
             model.ChildrenMilestones.Select(record => new[]
             {
-                Cell.Text(record.ParentWorkPackageId),
                 Cell.Text(record.ParentId),
-                Cell.Text(record.ParentKind),
-                Cell.Text(record.RecordType),
                 Cell.Text(record.RecordId),
+                Cell.Text(record.Relationship),
+                Cell.Text(record.RecordType),
                 Cell.Text(record.Name),
                 Cell.Text(FormatDate(record.PlannedDate)),
-                Cell.Text(record.Relationship)
+                Cell.Text(record.SourceReference)
             }));
     }
 
     private static void WriteDependencies(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Subject", "Predecessor", "Relationship type", "Validation state", "Analysis eligible"],
+        WriteWorksheet(writer, ["Task / Milestone ID", "Depends On", "Dependency Type", "Analysis Eligibility", "Validation State", "Source Reference"],
             model.Dependencies.Select(dependency => new[]
             {
                 Cell.Text(dependency.SubjectId),
                 Cell.Text(dependency.PredecessorId),
                 Cell.Text(dependency.DependencyType.ToString()),
+                Cell.Text(dependency.AnalysisEligible ? "TRUE" : "FALSE"),
                 Cell.Text(dependency.ValidationState.ToString()),
-                Cell.Text(dependency.AnalysisEligible ? "TRUE" : "FALSE")
+                Cell.Text(dependency.SourceReference)
             }));
     }
 
     private static void WriteProjectInfo(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Key", "Value"],
+        WriteWorksheet(writer, ["Field", "Value", "Data State", "Source Reference"],
             model.ProjectInfo.Select(info => new[]
             {
                 Cell.Text(info.Key),
-                Cell.Text(info.Value)
+                Cell.Text(info.Value),
+                Cell.Text(info.DataState.ToString()),
+                Cell.Text(info.SourceReference)
             }));
     }
 
     private static void WriteWarnings(XmlWriter writer, CarioWorkbookModel model)
     {
-        WriteWorksheet(writer, ["Warning ID", "Code", "Severity", "Affected task", "Explanation", "Source reference"],
+        WriteWorksheet(writer, ["Warning ID", "Severity", "Code", "Message", "Affected Item IDs", "Source Reference"],
             model.Warnings.Select(warning => new[]
             {
                 Cell.Text(warning.Id),
-                Cell.Text(warning.Code),
                 Cell.Text(warning.Severity.ToString()),
-                Cell.Text(string.Join(",", warning.AffectedIds)),
+                Cell.Text(warning.Code),
                 Cell.Text(warning.Message),
+                Cell.Text(string.Join(",", warning.AffectedIds)),
                 Cell.Text(string.Join(";", warning.SourceReferences.Select(FormatSourceReference)))
             }));
     }

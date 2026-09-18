@@ -122,6 +122,7 @@ internal static class Program
         ,("SharedManagementViewsPreservePlanningExecutionAndRiskSemantics", ManagementProjectionTests.SharedManagementViewsPreservePlanningExecutionAndRiskSemantics)
         ,("CarioMappingPreservesManyToManyAssignmentsAndLeavesUnresolvedIdentityBlank", CarioMappingTests.CarioMappingPreservesManyToManyAssignmentsAndLeavesUnresolvedIdentityBlank)
         ,("CarioMappingConfigurationMapsRoleAndTaskMetadataWithoutChangingBaselineDates", CarioMappingTests.CarioMappingConfigurationMapsRoleAndTaskMetadataWithoutChangingBaselineDates)
+        ,("CarioXlsxUsesTheApprovedContractHeadersAndRecordSemantics", CarioXlsxTests.CarioXlsxUsesTheApprovedContractHeadersAndRecordSemantics)
         ,("CarioXlsxUsesSixExactSheetsAndBclPackageParts", CarioXlsxTests.CarioXlsxUsesSixExactSheetsAndBclPackageParts)
         ,("CarioXlsxNeverReplacesBaselineDatesWithActualDates", CarioXlsxTests.CarioXlsxNeverReplacesBaselineDatesWithActualDates)
         ,("CarioXlsxExportIsDeterministicForTheSameModel", CarioXlsxTests.CarioXlsxExportIsDeterministicForTheSameModel)

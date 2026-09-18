@@ -21,7 +21,10 @@ internal static class ApplicationTests
         TestAssert.Equal(result.Project.Project.Id, result.Views.Wbs.Root.Id, "Application WBS must use the canonical project identity.");
         TestAssert.Equal(53, result.Views.Gantt.Items.Count, "Application Gantt must use the shared management projection.");
         TestAssert.Equal(5, result.Views.Kanban.Columns.Count, "Application Kanban must expose the five supported execution status columns.");
-        TestAssert.True(result.Cario.Tasks.Count == 53 && result.Cario.Assignments.Count == 53, "Application CARIO model must preserve task and assignment counts.");
+        TestAssert.Equal(60, result.Cario.Tasks.Count, "Application CARIO model must preserve 53 cards plus 7 milestone/decision task rows.");
+        TestAssert.Equal(53, result.Cario.Tasks.Count(task => task.WorkItemType == "DeliveryCard"), "Application CARIO model must preserve all executable delivery cards.");
+        TestAssert.Equal(7, result.Cario.Tasks.Count(task => task.WorkItemType is "Decision" or "Milestone"), "Application CARIO model must preserve all milestone/decision rows.");
+        TestAssert.Equal(53, result.Cario.Assignments.Count, "Application CARIO model must preserve every assignment row.");
         TestAssert.True(result.SemanticDigest.Length == 64, "Application result must expose a semantic SHA-256 digest.");
     }
 
