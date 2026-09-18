@@ -98,6 +98,10 @@ internal static class CarioXlsxTests
 
         var warningSheetXml = LoadXml(archive, "xl/worksheets/sheet6.xml");
         TestAssert.Contains("CARIO_MAPPING_UNRESOLVED", warningSheetXml, "Mapping warnings must be exported to sheet 06.");
+
+        var dependencySheetXml = LoadXml(archive, "xl/worksheets/sheet4.xml");
+        TestAssert.Contains("FINISH_TO_START", dependencySheetXml, "Dependency types must use stable contract enum codes.");
+        TestAssert.Contains("INVALID_SOURCE_EVIDENCE", dependencySheetXml, "Invalid source dependency state must remain explicit in the workbook.");
     }
 
     public static void CarioXlsxNeverReplacesBaselineDatesWithActualDates()

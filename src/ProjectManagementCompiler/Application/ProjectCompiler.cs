@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ProjectManagementCompiler.Domain;
 using ProjectManagementCompiler.Extraction;
 using ProjectManagementCompiler.Management;
@@ -93,7 +94,7 @@ public sealed class ProjectCompiler : IProjectCompiler
         {
             throw;
         }
-        catch (InvalidDataException exception)
+        catch (Exception exception) when (exception is InvalidDataException or JsonException or NotSupportedException)
         {
             throw new ProjectCompilationException(
                 "reopen",

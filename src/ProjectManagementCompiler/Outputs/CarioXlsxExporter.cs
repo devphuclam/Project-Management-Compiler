@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 
 namespace ProjectManagementCompiler.Outputs;
@@ -195,9 +196,9 @@ public sealed class CarioXlsxExporter
             {
                 Cell.Text(dependency.SubjectId),
                 Cell.Text(dependency.PredecessorId),
-                Cell.Text(dependency.DependencyType.ToString()),
+                Cell.Text(FormatEnum(dependency.DependencyType)),
                 Cell.Text(dependency.AnalysisEligible ? "TRUE" : "FALSE"),
-                Cell.Text(dependency.ValidationState.ToString()),
+                Cell.Text(FormatEnum(dependency.ValidationState)),
                 Cell.Text(dependency.SourceReference)
             }));
     }
@@ -209,7 +210,7 @@ public sealed class CarioXlsxExporter
             {
                 Cell.Text(info.Key),
                 Cell.Text(info.Value),
-                Cell.Text(info.DataState.ToString()),
+                Cell.Text(FormatEnum(info.DataState)),
                 Cell.Text(info.SourceReference)
             }));
     }
@@ -296,6 +297,10 @@ public sealed class CarioXlsxExporter
     private static string FormatDate(DateOnly? date) => date is null || date == DateOnly.MinValue
         ? string.Empty
         : date.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private static string FormatEnum<TEnum>(TEnum value)
+        where TEnum : struct, Enum =>
+        JsonNamingPolicy.SnakeCaseUpper.ConvertName(value.ToString()) ?? value.ToString().ToUpperInvariant();
 
     private static string FormatSourceReference(Domain.SourceReference reference)
     {

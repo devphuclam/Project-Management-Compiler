@@ -109,6 +109,11 @@ public static class CanonicalProjectValidator
             Add(diagnostics, "INVALID_BASELINE_STATUS", "Baseline requires an explicit status.", project.Baseline.Id);
         }
 
+        if (!Enum.IsDefined(project.Baseline.ValidationState))
+        {
+            Add(diagnostics, "INVALID_BASELINE_VALIDATION_STATE", "Baseline validationState is unsupported.", project.Baseline.Id);
+        }
+
         var documentIds = project.Sources
             .SelectMany(source => source.Documents)
             .Where(document => !string.IsNullOrWhiteSpace(document.Id))
@@ -222,6 +227,11 @@ public static class CanonicalProjectValidator
                 Add(diagnostics, "INVALID_CARD_PARENT", $"Delivery card '{card.Id}' parent must be its work package.", card.Id);
             }
 
+            if (card.State is not null && !Enum.IsDefined(card.State.Value))
+            {
+                Add(diagnostics, "INVALID_CARD_STATE", $"Delivery card '{card.Id}' has an unsupported execution state.", card.Id);
+            }
+
             ValidatePlannedEntityDatesAndMeasures(diagnostics, card, "delivery card");
         }
 
@@ -237,6 +247,16 @@ public static class CanonicalProjectValidator
         var milestoneIds = ValidateIds(project.Milestones, milestone => milestone.Id, "INVALID_MILESTONE_ID", "DUPLICATE_MILESTONE_ID", diagnostics);
         foreach (var milestone in project.Milestones)
         {
+            if (!Enum.IsDefined(milestone.Kind))
+            {
+                Add(diagnostics, "INVALID_MILESTONE_KIND", $"Milestone '{milestone.Id}' has an unsupported kind.", milestone.Id);
+            }
+
+            if (milestone.State is not null && !Enum.IsDefined(milestone.State.Value))
+            {
+                Add(diagnostics, "INVALID_MILESTONE_STATE", $"Milestone '{milestone.Id}' has an unsupported execution state.", milestone.Id);
+            }
+
             if (milestone.ParentId is not null
                 && !phaseIds.Contains(milestone.ParentId)
                 && !workPackageIds.Contains(milestone.ParentId))
@@ -420,6 +440,11 @@ public static class CanonicalProjectValidator
             if (!Enum.IsDefined(dependency.DependencyType))
             {
                 Add(diagnostics, "INVALID_DEPENDENCY_TYPE", $"Dependency '{dependency.SubjectId}' has an unsupported dependency type.", dependency.SubjectId);
+            }
+
+            if (!Enum.IsDefined(dependency.ValidationState))
+            {
+                Add(diagnostics, "INVALID_DEPENDENCY_VALIDATION_STATE", $"Dependency '{dependency.SubjectId}' has an unsupported validation state.", dependency.SubjectId);
             }
         }
     }

@@ -33,6 +33,7 @@ public sealed record CompilationResult
     public string SemanticDigest { get; init; } = string.Empty;
     public IReadOnlyList<ImportWarning> Warnings => Project.Warnings
         .Concat(Analysis.Diagnostics)
+        .Concat(Cario.Warnings)
         .GroupBy(warning => warning.Id, StringComparer.OrdinalIgnoreCase)
         .Select(group => group.First())
         .OrderBy(warning => warning.Id, StringComparer.Ordinal)

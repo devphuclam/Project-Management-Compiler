@@ -127,6 +127,21 @@ internal static class CanonicalValidationTests
                 AnalysisEligible = true
             }]
         }, "INVALID_DEPENDENCY_ANALYSIS_STATE");
+
+        AssertHasCode(project with
+        {
+            Dependencies = [project.Dependencies[0] with { ValidationState = (ValidationState)999 }]
+        }, "INVALID_DEPENDENCY_VALIDATION_STATE");
+
+        AssertHasCode(project with
+        {
+            DeliveryCards = [project.DeliveryCards[0] with { State = (ExecutionState)999 }]
+        }, "INVALID_CARD_STATE");
+
+        AssertHasCode(project with
+        {
+            Milestones = [project.Milestones[0] with { Kind = (MilestoneKind)999 }]
+        }, "INVALID_MILESTONE_KIND");
     }
 
     public static void CanonicalValidatorRejectsDuplicateExecutableAndInvalidOverlayRecords()

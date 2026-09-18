@@ -64,6 +64,20 @@ app.MapPost("/api/compile", async (
             });
         }
 
+        if (request.MaxDocumentBytes <= 0
+            || request.MaxDocumentBytes > 2 * 1024 * 1024
+            || request.MaxTotalDocumentBytes <= 0
+            || request.MaxTotalDocumentBytes > MaximumRequestBodyBytes
+            || request.MaxDocumentBytes > request.MaxTotalDocumentBytes)
+        {
+            return Results.BadRequest(new ApiErrorResponse
+            {
+                Code = "INVALID_SOURCE_LIMITS",
+                Message = "Source limits must be positive, bounded to 2 MiB per file and 8 MiB total, and the per-file limit cannot exceed the total limit.",
+                Phase = "capture"
+            });
+        }
+
         var result = await compiler.CompileAsync(new CompilationRequest
         {
             SourcePath = Path.GetFullPath(request.SourcePath),

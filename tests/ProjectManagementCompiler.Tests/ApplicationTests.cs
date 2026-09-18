@@ -25,6 +25,7 @@ internal static class ApplicationTests
         TestAssert.Equal(53, result.Cario.Tasks.Count(task => task.WorkItemType == "DeliveryCard"), "Application CARIO model must preserve all executable delivery cards.");
         TestAssert.Equal(7, result.Cario.Tasks.Count(task => task.WorkItemType is "Decision" or "Milestone"), "Application CARIO model must preserve all milestone/decision rows.");
         TestAssert.Equal(53, result.Cario.Assignments.Count, "Application CARIO model must preserve every assignment row.");
+        TestAssert.True(result.Warnings.Any(warning => warning.Code == "CARIO_MAPPING_UNRESOLVED"), "Unresolved CARIO mappings must be visible in the application warning stream.");
         TestAssert.True(result.SemanticDigest.Length == 64, "Application result must expose a semantic SHA-256 digest.");
     }
 
@@ -75,6 +76,24 @@ internal static class ApplicationTests
         TestAssert.False(result.Accepted, "Application must reject an in-progress update without an actual start.");
         TestAssert.Equal(0, result.Result.Project.ExecutionOverlay.Records.Count, "Rejected execution updates must not mutate the result.");
         TestAssert.True(result.Diagnostics.Any(diagnostic => diagnostic.Code == "INVALID_EXECUTION_UPDATE"), "Rejected updates must return structured diagnostics.");
+    }
+
+    public static void CompilerRejectsMalformedCanonicalJsonWithStructuredReopenError()
+    {
+        var compiler = new ProjectCompiler();
+        var threw = false;
+        try
+        {
+            compiler.Reopen("{ not valid canonical json");
+        }
+        catch (ProjectCompilationException exception)
+        {
+            threw = true;
+            TestAssert.Equal("reopen", exception.Phase, "Malformed canonical JSON must identify the reopen phase.");
+            TestAssert.True(exception.Diagnostics.Any(diagnostic => diagnostic.Code == "INVALID_CANONICAL_JSON"), "Malformed canonical JSON must return a structured diagnostic.");
+        }
+
+        TestAssert.True(threw, "Malformed canonical JSON must not escape as an unstructured parser exception.");
     }
 
     private static string FixturePath() =>

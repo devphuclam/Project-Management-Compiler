@@ -129,6 +129,7 @@ internal static class Program
         ,("CompilerComposesCaptureCanonicalAnalysisViewsAndCarioExport", ApplicationTests.CompilerComposesCaptureCanonicalAnalysisViewsAndCarioExport)
         ,("CompilerExecutionUpdateSaveAndReopenPreserveBaselineAndRecalculateAlerts", ApplicationTests.CompilerExecutionUpdateSaveAndReopenPreserveBaselineAndRecalculateAlerts)
         ,("CompilerRejectsInvalidExecutionUpdateWithoutMutatingResult", ApplicationTests.CompilerRejectsInvalidExecutionUpdateWithoutMutatingResult)
+        ,("CompilerRejectsMalformedCanonicalJsonWithStructuredReopenError", ApplicationTests.CompilerRejectsMalformedCanonicalJsonWithStructuredReopenError)
         ,("CpmUsesNormalizedDurationAndExcludesInvalidSourceEdges", CpmTests.CpmUsesNormalizedDurationAndExcludesInvalidSourceEdges)
         ,("CpmDetectsCyclesAndLeavesBaselineUntouched", CpmTests.CpmDetectsCyclesAndLeavesBaselineUntouched)
         ,("CpmRejectsUnsupportedEligibleEdges", CpmTests.CpmRejectsUnsupportedEligibleEdges)

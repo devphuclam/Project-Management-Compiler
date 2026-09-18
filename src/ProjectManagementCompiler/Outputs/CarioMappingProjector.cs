@@ -290,6 +290,10 @@ public sealed class CarioMappingProjector
     private static IReadOnlyList<CarioProjectInfoRow> BuildProjectInfo(CanonicalProject project)
     {
         var sourceReference = FormatSourceReferences(project.Provenance);
+        var resolvedRefs = string.Join(",", project.Sources
+            .Select(source => source.ResolvedRef)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal));
         var analysisReference = FormatSourceReferences(project.Provenance);
         var analysis = project.Analysis;
         return
@@ -306,7 +310,7 @@ public sealed class CarioMappingProjector
             Info("Reserve hours", FormatDecimal(project.Baseline.ReserveHours ?? project.Reserve.InitialHours), project.Baseline.ReserveHours is not null || project.Reserve.InitialHours is not null ? DataState.Known : DataState.Unknown, sourceReference),
             Info("WIP limit", project.Policies.WorkInProgressLimit?.ToString(), project.Policies.WorkInProgressLimit is null ? DataState.Unknown : DataState.Known, sourceReference),
             Info("Source IDs", string.Join(",", project.Project.SourceIds.OrderBy(id => id, StringComparer.Ordinal)), project.Project.SourceIds.Count == 0 ? DataState.Unknown : DataState.Known, sourceReference),
-            Info("Source ref", sourceReference, string.IsNullOrWhiteSpace(sourceReference) ? DataState.Unknown : DataState.Known, sourceReference),
+            Info("Source ref", string.IsNullOrWhiteSpace(resolvedRefs) ? null : resolvedRefs, string.IsNullOrWhiteSpace(resolvedRefs) ? DataState.Unknown : DataState.Known, sourceReference),
             Info("CPM state", analysis?.CpmState.ToString().ToUpperInvariant(), analysis is null ? DataState.Unknown : DataState.Calculated, analysisReference),
             Info("Forecast state", analysis?.ForecastState.ToString().ToUpperInvariant(), analysis is null ? DataState.Unknown : analysis.ForecastState, analysisReference),
             Info("Export note", "Human-assisted CARIO fill file; native CARIO import is not claimed.", DataState.Known, sourceReference)
