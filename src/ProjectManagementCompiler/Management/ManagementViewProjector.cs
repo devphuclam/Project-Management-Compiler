@@ -113,11 +113,11 @@ public sealed class ManagementViewProjector
 {
     private static readonly (string Id, string Label, ExecutionState? State)[] ColumnDefinitions =
     [
-        ("NOT_STARTED", "Not started", ExecutionState.NotStarted),
-        ("IN_PROGRESS", "In progress", ExecutionState.InProgress),
-        ("COMPLETED", "Completed", ExecutionState.Completed),
-        ("SUSPENDED", "Suspended", ExecutionState.Suspended),
-        ("CANCELLED", "Cancelled", ExecutionState.Cancelled),
+        ("NOT_STARTED", "Chưa bắt đầu", ExecutionState.NotStarted),
+        ("IN_PROGRESS", "Đang thực hiện", ExecutionState.InProgress),
+        ("COMPLETED", "Hoàn thành", ExecutionState.Completed),
+        ("SUSPENDED", "Tạm ngưng", ExecutionState.Suspended),
+        ("CANCELLED", "Hủy", ExecutionState.Cancelled),
         ("UNKNOWN", "Unknown", null)
     ];
 

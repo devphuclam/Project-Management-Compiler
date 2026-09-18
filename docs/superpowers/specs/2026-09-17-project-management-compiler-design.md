@@ -515,10 +515,12 @@ The Kanban view groups the same delivery cards by the source-compatible states:
 - `Hủy`.
 
 It applies the source WIP policy as project policy metadata (`maxActiveItems: 1`)
-for IDEAEngineering. It derives `Quá hạn` from date and state; it does not add a
-manual overdue column to the canonical state machine. The overlay may change the
-effective authored state for management views, but `OVERDUE` and `AT_RISK` are
-never persisted as states.
+for IDEAEngineering. It derives `Quá hạn` for active `IN_PROGRESS` cards from
+date and state; a `NOT_STARTED` card past its planned start derives
+`START_DELAY` instead of being double-counted as active overdue. It does not
+add a manual overdue column to the canonical state machine. The overlay may
+change the effective authored state for management views, but `OVERDUE` and
+`AT_RISK` are never persisted as states.
 
 ### Critical path
 

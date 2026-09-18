@@ -108,9 +108,10 @@ view contains the same IDs, hierarchy, dates, statuses, and diagnostic states.
 3. **Given** the imported CARIO-compatible state policy, **when** the user
    opens Kanban, **then** cards are grouped as `Chưa bắt đầu`, `Đang thực hiện`,
    `Hoàn thành`, `Tạm ngưng`, or `Hủy`, with WIP=1 shown as project policy.
-4. **Given** a fixed as-of date after a card deadline, **when** the card is not
-   completed or cancelled, **then** the UI derives `Quá hạn` without changing
-   the authored execution state.
+4. **Given** a fixed as-of date after a card deadline, **when** the card is
+   `IN_PROGRESS`, **then** the UI derives `Quá hạn` without changing the
+   authored execution state. A `NOT_STARTED` card past its planned start (or
+   finish) derives `START_DELAY` and is not double-counted as active overdue.
 5. **Given** planning-only input, **when** the user opens Dashboard, **then**
    actual work, remaining estimate, completion evidence, and forecast are shown
    as unknown rather than inferred from commits or elapsed time.
