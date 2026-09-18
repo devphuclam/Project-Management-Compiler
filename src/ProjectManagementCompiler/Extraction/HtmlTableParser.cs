@@ -1,15 +1,11 @@
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
 using ProjectManagementCompiler.Domain;
 
 namespace ProjectManagementCompiler.Extraction;
 
 public static class HtmlTableParser
 {
-    private static readonly Regex HeadingPattern = new(@"<h[1-6][^>]*>(?<text>.*?)</h[1-6]>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-    private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled | RegexOptions.Singleline);
-
     public static PlanningParseResult Parse(PlanningDocument document)
     {
         if (document.Source.Format != SourceDocumentFormat.Html)
@@ -29,10 +25,7 @@ public static class HtmlTableParser
         }
 
         var content = document.Source.Content;
-        var headings = HeadingPattern.Matches(content)
-            .Cast<Match>()
-            .Select(match => (Position: match.Index, Text: Text(match.Groups["text"].Value)))
-            .ToArray();
+        var headings = ExtractHeadings(content);
         var diagnostics = new List<ImportWarning>();
         var tables = new List<HtmlTableState>();
         var stack = new Stack<HtmlOpenTag>();
@@ -506,6 +499,78 @@ public static class HtmlTableParser
 
     private static int Line(string content, int position) => content[..position].Count(character => character == '\n') + 1;
 
+    private static IReadOnlyList<(int Position, string Text)> ExtractHeadings(string content)
+    {
+        var headings = new List<(int Position, string Text)>();
+        var activeLevel = 0;
+        var activePosition = -1;
+        var activeText = new StringBuilder();
+
+        foreach (var token in Tokenize(content))
+        {
+            if (token.Kind == HtmlTokenKind.Text)
+            {
+                if (activeLevel != 0)
+                {
+                    activeText.Append(token.RawText);
+                }
+
+                continue;
+            }
+
+            if (token.Kind == HtmlTokenKind.GenericTag && TryParseHeadingTag(token.RawText, out var level, out var isClosing))
+            {
+                if (!isClosing)
+                {
+                    activeLevel = level;
+                    activePosition = token.Position;
+                    activeText.Clear();
+                }
+                else if (activeLevel == level)
+                {
+                    headings.Add((activePosition, Text(activeText.ToString())));
+                    activeLevel = 0;
+                    activePosition = -1;
+                    activeText.Clear();
+                }
+
+                continue;
+            }
+
+            if (activeLevel != 0)
+            {
+                activeText.Append(token.RawText);
+            }
+        }
+
+        return headings;
+    }
+
+    private static bool TryParseHeadingTag(string raw, out int level, out bool isClosing)
+    {
+        level = 0;
+        isClosing = false;
+        var index = 1;
+        if (index < raw.Length && raw[index] == '/')
+        {
+            isClosing = true;
+            index++;
+        }
+
+        while (index < raw.Length && char.IsWhiteSpace(raw[index]))
+        {
+            index++;
+        }
+
+        if (index + 1 >= raw.Length || (raw[index] is not ('h' or 'H')) || raw[index + 1] is < '1' or > '6')
+        {
+            return false;
+        }
+
+        level = raw[index + 1] - '0';
+        return index + 2 >= raw.Length || char.IsWhiteSpace(raw[index + 2]) || raw[index + 2] is '/' or '>';
+    }
+
     private static IEnumerable<HtmlToken> Tokenize(string content)
     {
         var position = 0;
@@ -516,7 +581,7 @@ public static class HtmlTableParser
             {
                 if (position < content.Length)
                 {
-                    yield return HtmlToken.Text(content[position..]);
+                    yield return HtmlToken.Text(content[position..], position);
                 }
 
                 yield break;
@@ -524,7 +589,7 @@ public static class HtmlTableParser
 
             if (open > position)
             {
-                yield return HtmlToken.Text(content[position..open]);
+                yield return HtmlToken.Text(content[position..open], position);
             }
 
             if (content.AsSpan(open).StartsWith("<!--", StringComparison.Ordinal))
@@ -537,7 +602,7 @@ public static class HtmlTableParser
             var close = FindTagEnd(content, open + 1);
             if (close < 0)
             {
-                yield return HtmlToken.Text(content[open..]);
+                yield return HtmlToken.Text(content[open..], open);
                 yield break;
             }
 
@@ -548,7 +613,7 @@ public static class HtmlTableParser
             }
             else
             {
-                yield return HtmlToken.Generic(raw);
+                yield return HtmlToken.Generic(raw, open);
             }
 
             position = close + 1;
@@ -759,7 +824,19 @@ public static class HtmlTableParser
 
     private static bool IsAttributeNameCharacter(char character) => char.IsLetterOrDigit(character) || character is ':' or '_' or '-' or '.';
 
-    private static string Text(string value) => WebUtility.HtmlDecode(TagPattern.Replace(value, string.Empty)).Trim();
+    private static string Text(string value)
+    {
+        var text = new StringBuilder();
+        foreach (var token in Tokenize(value))
+        {
+            if (token.Kind == HtmlTokenKind.Text)
+            {
+                text.Append(token.RawText);
+            }
+        }
+
+        return WebUtility.HtmlDecode(text.ToString()).Trim();
+    }
 
     private enum HtmlTokenKind
     {
@@ -777,11 +854,11 @@ public static class HtmlTableParser
         DataCell
     }
 
-    private sealed record HtmlToken(HtmlTokenKind Kind, string RawText, HtmlTag? Tag)
+    private sealed record HtmlToken(HtmlTokenKind Kind, string RawText, HtmlTag? Tag, int Position)
     {
-        public static HtmlToken Text(string text) => new(HtmlTokenKind.Text, text, null);
-        public static HtmlToken Generic(string text) => new(HtmlTokenKind.GenericTag, text, null);
-        public static HtmlToken Relevant(HtmlTag tag) => new(HtmlTokenKind.RelevantTag, string.Empty, tag);
+        public static HtmlToken Text(string text, int position) => new(HtmlTokenKind.Text, text, null, position);
+        public static HtmlToken Generic(string text, int position) => new(HtmlTokenKind.GenericTag, text, null, position);
+        public static HtmlToken Relevant(HtmlTag tag) => new(HtmlTokenKind.RelevantTag, tag.Raw, tag, tag.Position);
     }
 
     private sealed record HtmlTag

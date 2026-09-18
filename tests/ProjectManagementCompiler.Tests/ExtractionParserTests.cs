@@ -40,6 +40,32 @@ internal static class ExtractionParserTests
         TestAssert.Equal(2, result.Rows[1].RowIndex, "HTML row order should be stable.");
     }
 
+    public static void HtmlParserPreservesCellTextWhenNestedTagAttributesContainGreaterThan()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr><td>A01</td><td><span title=\"1 > 0\">01</span></td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "A nested tag with a greater-than sign in a quoted attribute must not invalidate the row.");
+        TestAssert.Equal("01", result.Rows[0].Cells["Name"], "Cell text must exclude the complete nested tag, including quoted attribute contents.");
+    }
+
+    public static void HtmlParserExtractsHeadingWhenAttributesContainGreaterThan()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1 title=\"a > b\">Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr><td>A01</td><td>First</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "A heading with a greater-than sign in a quoted attribute must still establish the table section.");
+        TestAssert.Equal("Gantt", result.Rows[0].Section, "The section must be extracted from the quote-aware heading boundary.");
+    }
+
     public static void HtmlParserRejectsDuplicateDataAttributesWithoutThrowing()
     {
         var document = Document(

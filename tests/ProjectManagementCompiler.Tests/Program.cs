@@ -38,6 +38,8 @@ internal static class Program
         ("LocalFixtureCaptureRemainsAvailableThroughAdapter", HttpsCapabilityTests.LocalFixtureCaptureRemainsAvailableThroughAdapter)
         ,("MarkdownParserPreservesVietnameseAndStableSourceMetadata", ExtractionParserTests.MarkdownParserPreservesVietnameseAndStableSourceMetadata)
         ,("HtmlParserReadsTablesAndDataAttributesInStableOrder", ExtractionParserTests.HtmlParserReadsTablesAndDataAttributesInStableOrder)
+        ,("HtmlParserPreservesCellTextWhenNestedTagAttributesContainGreaterThan", ExtractionParserTests.HtmlParserPreservesCellTextWhenNestedTagAttributesContainGreaterThan)
+        ,("HtmlParserExtractsHeadingWhenAttributesContainGreaterThan", ExtractionParserTests.HtmlParserExtractsHeadingWhenAttributesContainGreaterThan)
         ,("HtmlParserRejectsDuplicateDataAttributesWithoutThrowing", ExtractionParserTests.HtmlParserRejectsDuplicateDataAttributesWithoutThrowing)
         ,("HtmlParserParsesQuotedAndUnquotedDataAttributesAndRejectsUnquotedDuplicates", ExtractionParserTests.HtmlParserParsesQuotedAndUnquotedDataAttributesAndRejectsUnquotedDuplicates)
         ,("HtmlParserIgnoresDataAttributeTextInsideOtherAttributeValues", ExtractionParserTests.HtmlParserIgnoresDataAttributeTextInsideOtherAttributeValues)
