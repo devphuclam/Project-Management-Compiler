@@ -100,6 +100,12 @@ internal static class Program
         ,("CanonicalJsonRoundTripsOverlayWithoutChangingBaseline", CanonicalJsonTests.CanonicalJsonRoundTripsOverlayWithoutChangingBaseline)
         ,("Schema10JsonWithoutOverlayUsesEmptyOverlay", CanonicalJsonTests.Schema10JsonWithoutOverlayUsesEmptyOverlay)
         ,("SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay", CanonicalJsonTests.SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay)
+        ,("StatusAnalysisUsesWorkingCalendarForLateStart", AnalysisTests.StatusAnalysisUsesWorkingCalendarForLateStart)
+        ,("StatusAnalysisDerivesOverdueWithoutChangingExecutionState", AnalysisTests.StatusAnalysisDerivesOverdueWithoutChangingExecutionState)
+        ,("StatusAnalysisDerivesCompletedOnTimeAndLateSeparately", AnalysisTests.StatusAnalysisDerivesCompletedOnTimeAndLateSeparately)
+        ,("CancelledIsNotOverdueAndSuspendedIsExplicit", AnalysisTests.CancelledIsNotOverdueAndSuspendedIsExplicit)
+        ,("LatePredecessorMarksUnstartedSuccessorAtRiskConservatively", AnalysisTests.LatePredecessorMarksUnstartedSuccessorAtRiskConservatively)
+        ,("InvalidDependencyEvidenceCannotFabricateDownstreamRisk", AnalysisTests.InvalidDependencyEvidenceCannotFabricateDownstreamRisk)
     ];
 
     public static int Main()
