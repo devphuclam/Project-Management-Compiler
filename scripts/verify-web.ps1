@@ -8,6 +8,7 @@ $fixture = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'tests\fixtures\ide
 $programPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\Program.cs'))
 $appJsPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\app.js'))
 $indexHtmlPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\index.html'))
+$stylesCssPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\styles.css'))
 
 if (-not (Test-Path -LiteralPath $appDll -PathType Leaf)) {
     throw "Built application was not found at '$appDll'."
@@ -220,6 +221,7 @@ try {
 
     $appJs = Get-Content -LiteralPath $appJsPath -Raw
     $indexHtml = Get-Content -LiteralPath $indexHtmlPath -Raw
+    $stylesCss = Get-Content -LiteralPath $stylesCssPath -Raw
     Assert-Condition (-not $appJs.Contains('innerHTML', [StringComparison]::OrdinalIgnoreCase)) 'Browser UI must not use unsafe innerHTML rendering.'
     Assert-Condition ($appJs.Contains('gantt-timeline', [StringComparison]::Ordinal)) 'Gantt renderer must expose a split timeline surface.'
     Assert-Condition ($appJs.Contains('gantt-as-of-marker', [StringComparison]::Ordinal)) 'Gantt renderer must expose an explicit as-of marker.'
@@ -247,6 +249,13 @@ try {
     Assert-Condition ($appJs.Contains('relativeFile', [StringComparison]::Ordinal) -and $appJs.Contains('documentId', [StringComparison]::Ordinal)) 'Browser source review must expose document ID and relative file metadata.'
     Assert-Condition (-not $appJs.Contains('source.Content', [StringComparison]::OrdinalIgnoreCase)) 'Browser source review must not render captured source content.'
     Assert-Condition (-not $appJs.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Browser source review must not embed an absolute source path.'
+    Assert-Condition ($appJs.Contains('project-control-center', [StringComparison]::Ordinal)) 'Browser UI must expose a project control center summary.'
+    Assert-Condition ($appJs.Contains('Needs attention', [StringComparison]::Ordinal)) 'Browser UI must expose an actionable attention queue.'
+    Assert-Condition ($appJs.Contains('Next milestone', [StringComparison]::Ordinal)) 'Browser UI must expose the next milestone readout.'
+    Assert-Condition ($appJs.Contains('attentionOnly', [StringComparison]::Ordinal)) 'Gantt state must support a focused attention mode.'
+    Assert-Condition ($appJs.Contains('Select a row to inspect', [StringComparison]::Ordinal)) 'Gantt detail flow must explain how to inspect a row.'
+    Assert-Condition ($indexHtml.Contains('Project control center', [StringComparison]::OrdinalIgnoreCase)) 'Browser shell must label the project control center.'
+    Assert-Condition ($stylesCss.Contains('.summary-hero', [StringComparison]::Ordinal) -and $stylesCss.Contains('.attention-queue', [StringComparison]::Ordinal)) 'Browser UI must style the control center and attention queue.'
     $program = Get-Content -LiteralPath $programPath -Raw
     Assert-Condition ($program.Contains('http://127.0.0.1:5050', [StringComparison]::Ordinal)) 'Program must bind to the loopback address.'
     Assert-Condition (-not $program.Contains('0.0.0.0', [StringComparison]::Ordinal)) 'Program must not bind to all interfaces.'

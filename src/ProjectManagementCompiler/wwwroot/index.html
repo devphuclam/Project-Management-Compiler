@@ -8,9 +8,10 @@
 </head>
 <body>
   <header class="app-header">
-    <div>
-      <p class="eyebrow">LOCAL MVP1</p>
+    <div class="app-header-copy">
+      <p class="eyebrow">PROJECT CONTROL CENTER · LOCAL MVP1</p>
       <h1>Project Management Compiler</h1>
+      <p class="header-description">Turn planning evidence into a calm, decision-ready view of delivery.</p>
       <p id="connection-status" class="muted">Ready for a local source directory.</p>
     </div>
     <div class="header-actions">
@@ -24,8 +25,9 @@
     <section class="panel controls-panel">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">INPUT</p>
-          <h2>Analyze planning source</h2>
+          <p class="eyebrow">SOURCE INTAKE</p>
+          <h2>Start with the planning evidence</h2>
+          <p class="panel-subtitle">Choose a local source, set the reporting date, then move from signal to action.</p>
         </div>
         <span class="local-only">Loopback only</span>
       </div>
@@ -55,11 +57,11 @@
       <p id="error-message" class="error" role="alert" hidden></p>
     </section>
 
-    <section id="summary-panel" class="summary-grid" aria-live="polite">
+    <section id="summary-panel" class="summary-region" aria-label="Project control center" aria-live="polite">
       <div class="empty-state">No project loaded. Analyze a local planning source to begin.</div>
     </section>
 
-    <section class="panel">
+    <section class="panel views-panel">
       <nav id="view-tabs" class="tabs" aria-label="Project views">
         <button class="tab active" data-view="dashboard">Dashboard</button>
         <button class="tab" data-view="wbs">WBS</button>
@@ -74,7 +76,7 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel execution-panel">
       <div class="panel-heading">
         <div>
           <p class="eyebrow">EXECUTION OVERLAY</p>

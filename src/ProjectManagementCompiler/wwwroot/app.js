@@ -10,6 +10,7 @@
       expansionInitialized: false,
       phaseFilter: "ALL",
       executionFilter: "ALL",
+      attentionOnly: false,
       criticalOnly: false,
       overdueOnly: false,
       atRiskOnly: false,
@@ -59,6 +60,125 @@
     byId("connection-status").textContent = message;
   }
 
+  function currentSummary() {
+    if (!state.project || !state.views) return null;
+    return {
+      project: state.project.project,
+      baseline: state.project.baseline,
+      analysis: state.project.analysis,
+      views: state.views,
+      sources: state.sources,
+      warnings: state.warnings
+    };
+  }
+
+  function isAttentionAlert(alert) {
+    const code = String(alert && alert.alertCode || "").toUpperCase();
+    return code !== "COMPLETED_ON_TIME" && code !== "CANCELLED";
+  }
+
+  function attentionRows(summary) {
+    if (!summary || !summary.views || !summary.views.gantt) return [];
+    const items = new Map((summary.views.gantt.items || []).map(item => [String(item.workItemId), item]));
+    const alerts = ((summary.analysis && summary.analysis.alerts) || []).filter(isAttentionAlert);
+    const rows = alerts.map(alert => {
+      const item = items.get(String(alert.workItemId));
+      return {
+        id: alert.workItemId || "UNKNOWN",
+        name: item && item.name || alert.workItemId || "Unidentified work item",
+        code: alert.alertCode || "ATTENTION",
+        label: alert.message || alert.label || alert.reason || "Derived schedule condition"
+      };
+    });
+    if (rows.length) return rows;
+    items.forEach(item => {
+      (item.lanes || []).filter(lane => String(lane.lane || "").toUpperCase() === "ALERT" && isAttentionAlert(lane)).forEach(alert => {
+        rows.push({
+          id: item.workItemId || "UNKNOWN",
+          name: item.name || item.workItemId || "Unidentified work item",
+          code: alert.alertCode || "ATTENTION",
+          label: alert.message || alert.label || "Derived schedule condition"
+        });
+      });
+    });
+    return rows;
+  }
+
+  function renderAttentionQueue(summary, compact) {
+    const queue = node("section", null, "attention-queue" + (compact ? " attention-queue-compact" : ""));
+    const heading = node("div", null, "section-heading");
+    const headingCopy = node("div");
+    headingCopy.appendChild(node("p", "INTERVENTION", "eyebrow"));
+    headingCopy.appendChild(node("h3", "Needs attention"));
+    heading.appendChild(headingCopy);
+    const rows = attentionRows(summary);
+    const attentionCount = rows.length;
+    heading.appendChild(node("span", attentionCount ? attentionCount + " signals" : "Clear", "attention-count" + (attentionCount ? " is-active" : "")));
+    queue.appendChild(heading);
+
+    const visibleRows = rows.slice(0, compact ? 4 : 5);
+    if (!visibleRows.length) {
+      const clearState = node("div", null, "attention-empty");
+      clearState.appendChild(node("strong", "No active attention signals."));
+      clearState.appendChild(node("span", "The current baseline is not asking for intervention.", "muted"));
+      queue.appendChild(clearState);
+      return queue;
+    }
+    visibleRows.forEach(row => {
+      const item = node("button", null, "attention-item");
+      item.type = "button";
+      item.dataset.summaryView = "gantt";
+      item.dataset.summaryKey = typedKey("DeliveryCard", row.id);
+      item.dataset.summaryAttention = "true";
+      item.appendChild(node("span", row.code, "attention-code"));
+      const copy = node("span", null, "attention-copy");
+      copy.appendChild(node("strong", row.name));
+      copy.appendChild(node("span", row.label, "muted"));
+      item.appendChild(copy);
+      item.appendChild(node("span", "→", "attention-arrow"));
+      queue.appendChild(item);
+    });
+    if (rows.length > visibleRows.length) {
+      const more = node("button", "View all attention in Gantt", "text-action");
+      more.type = "button";
+      more.dataset.summaryView = "gantt";
+      more.dataset.summaryAttention = "true";
+      queue.appendChild(more);
+    }
+    return queue;
+  }
+
+  function updateActiveTab(view) {
+    document.querySelectorAll(".tab").forEach(item => item.classList.toggle("active", item.dataset.view === view));
+  }
+
+  function activateView(view) {
+    state.activeView = view;
+    updateActiveTab(view);
+    renderActiveView();
+  }
+
+  function openSummaryView(view, key, attention) {
+    if (view === "gantt") {
+      const projectId = state.project && state.project.project && state.project.project.id || state.project && state.project.id || "project";
+      prepareGanttState(projectId);
+      state.gantt.selectedRowKey = key || null;
+      state.gantt.attentionOnly = Boolean(attention);
+      if (key && state.views && state.views.wbs && state.views.gantt) {
+        const model = buildGanttRows(state.views.wbs.root, state.views.gantt, state.project && state.project.baseline || {});
+        let row = model.byKey.get(key) || null;
+        while (row) {
+          if (row.isSummary) state.gantt.expandedKeys.add(row.key);
+          row = row.parentKey ? model.byKey.get(row.parentKey) : null;
+        }
+      }
+    }
+    activateView(view);
+    const content = byId("view-content");
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (content) content.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  }
+
   function renderSummary(summary) {
     const panel = byId("summary-panel");
     clear(panel);
@@ -67,19 +187,82 @@
       return;
     }
     const dashboard = summary.views.dashboard;
-    const values = [
-      ["Project", summary.project.name || summary.project.id],
-      ["Cards", dashboard.totalCards],
-      ["Delivery cards completed", dashboard.completed + "/" + dashboard.totalCards],
-      ["In progress", dashboard.inProgress],
-      ["Overdue", dashboard.overdue],
-      ["At risk", dashboard.atRisk]
-    ];
-    values.forEach(([label, value]) => {
-      const card = node("div", null, "summary-card");
+    panel.className = "summary-region project-control-center";
+    const overdue = Number(dashboard.overdue || 0);
+    const atRisk = Number(dashboard.atRisk || 0);
+    const lateToStart = Number(dashboard.lateToStart || 0);
+    const attentionCount = overdue + atRisk + lateToStart;
+    const healthLabel = overdue ? "Intervention needed" : attentionCount ? "Watch closely" : "On track";
+    const healthClass = overdue ? "danger" : attentionCount ? "warning" : "success";
+    const completed = Number(dashboard.completed || 0);
+    const totalCards = Number(dashboard.totalCards || 0);
+    const progress = totalCards ? Math.round((completed / totalCards) * 100) : 0;
+    const milestones = (summary.views.gantt && summary.views.gantt.milestones || []).filter(item => parseDate(item.plannedDate) !== null).sort((left, right) => parseDate(left.plannedDate) - parseDate(right.plannedDate));
+    const asOfTimestamp = parseDate(summary.analysis && summary.analysis.asOfDate);
+    const nextMilestone = milestones.find(item => asOfTimestamp === null || parseDate(item.plannedDate) >= asOfTimestamp) || milestones[0] || null;
+
+    const hero = node("div", null, "summary-hero");
+    const heroCopy = node("div", null, "summary-hero-copy");
+    heroCopy.appendChild(node("p", "PROJECT CONTROL CENTER", "eyebrow"));
+    heroCopy.appendChild(node("h2", summary.project.name || summary.project.id));
+    heroCopy.appendChild(node("p", "Baseline " + (summary.baseline.version || summary.baseline.id || "UNKNOWN") + " · reporting as of " + formatDate(summary.analysis && summary.analysis.asOfDate), "summary-meta"));
+    hero.appendChild(heroCopy);
+    const heroMeta = node("div", null, "summary-hero-meta");
+    heroMeta.appendChild(node("span", healthLabel, "summary-status " + healthClass));
+    heroMeta.appendChild(node("span", attentionCount ? attentionCount + " attention signals" : "No active signals", "summary-signal-count"));
+    hero.appendChild(heroMeta);
+    panel.appendChild(hero);
+
+    const mainGrid = node("div", null, "summary-main-grid");
+    const progressCard = node("section", null, "summary-progress-card");
+    const progressHeading = node("div", null, "summary-card-heading");
+    progressHeading.appendChild(node("span", "DELIVERY PROGRESS", "eyebrow"));
+    progressHeading.appendChild(node("strong", progress + "%", "summary-progress-value"));
+    progressCard.appendChild(progressHeading);
+    const progressTrack = node("div", null, "summary-progress-track");
+    const progressFill = node("span");
+    progressFill.style.width = progress + "%";
+    progressTrack.appendChild(progressFill);
+    progressCard.appendChild(progressTrack);
+    progressCard.appendChild(node("p", completed + " of " + totalCards + " delivery cards completed."));
+    const progressStats = node("div", null, "summary-inline-stats");
+    progressStats.appendChild(node("span", String(dashboard.inProgress || 0) + " in progress"));
+    progressStats.appendChild(node("span", String(dashboard.notStarted || 0) + " not started"));
+    progressCard.appendChild(progressStats);
+    mainGrid.appendChild(progressCard);
+
+    const milestoneCard = node("section", null, "summary-milestone-card");
+    milestoneCard.appendChild(node("p", "UP NEXT", "eyebrow"));
+    milestoneCard.appendChild(node("h3", "Next milestone"));
+    milestoneCard.appendChild(node("strong", nextMilestone ? nextMilestone.name || nextMilestone.milestoneId : "No dated milestone"));
+    milestoneCard.appendChild(node("p", nextMilestone ? formatDate(nextMilestone.plannedDate) + " · " + (nextMilestone.milestoneId || "Milestone") : "Add a dated decision point to the baseline.", "muted"));
+    if (nextMilestone) {
+      const milestoneAction = node("button", "Open in Gantt →", "text-action");
+      milestoneAction.type = "button";
+      milestoneAction.dataset.summaryView = "gantt";
+      milestoneAction.dataset.summaryKey = typedKey("Milestone", nextMilestone.milestoneId);
+      milestoneCard.appendChild(milestoneAction);
+    }
+    mainGrid.appendChild(milestoneCard);
+    mainGrid.appendChild(renderAttentionQueue(summary, false));
+    panel.appendChild(mainGrid);
+
+    const metrics = node("div", null, "summary-metric-grid");
+    [["Cards", dashboard.totalCards, ""], ["Completed", dashboard.completed, "success"], ["In progress", dashboard.inProgress, "accent"], ["Overdue", dashboard.overdue, "danger"], ["At risk", dashboard.atRisk, "warning"], ["Late to start", dashboard.lateToStart, "warning"]].forEach(([label, value, tone]) => {
+      const card = node("div", null, "summary-card " + tone);
       card.appendChild(node("span", label, "label"));
       card.appendChild(node("strong", value, "value"));
-      panel.appendChild(card);
+      metrics.appendChild(card);
+    });
+    panel.appendChild(metrics);
+    const footer = node("div", null, "summary-footer");
+    footer.appendChild(node("span", (summary.baseline.planningStart || "UNKNOWN") + " → " + (summary.baseline.planningFinish || "UNKNOWN"), "muted"));
+    footer.appendChild(node("span", "Baseline remains immutable · execution is recorded separately", "muted"));
+    panel.appendChild(footer);
+    panel.addEventListener("click", event => {
+      const target = event.target.closest("[data-summary-view]");
+      if (!target) return;
+      openSummaryView(target.dataset.summaryView, target.dataset.summaryKey || null, target.dataset.summaryAttention === "true");
     });
   }
 
@@ -104,22 +287,38 @@
 
   function renderDashboard(view) {
     const fragment = document.createDocumentFragment();
+    const summary = currentSummary();
+    const heading = node("div", null, "dashboard-heading");
+    heading.appendChild(node("p", "OPERATING PULSE", "eyebrow"));
+    heading.appendChild(node("h3", "Delivery pulse"));
+    heading.appendChild(node("p", "A compact read on progress, schedule pressure, and the decisions that need a human next.", "muted"));
+    fragment.appendChild(heading);
     const metrics = [
-      ["Completed", view.completed], ["In progress", view.inProgress], ["Not started", view.notStarted],
-      ["Suspended", view.suspended], ["Cancelled", view.cancelled], ["Late to start", view.lateToStart],
-      ["Overdue", view.overdue], ["At risk", view.atRisk], ["Completed late", view.completedLate],
-      ["Delivery cards completed", view.completed + "/" + view.totalCards],
-      ["Baseline finish", view.baselineFinish || "UNKNOWN"], ["CPM finish", view.cpmFinish || "UNKNOWN"],
-      ["Forecast finish", view.forecastFinish || "UNKNOWN"]
+      ["Completed", view.completed, "success"], ["In progress", view.inProgress, "accent"], ["Not started", view.notStarted, ""],
+      ["Late to start", view.lateToStart, "warning"], ["Overdue", view.overdue, "danger"], ["At risk", view.atRisk, "warning"],
+      ["Completed late", view.completedLate, "danger"], ["Delivery cards completed", view.completed + "/" + view.totalCards, "accent"]
     ];
     const grid = node("div", null, "metric-grid");
-    metrics.forEach(([label, value]) => {
-      const metric = node("div", null, "metric");
+    metrics.forEach(([label, value, tone]) => {
+      const metric = node("div", null, "metric " + tone);
       metric.appendChild(node("strong", value));
       metric.appendChild(node("span", label));
       grid.appendChild(metric);
     });
     fragment.appendChild(grid);
+    const dashboardGrid = node("div", null, "dashboard-grid");
+    const schedule = node("section", null, "dashboard-card");
+    schedule.appendChild(node("p", "SCHEDULE READOUT", "eyebrow"));
+    schedule.appendChild(node("h3", "Three dates to keep visible"));
+    [["Baseline finish", view.baselineFinish], ["CPM finish", view.cpmFinish], ["Forecast finish", view.forecastFinish]].forEach(([label, value]) => {
+      const row = node("div", null, "readout-row");
+      row.appendChild(node("span", label, "muted"));
+      row.appendChild(node("strong", value || "UNKNOWN"));
+      schedule.appendChild(row);
+    });
+    dashboardGrid.appendChild(schedule);
+    if (summary) dashboardGrid.appendChild(renderAttentionQueue(summary, true));
+    fragment.appendChild(dashboardGrid);
     fragment.appendChild(node("h3", "Analysis summaries"));
     fragment.appendChild(renderTable(["View", "Value", "State"], (view.summaries || []).map(item => [item.label, item.value, item.state])));
     return fragment;
@@ -568,6 +767,7 @@
   function rowMatchesFilters(row) {
     if (state.gantt.phaseFilter !== "ALL" && row.phaseId !== state.gantt.phaseFilter) return false;
     if (state.gantt.executionFilter !== "ALL" && String(row.state || "UNKNOWN") !== state.gantt.executionFilter) return false;
+    if (state.gantt.attentionOnly && !row.alerts.some(isAttentionAlert)) return false;
     if (state.gantt.criticalOnly && !row.isCritical) return false;
     if (state.gantt.overdueOnly && !row.alerts.some(alert => alert.alertCode === "OVERDUE")) return false;
     if (state.gantt.atRiskOnly && !row.alerts.some(alert => alert.alertCode === "AT_RISK")) return false;
@@ -610,6 +810,12 @@
 
   function renderGanttToolbar(rows, range, analysis) {
     const toolbar = node("div", null, "gantt-toolbar");
+    const toolbarTop = node("div", null, "gantt-toolbar-top");
+    const toolbarHeading = node("div", null, "gantt-toolbar-heading");
+    toolbarHeading.appendChild(node("p", "PLAN CONTROL", "eyebrow"));
+    toolbarHeading.appendChild(node("h3", "Schedule view"));
+    toolbarHeading.appendChild(node("p", "Read the immutable baseline first; use attention mode to isolate the work that needs a decision.", "muted"));
+    toolbarTop.appendChild(toolbarHeading);
     const actions = node("div", null, "gantt-toolbar-actions");
     const addAction = (label, action, pressed) => {
       const button = node("button", label, "secondary gantt-action");
@@ -620,12 +826,14 @@
     };
     addAction("Expand all", "expand-all");
     addAction("Collapse all", "collapse-all");
+    addAction("Needs attention", "attention", state.gantt.attentionOnly);
     addAction("−", "zoom-out");
     addAction("+", "zoom-in");
     addAction("Fit project", "fit-project");
     addAction("Critical path", "critical-path", state.gantt.criticalPath);
     addAction("Show dependencies", "dependencies", state.gantt.showDependencies);
-    toolbar.appendChild(actions);
+    toolbarTop.appendChild(actions);
+    toolbar.appendChild(toolbarTop);
 
     const filters = node("div", null, "gantt-filters");
     const phase = node("select");
@@ -692,7 +900,9 @@
     panel.id = "gantt-detail-panel";
     panel.setAttribute("aria-live", "polite");
     if (!row) {
-      panel.hidden = true;
+      panel.appendChild(node("p", "ROW INSPECTOR", "eyebrow"));
+      panel.appendChild(node("h3", "Select a row to inspect"));
+      panel.appendChild(node("p", "Choose a phase, work package, delivery card, or milestone to compare plan, actual evidence, variance, and dependencies.", "muted"));
       return panel;
     }
     const heading = node("div", null, "gantt-detail-heading");
@@ -759,7 +969,7 @@
     const model = buildGanttRows(state.views && state.views.wbs && state.views.wbs.root, view, baseline || {});
     const rows = model.rows;
     if (!state.gantt.expansionInitialized) {
-      rows.filter(row => row.isSummary).forEach(row => state.gantt.expandedKeys.add(row.key));
+      rows.filter(row => row.kind === "Project" || row.kind === "Phase").forEach(row => state.gantt.expandedKeys.add(row.key));
       state.gantt.expansionInitialized = true;
     }
     const range = buildTimelineRange(rows, analysis || {}, baseline || {});
@@ -839,6 +1049,8 @@
           const key = actionTarget.dataset.ganttKey;
           if (state.gantt.expandedKeys.has(key)) state.gantt.expandedKeys.delete(key);
           else state.gantt.expandedKeys.add(key);
+        } else if (action === "attention") {
+          state.gantt.attentionOnly = !state.gantt.attentionOnly;
         } else if (action === "zoom-in" || action === "zoom-out") {
           const order = ["day", "week", "month"];
           const current = order.indexOf(state.gantt.zoom);
@@ -1095,12 +1307,7 @@
     }
   }
 
-  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
-    tab.classList.add("active");
-    state.activeView = tab.dataset.view;
-    renderActiveView();
-  }));
+  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => activateView(tab.dataset.view)));
   byId("analyze-button").addEventListener("click", analyze);
   byId("refresh-button").addEventListener("click", refresh);
   byId("reopen-button").addEventListener("click", reopenJson);
