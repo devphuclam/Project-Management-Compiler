@@ -164,12 +164,16 @@ public sealed record AuthorityResolution
         };
 
         diagnostics.AddRange(conflicts);
+        var requiredBaselineDiagnostics = RequiredBaselineDiagnostics(authority, appendix, baseline, authorityRows, parsed);
+        diagnostics.AddRange(requiredBaselineDiagnostics);
         return new AuthorityResolution
         {
             HasCanonicalBaseline = authority is not null
                 && appendix is not null
                 && IsValidRequiredDocument(authority, parsed)
-                && IsValidRequiredDocument(appendix, parsed),
+                && IsValidRequiredDocument(appendix, parsed)
+                && !requiredBaselineDiagnostics
+                    .Any(diagnostic => diagnostic.Severity == WarningSeverity.Error),
             AuthorityDocument = authority,
             Baseline = baseline,
             Documents = documents,
@@ -184,6 +188,91 @@ public sealed record AuthorityResolution
     private static bool IsValidRequiredDocument(PlanningDocument document, IReadOnlyDictionary<PlanningDocument, PlanningParseResult> parsed) =>
         parsed.TryGetValue(document, out var result)
         && result.Diagnostics.All(diagnostic => diagnostic.Severity != WarningSeverity.Error);
+
+    private static IReadOnlyList<ImportWarning> RequiredBaselineDiagnostics(
+        PlanningDocument? authority,
+        PlanningDocument? appendix,
+        ExtractedPlanningBaseline baseline,
+        IReadOnlyList<PlanningTableRow> authorityRows,
+        IReadOnlyDictionary<PlanningDocument, PlanningParseResult> parsed)
+    {
+        if (authority is null || appendix is null)
+        {
+            return Array.Empty<ImportWarning>();
+        }
+
+        var diagnostics = new List<ImportWarning>();
+        var requiredFacts = new (string Name, bool Present)[]
+        {
+            ("Project ID", HasValue(baseline.ProjectId)),
+            ("Baseline ID", HasValue(baseline.BaselineId)),
+            ("Baseline version", HasValue(baseline.BaselineVersion)),
+            ("Planning start", baseline.PlanningStart is not null),
+            ("Planning finish", baseline.PlanningFinish is not null),
+            ("Target date", baseline.TargetDate is not null),
+            ("Authoritative effort", baseline.PlannedEffortHours is not null)
+        };
+
+        foreach (var (name, present) in requiredFacts.Where(fact => !fact.Present))
+        {
+            diagnostics.Add(new ImportWarning
+            {
+                Id = $"MISSING_REQUIRED_BASELINE_DATA:{authority.Source.RelativeFile}:{name}",
+                Severity = WarningSeverity.Error,
+                Code = "MISSING_REQUIRED_BASELINE_DATA",
+                Message = $"DOC-07 is missing usable required baseline fact '{name}'; canonical extraction will not guess a value.",
+                AffectedIds = [name],
+                SourceReferences = [authority.Source.SourceReference with
+                {
+                    RelativeFile = authority.Source.RelativeFile,
+                    Section = "Source identity",
+                    ExtractionRule = "idea-planning-required-baseline-fact"
+                }]
+            });
+        }
+
+        var hasPhaseRow = authorityRows.Any(IsUsablePhaseRow);
+        var appendixRows = parsed.TryGetValue(appendix, out var appendixResult)
+            ? appendixResult.Rows
+            : Array.Empty<PlanningTableRow>();
+        var hasWorkPackageRow = appendixRows.Any(IsUsableWorkPackageRow);
+        if (!hasPhaseRow || !hasWorkPackageRow)
+        {
+            var missingRows = new List<string>();
+            if (!hasPhaseRow)
+            {
+                missingRows.Add("DOC-07 phase row");
+            }
+
+            if (!hasWorkPackageRow)
+            {
+                missingRows.Add("Appendix A work-package row");
+            }
+
+            diagnostics.Add(new ImportWarning
+            {
+                Id = $"MISSING_REQUIRED_BASELINE_ROWS:{authority.Source.RelativeFile}",
+                Severity = WarningSeverity.Error,
+                Code = "MISSING_REQUIRED_BASELINE_ROWS",
+                Message = $"Canonical extraction requires at least one usable {string.Join(" and ", missingRows)}.",
+                AffectedIds = missingRows,
+                SourceReferences = [authority.Source.SourceReference, appendix.Source.SourceReference]
+            });
+        }
+
+        return diagnostics;
+    }
+
+    private static bool IsUsablePhaseRow(PlanningTableRow row) =>
+        row.Headers.Any(header => (PlanningParserSupport.Normalize(header) is "PHASE ID" or "PHASE")
+            && HasValue(row.Cells[header]));
+
+    private static bool IsUsableWorkPackageRow(PlanningTableRow row) =>
+        row.Headers.Any(header => (PlanningParserSupport.Normalize(header) is "ID" or "WORK PACKAGE ID" or "CODE")
+            && HasValue(row.Cells[header]));
+
+    private static bool HasValue(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Trim() is not ("—" or "-");
 
     private static bool TryGetKeyValue(PlanningTableRow row, out string key, out string value)
     {
@@ -269,18 +358,35 @@ public sealed record AuthorityResolution
 
     private static IReadOnlyList<ImportWarning> FindSubordinateReferences(PlanningDocument authority, IReadOnlyList<PlanningDocument> documents)
     {
-        var current = Regex.Match(authority.Source.Content, @"DOC-07@(?<version>\d+(?:\.\d+)+)", RegexOptions.IgnoreCase).Groups["version"].Value;
-        if (string.IsNullOrEmpty(current))
+        var warnings = new List<ImportWarning>();
+        var authorityReferences = ControlEnvelopeReferences(authority.Source.Content);
+        var current = string.Empty;
+        foreach (var reference in authorityReferences)
         {
-            return Array.Empty<ImportWarning>();
+            if (TryNormalizeControlEnvelopeVersion(reference, out var normalized))
+            {
+                current = normalized;
+                continue;
+            }
+
+            warnings.Add(MalformedControlEnvelopeDiagnostic(authority, reference));
         }
 
-        var warnings = new List<ImportWarning>();
+        if (string.IsNullOrEmpty(current))
+        {
+            return warnings;
+        }
+
         foreach (var document in documents.Where(document => document.AuthorityRank > authority.AuthorityRank))
         {
-            foreach (Match match in Regex.Matches(document.Source.Content, @"DOC-07@(?<version>\d+(?:\.\d+)+)", RegexOptions.IgnoreCase))
+            foreach (var reference in ControlEnvelopeReferences(document.Source.Content))
             {
-                var subordinate = match.Groups["version"].Value;
+                if (!TryNormalizeControlEnvelopeVersion(reference, out var subordinate))
+                {
+                    warnings.Add(MalformedControlEnvelopeDiagnostic(document, reference));
+                    continue;
+                }
+
                 var comparison = CompareDottedVersions(subordinate, current);
                 if (comparison == 0)
                 {
@@ -305,8 +411,12 @@ public sealed record AuthorityResolution
 
     private static int CompareDottedVersions(string left, string right)
     {
-        var leftParts = left.Split('.').Select(int.Parse).ToArray();
-        var rightParts = right.Split('.').Select(int.Parse).ToArray();
+        if (!TryParseDottedVersion(left, out var leftParts)
+            || !TryParseDottedVersion(right, out var rightParts))
+        {
+            return 0;
+        }
+
         var length = Math.Max(leftParts.Length, rightParts.Length);
         for (var index = 0; index < length; index++)
         {
@@ -321,6 +431,61 @@ public sealed record AuthorityResolution
 
         return 0;
     }
+
+    private static IReadOnlyList<string> ControlEnvelopeReferences(string content) =>
+        Regex.Matches(content, @"DOC-07@(?<version>[^\s<>""',;)\]}]+)", RegexOptions.IgnoreCase)
+            .Cast<Match>()
+            .Select(match => match.Groups["version"].Value)
+            .ToArray();
+
+    private static bool TryNormalizeControlEnvelopeVersion(string raw, out string normalized)
+    {
+        normalized = raw.TrimEnd(',', ';', ':', ')', ']', '}');
+        if (TryParseDottedVersion(normalized, out _))
+        {
+            return true;
+        }
+
+        if (normalized.EndsWith(".", StringComparison.Ordinal)
+            && TryParseDottedVersion(normalized[..^1], out _))
+        {
+            normalized = normalized[..^1];
+            return true;
+        }
+
+        normalized = string.Empty;
+        return false;
+    }
+
+    private static bool TryParseDottedVersion(string version, out int[] parsed)
+    {
+        var components = version.Split('.');
+        if (components.Length < 2)
+        {
+            parsed = Array.Empty<int>();
+            return false;
+        }
+
+        parsed = new int[components.Length];
+        for (var index = 0; index < components.Length; index++)
+        {
+            if (!int.TryParse(components[index], NumberStyles.None, CultureInfo.InvariantCulture, out parsed[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static ImportWarning MalformedControlEnvelopeDiagnostic(PlanningDocument document, string reference) => new()
+    {
+        Id = $"MALFORMED_CONTROL_ENVELOPE_REFERENCE:{document.Source.RelativeFile}:{reference}",
+        Severity = WarningSeverity.Error,
+        Code = "MALFORMED_CONTROL_ENVELOPE_REFERENCE",
+        Message = $"'{document.Source.RelativeFile}' contains an untrusted malformed DOC-07@{reference} control-envelope reference; it was ignored for version classification.",
+        SourceReferences = [document.Source.SourceReference]
+    };
 }
 
 public sealed class AuthorityResolver

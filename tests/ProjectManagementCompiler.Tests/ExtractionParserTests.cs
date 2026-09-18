@@ -80,6 +80,18 @@ internal static class ExtractionParserTests
         TestAssert.Equal(0, result.Rows.Count, "Malformed HTML rows must not be padded, truncated, or dictionary-overwritten.");
     }
 
+    public static void HtmlParserRejectsTablesWithoutHeaderRows()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><td>ID</td><td>Name</td></tr><tr><td>A01</td><td>First data row</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.True(result.Diagnostics.Any(d => d.Code == "MISSING_TABLE_HEADER" && d.Severity == WarningSeverity.Error), "HTML tables without a th header row must be explicit errors.");
+        TestAssert.Equal(0, result.Rows.Count, "HTML data rows must not be guessed into headers or emitted without a th header row.");
+    }
+
     public static void DiscoveryIgnoresUnrecognizedCapturedDocuments()
     {
         var snapshot = new ProjectManagementCompiler.Sources.RepositorySnapshot

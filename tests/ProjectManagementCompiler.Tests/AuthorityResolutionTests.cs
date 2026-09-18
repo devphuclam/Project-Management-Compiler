@@ -14,7 +14,7 @@ internal static class AuthorityResolutionTests
             Documents =
             [
                 Document("README.md", "# README\n\n| Field | Value |\n|---|---|\n| Project ID | readme-project |\n| WIP policy | 9 |"),
-                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | authoritative-project |\n| Baseline ID | baseline-01 |\n| Baseline version | 0.14 |\n\n## Phases\n\n| Phase ID | Name | Start | Finish | Gate |\n|---|---|---|---|---|\n| PH0 | Khởi động | 2026-09-18 | 2026-09-25 | G-D0 |"),
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | authoritative-project |\n| Baseline ID | baseline-01 |\n| Baseline version | 0.14 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name | Start | Finish | Gate |\n|---|---|---|---|---|\n| PH0 | Khởi động | 2026-09-18 | 2026-09-25 | G-D0 |"),
                 Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Phase | Start | Finish | Effort | Duration | Completion condition |\n|---|---|---|---|---|---:|---:|---|\n| P01 | Gói P01 | PH0 | 2026-09-18 | 2026-09-18 | 16 | 480 | Reviewed |"),
                 Document("docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html", "<h1>Gantt</h1><table><tr><th>Phase</th><th>Name</th></tr><tr data-phase=\"PH0\"><td>PH0</td><td>Gantt</td></tr></table>"),
                 Document("docs/product/instances/idea-engineering/planning/idea-technical-pilot-kanban-cario.md", "# Kanban\n\n## Planning policy\n\n| Policy | Value |\n|---|---|\n| WIP policy | 1 |")
@@ -63,6 +63,41 @@ internal static class AuthorityResolutionTests
 
         TestAssert.False(resolution.HasCanonicalBaseline, "Required-document Error diagnostics must disable canonical baseline resolution.");
         TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "MISSING_REQUIRED_HEADING"), "Required document heading errors must remain visible.");
+    }
+
+    public static void MissingRequiredBaselineDataAndRowsDisableCanonicalBaseline()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n## Phases"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A")
+            ]
+        });
+
+        TestAssert.False(resolution.HasCanonicalBaseline, "Headings without usable baseline data or rows must not establish a canonical baseline.");
+        TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "MISSING_REQUIRED_BASELINE_DATA" && d.Severity == WarningSeverity.Error), "Missing core baseline data must be an explicit Error diagnostic.");
+        TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "MISSING_REQUIRED_BASELINE_ROWS" && d.Severity == WarningSeverity.Error), "Missing phase and work-package rows must be an explicit Error diagnostic.");
+    }
+
+    public static void MissingRequiredBaselineFactsDisableCanonicalBaselineWithoutGuessing()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.False(resolution.HasCanonicalBaseline, "Omitted core DOC-07 facts must block canonical baseline status.");
+        TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "MISSING_REQUIRED_BASELINE_DATA" && d.Severity == WarningSeverity.Error && d.AffectedIds.Contains("Baseline ID")), "Missing baseline identity must identify the omitted fact.");
+        TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "MISSING_REQUIRED_BASELINE_DATA" && d.AffectedIds.Contains("Authoritative effort")), "Missing authoritative effort must identify the omitted fact.");
+        TestAssert.True(resolution.Baseline.BaselineId is null && resolution.Baseline.PlanningStart is null && resolution.Baseline.PlannedEffortHours is null, "Missing facts must remain nullable rather than being guessed.");
     }
 
     public static void UnsupportedRequiredDocumentFormatDisablesCanonicalBaseline()
@@ -177,6 +212,22 @@ internal static class AuthorityResolutionTests
 
         TestAssert.True(resolution.Diagnostics.Any(d => d.Code == "FUTURE_SUBORDINATE_REFERENCE"), "A numerically newer subordinate version must produce a distinct warning.");
         TestAssert.False(resolution.Diagnostics.Any(d => d.Code == "STALE_SUBORDINATE_REFERENCE"), "A numerically newer subordinate version must not be classified as stale.");
+    }
+
+    public static void MalformedSubordinateControlEnvelopeReferencesAreErrorsAndDoNotThrow()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14 |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\nDOC-07@999999999999999999999.1 and DOC-07@1.bad\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.True(resolution.Diagnostics.Count(d => d.Code == "MALFORMED_CONTROL_ENVELOPE_REFERENCE" && d.Severity == WarningSeverity.Error) >= 2, "Overflow and malformed control-envelope versions must produce explicit Error diagnostics.");
+        TestAssert.False(resolution.Diagnostics.Any(d => d.Code is "STALE_SUBORDINATE_REFERENCE" or "FUTURE_SUBORDINATE_REFERENCE"), "Malformed versions must not be classified as stale or future.");
     }
 
     public static void ControlledFixtureResolvesBaselinePhasesAndPolicyFacts()

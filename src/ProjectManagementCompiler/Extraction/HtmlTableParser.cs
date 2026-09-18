@@ -58,7 +58,20 @@ public static class HtmlTableParser
             var headerPosition = Array.FindIndex(tableRows, row => CellPattern.Matches(row.Groups["body"].Value).Cast<Match>().Any(cell => cell.Groups["kind"].Value.Equals("th", StringComparison.OrdinalIgnoreCase)));
             if (headerPosition < 0)
             {
-                headerPosition = 0;
+                diagnostics.Add(new ImportWarning
+                {
+                    Id = $"MISSING_TABLE_HEADER:{document.Source.RelativeFile}:{tableIndex}",
+                    Severity = WarningSeverity.Error,
+                    Code = "MISSING_TABLE_HEADER",
+                    Message = $"HTML table {tableIndex} in '{document.Source.RelativeFile}' has no <th> header row; data rows were not guessed.",
+                    SourceReferences = [document.Source.SourceReference with
+                    {
+                        RelativeFile = document.Source.RelativeFile,
+                        Table = $"table-{tableIndex:D2}",
+                        ExtractionRule = "idea-planning-html-table-header"
+                    }]
+                });
+                continue;
             }
 
             var headers = Cells(tableRows[headerPosition].Groups["body"].Value);
