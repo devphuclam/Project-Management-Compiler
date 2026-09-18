@@ -6,6 +6,8 @@ public sealed record SourceDocument
     public string RelativeFile { get; init; } = string.Empty;
     public SourceDocumentFormat Format { get; init; }
     public long SizeBytes { get; init; }
+    public string Content { get; init; } = string.Empty;
+    public SourceReference SourceReference { get; init; } = new();
 }
 
 public sealed record SourceReference
