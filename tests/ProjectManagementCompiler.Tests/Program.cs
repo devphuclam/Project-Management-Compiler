@@ -111,6 +111,10 @@ internal static class Program
         ,("InvalidDependencyEvidenceCannotFabricateDownstreamRisk", AnalysisTests.InvalidDependencyEvidenceCannotFabricateDownstreamRisk)
         ,("WbsProjectionBuildsPhasePackageCardAndMilestoneTree", ManagementProjectionTests.WbsProjectionBuildsPhasePackageCardAndMilestoneTree)
         ,("WbsProjectionDoesNotDoubleCountExecutableCards", ManagementProjectionTests.WbsProjectionDoesNotDoubleCountExecutableCards)
+        ,("CpmUsesNormalizedDurationAndExcludesInvalidSourceEdges", CpmTests.CpmUsesNormalizedDurationAndExcludesInvalidSourceEdges)
+        ,("CpmDetectsCyclesAndLeavesBaselineUntouched", CpmTests.CpmDetectsCyclesAndLeavesBaselineUntouched)
+        ,("CpmRejectsUnsupportedEligibleEdges", CpmTests.CpmRejectsUnsupportedEligibleEdges)
+        ,("OrchestratorCombinesCpmAndExecutionAnalysis", CpmTests.OrchestratorCombinesCpmAndExecutionAnalysis)
     ];
 
     public static int Main()

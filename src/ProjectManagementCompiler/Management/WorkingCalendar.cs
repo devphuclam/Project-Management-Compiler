@@ -33,6 +33,24 @@ public sealed class WorkingCalendar
             : -CountForward(to.Value, from.Value);
     }
 
+    public DateOnly AddWorkingMinutes(DateOnly start, int workingMinutes)
+    {
+        if (workingMinutes == 0)
+        {
+            return NormalizeWorkingDate(start, 1);
+        }
+
+        var direction = Math.Sign(workingMinutes);
+        var workingDays = Math.Abs(workingMinutes) / minutesPerWorkingDay;
+        var date = NormalizeWorkingDate(start, direction);
+        for (var index = 0; index < workingDays; index++)
+        {
+            date = NormalizeWorkingDate(date.AddDays(direction), direction);
+        }
+
+        return date;
+    }
+
     private int CountForward(DateOnly from, DateOnly to)
     {
         var workingDays = 0;
@@ -45,5 +63,15 @@ public sealed class WorkingCalendar
         }
 
         return checked(workingDays * minutesPerWorkingDay);
+    }
+
+    private DateOnly NormalizeWorkingDate(DateOnly date, int direction)
+    {
+        while (!workingWeekdays.Contains(date.DayOfWeek))
+        {
+            date = date.AddDays(direction);
+        }
+
+        return date;
     }
 }
