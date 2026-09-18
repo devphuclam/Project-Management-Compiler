@@ -231,6 +231,25 @@ public sealed record AuthorityResolution
             });
         }
 
+        if (HasValue(baseline.BaselineVersion)
+            && !TryParseDottedVersion(baseline.BaselineVersion!, out _))
+        {
+            diagnostics.Add(new ImportWarning
+            {
+                Id = $"MALFORMED_BASELINE_VERSION:{authority.Source.RelativeFile}:{baseline.BaselineVersion}",
+                Severity = WarningSeverity.Error,
+                Code = "MALFORMED_BASELINE_VERSION",
+                Message = $"DOC-07 contains malformed baseline version '{baseline.BaselineVersion}'; canonical extraction will not treat it as a valid version.",
+                AffectedIds = ["Baseline version"],
+                SourceReferences = [authority.Source.SourceReference with
+                {
+                    RelativeFile = authority.Source.RelativeFile,
+                    Section = "Source identity",
+                    ExtractionRule = "idea-planning-baseline-version"
+                }]
+            });
+        }
+
         var hasPhaseRow = authorityRows.Any(IsUsablePhaseRow);
         var appendixRows = parsed.TryGetValue(appendix, out var appendixResult)
             ? appendixResult.Rows

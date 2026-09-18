@@ -334,6 +334,41 @@ internal static class AuthorityResolutionTests
         TestAssert.True(resolution.HasCanonicalBaseline, "Equivalent authority envelope versions must preserve canonical baseline status.");
     }
 
+    public static void MalformedBaselineVersionsDisableCanonicalBaseline()
+    {
+        foreach (var version in new[] { "1", "1.x", "999999999999999999999999.1" })
+        {
+            var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+            {
+                RepositoryId = "fixture",
+                Documents =
+                [
+                    Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", $"# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | {version} |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |"),
+                    Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+                ]
+            });
+
+            TestAssert.True(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "MALFORMED_BASELINE_VERSION" && diagnostic.Severity == WarningSeverity.Error), $"Baseline version '{version}' must produce an explicit Error diagnostic.");
+            TestAssert.False(resolution.HasCanonicalBaseline, $"Malformed baseline version '{version}' must disable canonical baseline status.");
+        }
+    }
+
+    public static void EquivalentDottedBaselineVersionsRemainCanonical()
+    {
+        var resolution = AuthorityResolution.Resolve(new RepositorySnapshot
+        {
+            RepositoryId = "fixture",
+            Documents =
+            [
+                Document("docs/product/instances/idea-engineering/DOC-07-mvp-roadmap-and-delivery-plan.md", "# Source plan\n\n## Source identity\n\n| Field | Value |\n|---|---|\n| Project ID | project |\n| Baseline ID | baseline |\n| Baseline version | 0.14.0 |\n| Planning start | 2026-09-18 |\n| Planning finish | 2026-09-25 |\n| Target date | 2026-09-25 |\n| Authoritative effort | 16 hours |\n\n## Phases\n\n| Phase ID | Name |\n|---|---|\n| PH0 | Phase |\n\nDOC-07@0.14"),
+                Document("docs/product/instances/idea-engineering/planning/DOC-07-appendix-A-task-breakdown-december-2026.md", "# Appendix A\n\n| ID | Name | Effort |\n|---|---|---:|\n| P01 | Package | 1 |")
+            ]
+        });
+
+        TestAssert.False(resolution.Diagnostics.Any(diagnostic => diagnostic.Code == "MALFORMED_BASELINE_VERSION"), "A valid dotted baseline version must not be diagnosed as malformed.");
+        TestAssert.True(resolution.HasCanonicalBaseline, "A valid dotted baseline version equivalent to a control-envelope reference must remain canonical.");
+    }
+
     public static void UnterminatedMarkdownFenceDisablesCanonicalBaseline()
     {
         var resolution = AuthorityResolution.Resolve(new RepositorySnapshot

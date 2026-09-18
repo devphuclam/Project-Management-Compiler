@@ -337,6 +337,51 @@ internal static class ExtractionParserTests
         TestAssert.True(diagnostics.All(diagnostic => diagnostic.SourceReferences.Count == 1), "Unmatched-tag diagnostics must retain one source reference each.");
     }
 
+    public static void HtmlParserDropsUnclosedRowBeforeFollowingRow()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr><td>A01</td><td>Unclosed<tr><td>A02</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "An unclosed row must be dropped without consuming the following valid row.");
+        TestAssert.Equal("A02", result.Rows[0].Cells["ID"], "The valid row after an unclosed row must remain parseable.");
+        var diagnostic = result.Diagnostics.Single(d => d.Code == "UNCLOSED_HTML_ROW");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "An unclosed row must be an explicit Error diagnostic.");
+    }
+
+    public static void HtmlParserRejectsMisorderedRelevantTagsWithoutGuessingRows()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th></tr>"
+            + "<tr><td>A01</th></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(0, result.Rows.Count, "Misordered relevant tags must not produce a guessed malformed row.");
+        TestAssert.True(result.Diagnostics.Any(diagnostic => diagnostic.Code == "MISORDERED_HTML_TAG" && diagnostic.Severity == WarningSeverity.Error), "Misordered relevant tags must be explicit Error diagnostics.");
+        TestAssert.True(result.Diagnostics.Any(diagnostic => diagnostic.Code == "MISMATCHED_HTML_CELL_TAG" && diagnostic.Severity == WarningSeverity.Error), "Misordered cell tags must identify the cell mismatch.");
+    }
+
+    public static void HtmlParserRejectsMalformedRowAttributeTokens()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr data-owner=Team Alpha><td>A01</td><td>Malformed attributes</td></tr>"
+            + "<tr data-owner=Team><td>A02</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "A row with malformed attribute tokens must be skipped while later valid rows remain available.");
+        TestAssert.Equal("A02", result.Rows[0].Cells["ID"], "The valid row after malformed attributes must be emitted.");
+        var diagnostic = result.Diagnostics.Single(diagnostic => diagnostic.Code == "MALFORMED_HTML_ATTRIBUTE");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Malformed attribute token streams must be explicit Error diagnostics.");
+    }
+
     public static void DiscoveryIgnoresUnrecognizedCapturedDocuments()
     {
         var snapshot = new ProjectManagementCompiler.Sources.RepositorySnapshot
