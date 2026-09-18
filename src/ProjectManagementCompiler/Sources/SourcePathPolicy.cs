@@ -13,7 +13,7 @@ public static class SourcePathPolicy
 
     public static string ResolvePath(string root, string relativePath, IRepositoryFileSystem fileSystem)
     {
-        var normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedRoot = NormalizeRoot(root);
         if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
         {
             throw new ArgumentException("Source path must be a non-rooted relative path.", nameof(relativePath));
@@ -37,7 +37,7 @@ public static class SourcePathPolicy
 
     public static bool HasSafeSegments(string root, string fullPath, IRepositoryFileSystem fileSystem)
     {
-        var normalizedRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedRoot = NormalizeRoot(root);
         if (fileSystem.IsReparsePoint(normalizedRoot))
         {
             return false;
@@ -61,5 +61,17 @@ public static class SourcePathPolicy
         }
 
         return true;
+    }
+
+    public static string NormalizeRoot(string root)
+    {
+        var fullPath = Path.GetFullPath(root);
+        var pathRoot = Path.GetPathRoot(fullPath);
+        if (pathRoot is not null && string.Equals(fullPath, pathRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return fullPath;
+        }
+
+        return fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 }

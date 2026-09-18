@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using ProjectManagementCompiler.Domain;
 using ProjectManagementCompiler.Sources;
 
@@ -46,6 +48,25 @@ internal static class SourceCaptureTests
         TestAssert.True(snapshot.Documents.All(document => document.SourceReference.RelativeFile == document.RelativeFile), "Source references preserve selected paths.");
     }
 
+    public static void SnapshotMetadataNeverExposesAbsoluteLocalRoot()
+    {
+        const string userRoot = @"C:\Users\alice\project";
+        var request = new SourceRequest { Location = userRoot, Ref = "refs/heads/task-4" };
+        var successful = Capture(FixtureFileSystem(userRoot), request);
+        var failed = Capture(new FakeRepositoryFileSystem(), request);
+
+        foreach (var snapshot in new[] { successful, failed })
+        {
+            var json = JsonSerializer.Serialize(snapshot);
+            TestAssert.False(json.Contains(userRoot, StringComparison.OrdinalIgnoreCase), "Snapshot metadata must not expose the absolute local root.");
+            TestAssert.Equal("local-repository", snapshot.LocationLabel, "Local snapshots should use a stable safe location label.");
+        }
+
+        TestAssert.True(successful.Documents.All(document => document.SourceReference.Repository == "local-repository"), "Document references must use a safe repository label.");
+        TestAssert.True(failed.Diagnostics.SelectMany(diagnostic => diagnostic.SourceReferences).All(reference => reference.Repository == "local-repository"), "Failed diagnostics must use a safe repository label.");
+        TestAssert.True(failed.Diagnostics.SelectMany(diagnostic => diagnostic.SourceReferences).All(reference => reference.ResolvedRef == request.Ref), "Failed diagnostics should retain the requested ref.");
+    }
+
     public static void MissingRecognizedFileProducesStableDiagnostic()
     {
         var fileSystem = FixtureFileSystem();
@@ -54,6 +75,35 @@ internal static class SourceCaptureTests
 
         TestAssert.Contains("SOURCE_FILE_MISSING", string.Join('|', snapshot.Diagnostics.Select(diagnostic => diagnostic.Code)), "Missing files should be diagnosed.");
         TestAssert.Equal(Kanban, snapshot.Diagnostics.Single(diagnostic => diagnostic.Code == "SOURCE_FILE_MISSING").SourceReferences.Single().RelativeFile, "Missing diagnostics should preserve the path.");
+        TestAssert.Equal(WarningSeverity.Warning, snapshot.Diagnostics.Single(diagnostic => diagnostic.Code == "SOURCE_FILE_MISSING").Severity, "Missing files are warnings rather than capture errors.");
+    }
+
+    public static void RefIsCopiedToEveryDocumentAndDiagnosticReference()
+    {
+        var request = new SourceRequest { Location = Root, Ref = "refs/tags/v1" };
+        var fileSystem = FixtureFileSystem();
+        fileSystem.Remove(Path.Combine(Root, Kanban));
+        var snapshot = Capture(fileSystem, request);
+
+        TestAssert.Equal(request.Ref, snapshot.ResolvedRef, "The snapshot should retain the requested ref.");
+        TestAssert.True(snapshot.Documents.Select(document => document.SourceReference).All(reference => reference.ResolvedRef == request.Ref), "Every document reference should retain the requested ref.");
+        TestAssert.True(snapshot.Diagnostics.SelectMany(diagnostic => diagnostic.SourceReferences).All(reference => reference.ResolvedRef == request.Ref), "Every diagnostic reference should retain the requested ref.");
+    }
+
+    public static void DiagnosticsAreProducedInRecognizedPathOrder()
+    {
+        var fileSystem = FixtureFileSystem();
+        fileSystem.Remove(Path.Combine(Root, Readme));
+        fileSystem.Remove(Path.Combine(Root, Appendix));
+        fileSystem.Remove(Path.Combine(Root, Html));
+        fileSystem.Remove(Path.Combine(Root, Kanban));
+        fileSystem.SetLength(Path.Combine(Root, Roadmap), 100);
+        var snapshot = Capture(fileSystem, new SourceRequest { Location = Root, MaxDocumentBytes = 10 });
+
+        var codes = snapshot.Diagnostics.Select(diagnostic => diagnostic.Code).ToArray();
+        TestAssert.True(
+            codes.SequenceEqual(new[] { "SOURCE_FILE_MISSING", "SOURCE_FILE_TOO_LARGE", "SOURCE_FILE_MISSING", "SOURCE_FILE_MISSING", "SOURCE_FILE_MISSING" }),
+            $"Diagnostics should remain deterministic and follow recognized path order. Actual: {string.Join(",", codes)}");
     }
 
     public static void UnreadableRootProducesBlockedDiagnostic()
@@ -67,8 +117,17 @@ internal static class SourceCaptureTests
     public static void RootedAndTraversalPathsAreRejected()
     {
         TestAssert.Throws<ArgumentException>(
+            () => SourcePathPolicy.ResolvePath(Root, @"C:\outside.md", FixtureFileSystem()),
+            "A rooted candidate path must not be accepted.");
+        TestAssert.Throws<ArgumentException>(
             () => SourcePathPolicy.ResolvePath(Root, "docs/../outside.md", FixtureFileSystem()),
             "A ref-like traversal must not change local path capture.");
+    }
+
+    public static void DriveRootNormalizationPreservesTrailingSeparator()
+    {
+        TestAssert.Equal(@"C:\", SourcePathPolicy.NormalizeRoot(@"C:\"), "Drive roots must retain their trailing separator.");
+        TestAssert.Equal(@"C:\README.md", SourcePathPolicy.ResolvePath(@"C:\", Readme, FixtureFileSystem()), "A drive-rooted candidate must resolve under the drive root.");
     }
 
     public static void ReparsePointEscapeProducesDiagnosticWithoutReading()
@@ -81,14 +140,58 @@ internal static class SourceCaptureTests
         TestAssert.False(fileSystem.ReadPaths.Any(path => path.Contains("docs", StringComparison.OrdinalIgnoreCase)), "Capture must not read through a reparse point.");
     }
 
+    public static void FileLevelReparsePointIsRejectedWithoutReading()
+    {
+        var fileSystem = FixtureFileSystem();
+        fileSystem.MarkReparse(Path.Combine(Root, Readme));
+        var snapshot = Capture(fileSystem);
+
+        var diagnostic = snapshot.Diagnostics.Single(diagnostic => diagnostic.Code == "SOURCE_PATH_ESCAPE");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Unsafe source paths remain capture errors.");
+        TestAssert.False(fileSystem.ReadPaths.Contains(Path.GetFullPath(Path.Combine(Root, Readme))), "A reparse-point file must not be read.");
+    }
+
+    public static void CaptureUsesValidatedReadBoundaryInsteadOfLegacyChecks()
+    {
+        var fileSystem = FixtureFileSystem();
+        fileSystem.ThrowOnLegacyRead = true;
+        var snapshot = Capture(fileSystem);
+
+        TestAssert.Equal(5, fileSystem.ValidatedReadPaths.Count, "Every selected file should use the validated read operation.");
+        TestAssert.Equal(0, fileSystem.LegacyLengthReadPaths.Count, "Capture must not perform a separate length check.");
+        TestAssert.Equal(0, fileSystem.LegacyTextReadPaths.Count, "Capture must not perform a separate text read.");
+        TestAssert.Equal(5, snapshot.Documents.Count, "Validated reads should still capture the fixture.");
+    }
+
     public static void OversizedFilesAreRejectedBeforeRead()
     {
         var fileSystem = FixtureFileSystem();
         fileSystem.SetLength(Path.Combine(Root, Readme), 2 * 1024 * 1024 + 1);
         var snapshot = Capture(fileSystem);
 
-        TestAssert.Contains("SOURCE_FILE_TOO_LARGE", string.Join('|', snapshot.Diagnostics.Select(diagnostic => diagnostic.Code)), "Oversized files need a precise diagnostic.");
+        var diagnostic = snapshot.Diagnostics.Single(diagnostic => diagnostic.Code == "SOURCE_FILE_TOO_LARGE");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Oversized files remain capture errors.");
         TestAssert.False(fileSystem.ReadPaths.Contains(Path.GetFullPath(Path.Combine(Root, Readme))), "An oversized file must not be read partially.");
+    }
+
+    public static void ValidatedReadRejectsBoundaryReparseWithoutReading()
+    {
+        var fileSystem = FixtureFileSystem();
+        fileSystem.ReparseAtValidatedRead.Add(Path.GetFullPath(Path.Combine(Root, Readme)));
+        var snapshot = Capture(fileSystem);
+
+        TestAssert.Equal("SOURCE_PATH_ESCAPE", snapshot.Diagnostics.First(diagnostic => diagnostic.SourceReferences.Any(reference => reference.RelativeFile == Readme)).Code, "A reparse detected at the read boundary must be reported as a path escape.");
+        TestAssert.False(fileSystem.ReadPaths.Contains(Path.GetFullPath(Path.Combine(Root, Readme))), "A file rejected at the read boundary must not be read.");
+    }
+
+    public static void ValidatedReadRejectsBoundaryOversizeWithoutPartialRead()
+    {
+        var fileSystem = FixtureFileSystem();
+        fileSystem.OversizeAtValidatedRead.Add(Path.GetFullPath(Path.Combine(Root, Readme)));
+        var snapshot = Capture(fileSystem);
+
+        TestAssert.Equal("SOURCE_FILE_TOO_LARGE", snapshot.Diagnostics.First(diagnostic => diagnostic.SourceReferences.Any(reference => reference.RelativeFile == Readme)).Code, "A size rejection at the read boundary needs a precise diagnostic.");
+        TestAssert.False(fileSystem.ReadPaths.Contains(Path.GetFullPath(Path.Combine(Root, Readme))), "A file rejected for size must not be partially read.");
     }
 
     public static void TotalSizeLimitIsRejectedBeforeReadingOverLimitDocument()
@@ -99,6 +202,41 @@ internal static class SourceCaptureTests
 
         TestAssert.Contains("SOURCE_TOTAL_TOO_LARGE", string.Join('|', snapshot.Diagnostics.Select(diagnostic => diagnostic.Code)), "The total limit needs a precise diagnostic.");
         TestAssert.True(fileSystem.ReadPaths.Count < 5, "Capture must stop before reading a document that would exceed the total limit.");
+    }
+
+    public static void TotalSizeAccountingUsesActualReadBytes()
+    {
+        var fileSystem = MinimalFileSystem();
+        fileSystem.AddFileBytes(Path.Combine(Root, Readme), new UTF8Encoding(false, true).GetBytes("é"));
+        fileSystem.AddFileBytes(Path.Combine(Root, Roadmap), new UTF8Encoding(false, true).GetBytes("x"));
+        var snapshot = Capture(fileSystem, new SourceRequest { Location = Root, MaxDocumentBytes = 2, MaxTotalDocumentBytes = 3 });
+
+        TestAssert.Equal(2, snapshot.Documents.Count, "Both files that exactly fit the byte total should be captured.");
+        TestAssert.Equal(2L, snapshot.Documents[0].SizeBytes, "The first document size should be its UTF-8 byte count.");
+        TestAssert.Equal(1L, snapshot.Documents[1].SizeBytes, "The second document size should be its UTF-8 byte count.");
+        TestAssert.Equal(3L, fileSystem.TotalBytesRead, "Total accounting should equal actual bytes read.");
+    }
+
+    public static void StrictUtf8AcceptsValidContent()
+    {
+        var fileSystem = MinimalFileSystem();
+        fileSystem.AddFileBytes(Path.Combine(Root, Readme), new UTF8Encoding(false, true).GetBytes("café"));
+        var snapshot = Capture(fileSystem, new SourceRequest { Location = Root, MaxDocumentBytes = 16, MaxTotalDocumentBytes = 16 });
+
+        TestAssert.Equal("café", snapshot.Documents.Single().Content, "Valid UTF-8 should be decoded with the supplied encoding.");
+    }
+
+    public static void StrictUtf8RejectsInvalidBytesWithoutPartialDocument()
+    {
+        var fileSystem = MinimalFileSystem();
+        fileSystem.AddFileBytes(Path.Combine(Root, Readme), [0xC3, 0x28]);
+        var snapshot = Capture(fileSystem, new SourceRequest { Location = Root, MaxDocumentBytes = 16, MaxTotalDocumentBytes = 16 });
+
+        var diagnostic = snapshot.Diagnostics.Single(diagnostic => diagnostic.SourceReferences.Any(reference => reference.RelativeFile == Readme));
+        TestAssert.Equal("SOURCE_CAPTURE_FAILED", diagnostic.Code, "Invalid UTF-8 should fail capture precisely.");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Capture failures remain errors.");
+        TestAssert.False(snapshot.Documents.Any(document => document.RelativeFile == Readme), "Invalid UTF-8 must not produce a partial document.");
+        TestAssert.False(fileSystem.ReadPaths.Contains(Path.GetFullPath(Path.Combine(Root, Readme))), "Invalid UTF-8 must not be committed as a read document.");
     }
 
     public static void FixtureCaptureWorksAgainstRealFileSystem()
@@ -116,19 +254,29 @@ internal static class SourceCaptureTests
     private static RepositorySnapshot Capture(LocalRepositorySourceAdapter adapter, SourceRequest request) =>
         adapter.CaptureAsync(request, CancellationToken.None).GetAwaiter().GetResult();
 
-    private static FakeRepositoryFileSystem FixtureFileSystem()
+    private static FakeRepositoryFileSystem FixtureFileSystem(string root = Root)
+    {
+        var fileSystem = new FakeRepositoryFileSystem();
+        fileSystem.AddDirectory(root);
+        fileSystem.AddDirectory(Path.Combine(root, "docs"));
+        fileSystem.AddDirectory(Path.Combine(root, "docs/product/instances/idea-engineering"));
+        fileSystem.AddDirectory(Path.Combine(root, "docs/product/instances/idea-engineering/planning"));
+        foreach (var path in new[] { Readme, Roadmap, Appendix, Html, Kanban })
+        {
+            fileSystem.AddFile(Path.Combine(root, path), $"# {path}");
+        }
+
+        fileSystem.AddFile(Path.Combine(root, "run.ps1"), "throw 'must never execute'");
+        return fileSystem;
+    }
+
+    private static FakeRepositoryFileSystem MinimalFileSystem()
     {
         var fileSystem = new FakeRepositoryFileSystem();
         fileSystem.AddDirectory(Root);
         fileSystem.AddDirectory(Path.Combine(Root, "docs"));
         fileSystem.AddDirectory(Path.Combine(Root, "docs/product/instances/idea-engineering"));
         fileSystem.AddDirectory(Path.Combine(Root, "docs/product/instances/idea-engineering/planning"));
-        foreach (var path in new[] { Readme, Roadmap, Appendix, Html, Kanban })
-        {
-            fileSystem.AddFile(Path.Combine(Root, path), $"# {path}");
-        }
-
-        fileSystem.AddFile(Path.Combine(Root, "run.ps1"), "throw 'must never execute'");
         return fileSystem;
     }
 }

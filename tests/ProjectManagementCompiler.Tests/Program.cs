@@ -14,12 +14,23 @@ internal static class Program
         ("SourceRequestUsesSafeSizeDefaults", SourceCaptureTests.SourceRequestUsesSafeSizeDefaults),
         ("CaptureReadsAllowListedDocumentsInFixedOrder", SourceCaptureTests.CaptureReadsAllowListedDocumentsInFixedOrder),
         ("CapturePreservesNormalizedReferencesAndOneTimestamp", SourceCaptureTests.CapturePreservesNormalizedReferencesAndOneTimestamp),
+        ("SnapshotMetadataNeverExposesAbsoluteLocalRoot", SourceCaptureTests.SnapshotMetadataNeverExposesAbsoluteLocalRoot),
         ("MissingRecognizedFileProducesStableDiagnostic", SourceCaptureTests.MissingRecognizedFileProducesStableDiagnostic),
+        ("RefIsCopiedToEveryDocumentAndDiagnosticReference", SourceCaptureTests.RefIsCopiedToEveryDocumentAndDiagnosticReference),
+        ("DiagnosticsAreProducedInRecognizedPathOrder", SourceCaptureTests.DiagnosticsAreProducedInRecognizedPathOrder),
         ("UnreadableRootProducesBlockedDiagnostic", SourceCaptureTests.UnreadableRootProducesBlockedDiagnostic),
         ("RootedAndTraversalPathsAreRejected", SourceCaptureTests.RootedAndTraversalPathsAreRejected),
+        ("DriveRootNormalizationPreservesTrailingSeparator", SourceCaptureTests.DriveRootNormalizationPreservesTrailingSeparator),
         ("ReparsePointEscapeProducesDiagnosticWithoutReading", SourceCaptureTests.ReparsePointEscapeProducesDiagnosticWithoutReading),
+        ("FileLevelReparsePointIsRejectedWithoutReading", SourceCaptureTests.FileLevelReparsePointIsRejectedWithoutReading),
+        ("CaptureUsesValidatedReadBoundaryInsteadOfLegacyChecks", SourceCaptureTests.CaptureUsesValidatedReadBoundaryInsteadOfLegacyChecks),
         ("OversizedFilesAreRejectedBeforeRead", SourceCaptureTests.OversizedFilesAreRejectedBeforeRead),
+        ("ValidatedReadRejectsBoundaryReparseWithoutReading", SourceCaptureTests.ValidatedReadRejectsBoundaryReparseWithoutReading),
+        ("ValidatedReadRejectsBoundaryOversizeWithoutPartialRead", SourceCaptureTests.ValidatedReadRejectsBoundaryOversizeWithoutPartialRead),
         ("TotalSizeLimitIsRejectedBeforeReadingOverLimitDocument", SourceCaptureTests.TotalSizeLimitIsRejectedBeforeReadingOverLimitDocument),
+        ("TotalSizeAccountingUsesActualReadBytes", SourceCaptureTests.TotalSizeAccountingUsesActualReadBytes),
+        ("StrictUtf8AcceptsValidContent", SourceCaptureTests.StrictUtf8AcceptsValidContent),
+        ("StrictUtf8RejectsInvalidBytesWithoutPartialDocument", SourceCaptureTests.StrictUtf8RejectsInvalidBytesWithoutPartialDocument),
         ("FixtureCaptureWorksAgainstRealFileSystem", SourceCaptureTests.FixtureCaptureWorksAgainstRealFileSystem)
     ];
 

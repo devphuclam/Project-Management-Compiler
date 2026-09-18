@@ -1,4 +1,7 @@
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 using ProjectManagementCompiler.Domain;
 
 namespace ProjectManagementCompiler.Sources;
@@ -36,16 +39,24 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         string root;
         try
         {
-            root = Path.GetFullPath(request.Location).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            root = SourcePathPolicy.NormalizeRoot(request.Location);
         }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or IOException)
+        catch (ArgumentException)
         {
-            return Task.FromResult(FailedSnapshot(request.Location, capturedAtUtc, "SOURCE_CAPTURE_FAILED", exception.Message));
+            return Task.FromResult(FailedSnapshot(request.Ref, capturedAtUtc, "SOURCE_CAPTURE_FAILED", "The local source directory could not be normalized."));
+        }
+        catch (NotSupportedException)
+        {
+            return Task.FromResult(FailedSnapshot(request.Ref, capturedAtUtc, "SOURCE_CAPTURE_FAILED", "The local source directory could not be normalized."));
+        }
+        catch (IOException)
+        {
+            return Task.FromResult(FailedSnapshot(request.Ref, capturedAtUtc, "SOURCE_CAPTURE_FAILED", "The local source directory could not be normalized."));
         }
 
         if (!fileSystem.DirectoryExists(root))
         {
-            return Task.FromResult(FailedSnapshot(root, capturedAtUtc, "SOURCE_CAPTURE_FAILED", "The local source directory is not readable."));
+            return Task.FromResult(FailedSnapshot(request.Ref, capturedAtUtc, "SOURCE_CAPTURE_FAILED", "The local source directory is not readable."));
         }
 
         var blocked = false;
@@ -58,89 +69,87 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             {
                 fullPath = SourcePathPolicy.ResolvePath(root, relativePath, fileSystem);
             }
-            catch (ArgumentException exception)
+            catch (ArgumentException)
             {
                 blocked = true;
-                diagnostics.Add(Diagnostic("SOURCE_PATH_ESCAPE", relativePath, exception.Message));
+                diagnostics.Add(Diagnostic("SOURCE_PATH_ESCAPE", relativePath, "A recognized source path is invalid.", request.Ref));
                 continue;
             }
 
             if (!SourcePathPolicy.HasSafeSegments(root, fullPath, fileSystem))
             {
                 blocked = true;
-                diagnostics.Add(Diagnostic("SOURCE_PATH_ESCAPE", relativePath, "A source path traverses a reparse point."));
+                diagnostics.Add(Diagnostic("SOURCE_PATH_ESCAPE", relativePath, "A source path traverses a reparse point.", request.Ref));
                 continue;
             }
 
             if (!fileSystem.FileExists(fullPath))
             {
-                diagnostics.Add(Diagnostic("SOURCE_FILE_MISSING", relativePath, "A recognized source file is missing."));
+                diagnostics.Add(Diagnostic("SOURCE_FILE_MISSING", relativePath, "A recognized source file is missing.", request.Ref));
                 continue;
             }
 
-            long length;
+            RepositoryFileReadResult read;
             try
             {
-                length = fileSystem.GetFileLength(fullPath);
+                read = fileSystem.ReadFile(
+                    fullPath,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true),
+                    request.MaxDocumentBytes,
+                    request.MaxTotalDocumentBytes - totalBytes);
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            catch (RepositoryFileReadException exception)
             {
                 blocked = true;
-                diagnostics.Add(Diagnostic("SOURCE_CAPTURE_FAILED", relativePath, exception.Message));
+                diagnostics.Add(exception.Failure switch
+                {
+                    RepositoryFileReadFailure.ReparsePoint => Diagnostic("SOURCE_PATH_ESCAPE", relativePath, "A source file became a reparse point at the read boundary.", request.Ref),
+                    RepositoryFileReadFailure.FileTooLarge => Diagnostic("SOURCE_FILE_TOO_LARGE", relativePath, $"Source file exceeds the {request.MaxDocumentBytes} byte limit.", request.Ref),
+                    RepositoryFileReadFailure.TotalTooLarge => Diagnostic("SOURCE_TOTAL_TOO_LARGE", relativePath, $"Selected source exceeds the {request.MaxTotalDocumentBytes} byte total limit.", request.Ref),
+                    _ => Diagnostic("SOURCE_CAPTURE_FAILED", relativePath, "The selected source file could not be read.", request.Ref)
+                });
                 continue;
             }
-            if (length > request.MaxDocumentBytes)
+            catch (FileNotFoundException)
             {
-                blocked = true;
-                diagnostics.Add(Diagnostic("SOURCE_FILE_TOO_LARGE", relativePath, $"Source file is {length} bytes; maximum is {request.MaxDocumentBytes} bytes."));
+                diagnostics.Add(Diagnostic("SOURCE_FILE_MISSING", relativePath, "A recognized source file is missing.", request.Ref));
                 continue;
-            }
-
-            if (length > request.MaxTotalDocumentBytes - totalBytes)
-            {
-                blocked = true;
-                diagnostics.Add(Diagnostic("SOURCE_TOTAL_TOO_LARGE", relativePath, $"Selected source exceeds the {request.MaxTotalDocumentBytes} byte total limit."));
-                continue;
-            }
-
-            string content;
-            try
-            {
-                content = fileSystem.ReadAllText(fullPath, new UTF8Encoding(false, true));
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException)
             {
                 blocked = true;
-                diagnostics.Add(Diagnostic("SOURCE_CAPTURE_FAILED", relativePath, exception.Message));
+                diagnostics.Add(Diagnostic("SOURCE_CAPTURE_FAILED", relativePath, "The selected source file could not be read.", request.Ref));
                 continue;
             }
+
             var format = GetFormat(relativePath);
             documents.Add(new SourceDocument
             {
                 Id = $"source-document-{documents.Count + 1:D2}",
                 RelativeFile = relativePath,
                 Format = format,
-                SizeBytes = length,
-                Content = content,
+                SizeBytes = read.BytesRead,
+                Content = read.Content,
                 SourceReference = new SourceReference
                 {
                     SourceId = "local-repository",
-                    Repository = root,
+                    Repository = "local-repository",
+                    ResolvedRef = request.Ref,
                     RelativeFile = relativePath,
                     ExtractionRule = "allow-listed-local-source-capture",
                     ConfidenceState = DataState.Known,
                     ValidationState = ValidationState.Known
                 }
             });
-            totalBytes += length;
+            totalBytes += read.BytesRead;
         }
 
         var state = blocked ? CaptureState.Blocked : CaptureState.Known;
         var snapshot = new RepositorySnapshot
         {
             RepositoryId = "local-repository",
-            RepositoryLabel = Path.GetFileName(root) ?? root,
-            LocationLabel = root,
+            RepositoryLabel = "local-repository",
+            LocationLabel = "local-repository",
             ResolvedRef = request.Ref,
             CapturedAtUtc = capturedAtUtc,
             CaptureState = state,
@@ -155,32 +164,194 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
             ? SourceDocumentFormat.Html
             : SourceDocumentFormat.Markdown;
 
-    private static ImportWarning Diagnostic(string code, string relativePath, string message) => new()
+    private static ImportWarning Diagnostic(string code, string relativePath, string message, string? resolvedRef) => new()
     {
         Id = $"{code}:{relativePath}",
-        Severity = WarningSeverity.Error,
+        Severity = code == "SOURCE_FILE_MISSING" ? WarningSeverity.Warning : WarningSeverity.Error,
         Code = code,
         Message = message,
-        SourceReferences = [new SourceReference { SourceId = "local-repository", RelativeFile = relativePath, ExtractionRule = "allow-listed-local-source-capture" }]
+        SourceReferences = [new SourceReference
+        {
+            SourceId = "local-repository",
+            Repository = "local-repository",
+            ResolvedRef = resolvedRef,
+            RelativeFile = relativePath,
+            ExtractionRule = "allow-listed-local-source-capture"
+        }]
     };
 
-    private static RepositorySnapshot FailedSnapshot(string location, DateTimeOffset capturedAtUtc, string code, string message) => new()
+    private static RepositorySnapshot FailedSnapshot(string? resolvedRef, DateTimeOffset capturedAtUtc, string code, string message) => new()
     {
         RepositoryId = "local-repository",
-        RepositoryLabel = Path.GetFileName(location) ?? location,
-        LocationLabel = location,
+        RepositoryLabel = "local-repository",
+        LocationLabel = "local-repository",
+        ResolvedRef = resolvedRef,
         CapturedAtUtc = capturedAtUtc,
         CaptureState = CaptureState.Blocked,
-        Diagnostics = [Diagnostic(code, string.Empty, message)]
+        Diagnostics = [Diagnostic(code, string.Empty, message, resolvedRef)]
     };
 
     private sealed class PhysicalRepositoryFileSystem : IRepositoryFileSystem
     {
         public bool DirectoryExists(string path) => Directory.Exists(path);
         public bool FileExists(string path) => File.Exists(path);
-        public bool IsReparsePoint(string path) =>
-            (File.Exists(path) || Directory.Exists(path)) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-        public long GetFileLength(string path) => new FileInfo(path).Length;
-        public string ReadAllText(string path, Encoding encoding) => File.ReadAllText(path, encoding);
+        public bool IsReparsePoint(string path)
+        {
+            try
+            {
+                return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+            }
+            catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return false;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return true;
+            }
+        }
+
+        public RepositoryFileReadResult ReadFile(string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes)
+        {
+            if (maxFileBytes < 0 || remainingTotalBytes < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxFileBytes));
+            }
+
+            if (IsReparsePoint(path))
+            {
+                throw new RepositoryFileReadException(RepositoryFileReadFailure.ReparsePoint, "The source file is a reparse point.");
+            }
+
+            using var stream = OpenReadStream(path);
+
+            if (stream.Length > maxFileBytes)
+            {
+                throw new RepositoryFileReadException(RepositoryFileReadFailure.FileTooLarge, "The source file exceeds its limit.", stream.Length);
+            }
+
+            if (stream.Length > remainingTotalBytes)
+            {
+                throw new RepositoryFileReadException(RepositoryFileReadFailure.TotalTooLarge, "The source exceeds the total limit.", stream.Length);
+            }
+
+            var maxRead = Math.Min(maxFileBytes, remainingTotalBytes);
+            using var content = new MemoryStream(capacity: checked((int)Math.Min(stream.Length, maxRead)));
+            var buffer = new byte[64 * 1024];
+            long bytesRead = 0;
+            while (true)
+            {
+                if (IsReparsePoint(path, stream.SafeFileHandle))
+                {
+                    throw new RepositoryFileReadException(RepositoryFileReadFailure.ReparsePoint, "The source file became a reparse point at the read boundary.", bytesRead);
+                }
+
+                var requested = (int)Math.Min(buffer.Length, maxRead - bytesRead + 1);
+                var read = stream.Read(buffer, 0, requested);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                bytesRead += read;
+                if (bytesRead > maxFileBytes)
+                {
+                    throw new RepositoryFileReadException(RepositoryFileReadFailure.FileTooLarge, "The source file exceeds its limit.", bytesRead);
+                }
+
+                if (bytesRead > remainingTotalBytes)
+                {
+                    throw new RepositoryFileReadException(RepositoryFileReadFailure.TotalTooLarge, "The source exceeds the total limit.", bytesRead);
+                }
+
+                content.Write(buffer, 0, read);
+            }
+
+            return new RepositoryFileReadResult(
+                encoding.GetString(content.GetBuffer(), 0, checked((int)bytesRead)),
+                bytesRead);
+        }
+
+        private bool IsReparsePoint(string path, SafeFileHandle handle)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return IsReparsePoint(path);
+            }
+
+            if (!GetFileInformationByHandle(handle, out var information))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            return (information.FileAttributes & (uint)FileAttributes.ReparsePoint) != 0;
+        }
+
+        private static FileStream OpenReadStream(string path)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return new FileStream(path, new FileStreamOptions
+                {
+                    Mode = FileMode.Open,
+                    Access = FileAccess.Read,
+                    Share = FileShare.Read,
+                    Options = FileOptions.SequentialScan,
+                    BufferSize = 64 * 1024
+                });
+            }
+
+            var handle = CreateFile(
+                path,
+                GenericRead,
+                FileShareRead,
+                IntPtr.Zero,
+                OpenExisting,
+                FileFlagOpenReparsePoint | FileFlagSequentialScan,
+                IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                handle.Dispose();
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            return new FileStream(handle, FileAccess.Read, 64 * 1024, isAsync: false);
+        }
+
+        private const uint GenericRead = 0x80000000;
+        private const uint FileShareRead = 0x00000001;
+        private const uint OpenExisting = 3;
+        private const uint FileFlagOpenReparsePoint = 0x00200000;
+        private const uint FileFlagSequentialScan = 0x08000000;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "CreateFileW", SetLastError = true)]
+        private static extern SafeFileHandle CreateFile(
+            string fileName,
+            uint desiredAccess,
+            uint shareMode,
+            IntPtr securityAttributes,
+            uint creationDisposition,
+            uint flagsAndAttributes,
+            IntPtr templateFile);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetFileInformationByHandle(
+            SafeFileHandle handle,
+            out ByHandleFileInformation information);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ByHandleFileInformation
+        {
+            public uint FileAttributes;
+            public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+            public uint FileSizeHigh;
+            public uint FileSizeLow;
+            public uint NumberOfLinks;
+            public uint FileIndexHigh;
+            public uint FileIndexLow;
+            public uint VolumeSerialNumber;
+        }
     }
 }
