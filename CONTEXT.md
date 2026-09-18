@@ -99,3 +99,25 @@ The explicit date supplied to analysis for late-start, active-overdue, and in-pr
 _Avoid_: implicit current date
 
 Execution overlay, actual, and forecast remain separate from plan. Planned and actual effort remain separate from planned and actual working duration. CARIO output stays plan-focused: planned start and deadline are never replaced with actual dates.
+
+**Field-level Authority**:
+Authority is assigned per semantic field, not by a blind document rank. DOC-07
+owns planning control, baseline, phase and gate policy; Appendix A owns work
+packages; the Kanban/CARIO register owns delivery cards and responsibility
+matrices; Gantt cross-checks; README discovers.
+
+**Unknown Authored Date**:
+A missing or unsafe source date is null with an explicit state/diagnostic. It is
+never represented by `DateOnly.MinValue` or `0001-01-01`.
+
+**Unknown Authored State**:
+An absent or unrecognized source execution state is not `NOT_STARTED`. Explicit
+`NOT_STARTED`, `NOT-RUN`, missing, and extraction failure remain distinguishable.
+
+**Work-Package Dependency Graph**:
+Appendix-owned predecessor evidence retained for traceability. It is separate
+from the delivery-card/milestone execution graph and is not double-fed into CPM.
+
+**Rendition Validity**:
+The validity of a subordinate Gantt or Kanban rendition is reported separately
+from DOC-07 baseline validity and Appendix work-package validity.

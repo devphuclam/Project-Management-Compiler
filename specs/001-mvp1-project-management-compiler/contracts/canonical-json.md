@@ -85,3 +85,9 @@ execution state, and update metadata are persisted under `executionOverlay`.
 recomputed after reopen. The semantic digest excludes capture timestamps and
 derived analysis, but includes the execution overlay because it is user-owned
 snapshot content.
+
+Canonical persistence contains source metadata, references, sizes and optional
+content digests, not full captured Markdown/HTML source text. Source content is
+a runtime extraction input and is not serialized by default. Nullable authored
+dates remain JSON `null`; `0001-01-01` is invalid business data. A missing source
+execution state remains null/unknown and is not serialized as `NOT_STARTED`.

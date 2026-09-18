@@ -22,6 +22,29 @@ installed platform libraries, runs offline, and never executes content from the
 input repository. The reference repository is used only to define the safe
 fixture convention; its checkout is not copied into this repository.
 
+## Corrective remediation gate
+
+Before continuing persistence, CPM, dashboard, CARIO, or browser work, the
+source/extraction slice must be compatible with the current IDEAEngineering
+planning contract inspected at commit
+`afa9638f629999de6faa881ca25226cda44820a5`. The committed offline fixture is
+public-safe but must mirror that structure: DOC-07 control and schedule tables,
+Vietnamese-shaped Appendix A, section-context phases, Kanban task tables,
+separate CARIO matrices, unsplit and split card IDs, and multiple predecessors.
+
+Authority is field-level: DOC-07 owns control/baseline/phase/gate/policy facts;
+Appendix A owns work packages and their effort/dependencies; Kanban owns card
+decomposition, card schedule/detail/dependencies and CARIO assignments; Gantt
+is a subordinate cross-check. Baseline validity, work-package validity,
+delivery-card completeness, rendition validity, dependency-analysis validity,
+and output readiness are reported separately. A malformed subordinate
+rendition does not erase a valid DOC-07 + Appendix baseline.
+
+The remediation also requires nullable unknown dates, non-fabricated unknown
+execution states, capture metadata and safe source identity preservation, and
+exclusion of runtime source content from persisted canonical JSON. The
+execution overlay remains additive and baseline-immutable.
+
 ## Scope and invariants
 
 The implementation must satisfy these non-negotiable rules:

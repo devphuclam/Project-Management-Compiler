@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-mvp1-project-management-compiler`  
 **Created**: 2026-09-17  
-**Status**: Approved MVP1 scope with execution-overlay amendment
+**Status**: Approved MVP1 scope with execution-overlay amendment; corrective source-contract remediation in progress
 **Input**: Approved architecture and MVP1 scope for a local project-management intelligence tool
 
 ## User problem
@@ -18,6 +18,27 @@ mistaking repository activity for project completion.
 MVP1 provides one deterministic path from the IDEAEngineering repository planning
 conventions to a canonical project snapshot, management views, and a human-
 assisted CARIO workbook.
+
+## Corrective source-contract remediation
+
+The supported source contract is the current IDEAEngineering planning structure,
+not a synthetic English table convention. This bounded remediation is pinned to
+inspected reference commit `afa9638f629999de6faa881ca25226cda44820a5`.
+
+Field-level ownership is explicit: DOC-07 owns control identity, applicable
+schedule baseline, phase windows, capacity/reserve, milestone/gate sequence and
+resource policy; Appendix A owns work-package identity, phase context, effort,
+dependencies and completion/output text; the Kanban/CARIO register owns card
+decomposition, card dates/slots, effort, dependencies, detail, board state and
+the many-to-many CARIO matrix; HTML Gantt is subordinate cross-check evidence;
+README is discovery/navigation only.
+
+The extraction result reports baseline validity, work-package validity,
+delivery-card completeness, rendition validity, dependency-analysis validity and
+output readiness separately. Missing/unknown dates remain null, unknown source
+execution state is not converted to `NOT_STARTED`, and runtime source content is
+not persisted in canonical JSON. Source capture metadata and a safe
+non-path-leaking source identity remain in canonical provenance.
 
 ## Actors
 

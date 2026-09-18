@@ -50,7 +50,11 @@ Mapping Status
 Source Reference
 ```
 
-Blank concrete identities are valid output when configuration is absent.
+Blank concrete identities are valid output when configuration is absent. The
+rows are many-to-many: every populated `(work item, logical role, CARIO role)`
+cell becomes one assignment row, and comma-separated logical roles in one cell
+become separate rows. The source codes are exactly `A`, `R+`, `R`, `C`, `I`, and
+`O`; no concrete employee is fabricated.
 
 ### 03_CHILDREN_MILESTONES
 

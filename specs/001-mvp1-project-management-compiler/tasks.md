@@ -4,6 +4,26 @@ These tasks are the dependency-ordered execution outline for the manually
 maintained Spec Kit package. The detailed bite-sized plan is produced after the
 written-spec review gate.
 
+## Corrective remediation — current source compatibility
+
+The following gate must complete before implementation continues past the
+management/output work already present on the branch. It is anchored to the
+current public IDEAEngineering reference at commit
+`afa9638f629999de6faa881ca25226cda44820a5`.
+
+- [x] R001 Inspect the current IDEAEngineering source structure and record field-level authority.
+- [x] R002 Run clean verification from the pre-remediation compiler commit.
+- [x] R003 Add failing compatibility tests shaped like DOC-07, Appendix A, and Kanban/CARIO.
+- [x] R004 Amend design/specification/contracts, ADR, context, and task gates.
+- [ ] R005 Rebuild the public-safe controlled fixture from the current source shape.
+- [ ] R006 Implement field-level authority resolution and separate rendition validity.
+- [ ] R007 Extract DOC-07 control, baseline, phase schedule, reserve, and milestones.
+- [ ] R008 Extract Vietnamese Appendix A work packages, outputs, effort, and predecessor evidence.
+- [ ] R009 Extract Kanban cards, CARIO matrices, and many-to-many logical-role assignments.
+- [ ] R010 Preserve work-package, card, and gate dependency graphs without double-feeding CPM.
+- [ ] R011 Preserve nullable authored dates/states, capture provenance, safe source identity, and the source-content boundary.
+- [ ] R012 Run optional local-reference compatibility verification, review the diff, and record blockers before resuming Task 8+.
+
 ## Foundation
 
 - [x] T001 Create the `net10.0` solution and platform-only project structure.

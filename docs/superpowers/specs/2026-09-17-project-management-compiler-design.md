@@ -1,6 +1,6 @@
 # Project Management Compiler — MVP1 Architecture and Design
 
-**Status:** Approved architecture; written design pending human review  
+**Status:** Approved architecture and MVP1 scope; corrective source-contract remediation in progress  
 **Date:** 2026-09-17  
 **Scope:** MVP1 compiler for the IDEAEngineering repository planning conventions  
 **Target:** local, loopback-only browser application and dependency-free export pipeline

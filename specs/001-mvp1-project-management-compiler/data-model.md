@@ -86,6 +86,12 @@ The canonical model must retain both the work-package effort and the detailed
 card effort. `analysis.effortAccounting` names the chosen roll-up level and any
 reconciliation warnings.
 
+Authored planned dates are nullable. A missing date is `null` with an explicit
+unknown/invalid diagnostic; `0001-01-01` is never a business date. Work-package
+dates may legitimately be absent when Appendix A does not author them. A source
+delivery-card state is nullable and carries a data state so missing, `NOT-RUN`,
+and explicit `NOT_STARTED` remain distinct.
+
 `plannedEffortHours` is authored work effort and is used for capacity/load.
 `plannedDurationWorkingMinutes` is authored elapsed working time and is used
 for dependency CPM. The compiler never derives duration from effort unless the
@@ -249,6 +255,11 @@ source may be retained for provenance only when it is marked
 `validationState: INVALID_SOURCE_EVIDENCE`, `analysisEligible: false`, and has
 an explicit diagnostic; it is excluded from CPM. An unmarked missing reference
 is a structural failure.
+
+Work-package dependencies remain a traceability graph owned by Appendix A.
+Delivery-card and milestone dependencies form the detailed execution graph.
+Equivalent edges are not silently double-fed into CPM; source work-package
+edges remain visible with their own provenance and analysis eligibility.
 
 The authoritative work-package effort roll-up for the current fixture is
 exactly 512 hours. Card-level effort remains available for detail and
