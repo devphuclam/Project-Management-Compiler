@@ -128,6 +128,48 @@ internal static class AnalysisTests
         TestAssert.False(analysis.Alerts.Any(alert => alert.AlertCode == "AT_RISK" && alert.WorkItemId == missing.SubjectId), "Invalid source dependency evidence must not create fabricated downstream risk.");
     }
 
+    public static void AtRiskAggregatesDelayedCardPredecessorsAndIgnoresWorkPackageEdges()
+    {
+        var captured = CaptureCanonicalProject("ideaengineering-real-shaped");
+        var project = captured with
+        {
+            DeliveryCards = captured.DeliveryCards
+                .Select(card => card with { State = ExecutionState.NotStarted })
+                .ToArray()
+        };
+        var delayedP03 = Apply(project, new ExecutionUpdate
+        {
+            WorkItemId = "P03",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 12, 1),
+            LastUpdatedAt = UpdatedAt()
+        });
+        var delayedP05 = Apply(delayedP03, new ExecutionUpdate
+        {
+            WorkItemId = "P05",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 12, 1),
+            LastUpdatedAt = UpdatedAt()
+        });
+        var delayedP06 = Apply(delayedP05, new ExecutionUpdate
+        {
+            WorkItemId = "P06",
+            ExecutionState = ExecutionState.InProgress,
+            ActualStart = new DateOnly(2026, 12, 1),
+            LastUpdatedAt = UpdatedAt()
+        });
+
+        var analysis = new ManagementAnalysisOrchestrator().Analyze(delayedP06, new DateOnly(2026, 12, 2));
+        var p04Risks = analysis.Alerts.Where(alert => alert.WorkItemId == "P04" && alert.AlertCode == "AT_RISK").ToArray();
+        var p07Risks = analysis.Alerts.Where(alert => alert.WorkItemId == "P07" && alert.AlertCode == "AT_RISK").ToArray();
+
+        TestAssert.Equal(1, p04Risks.Length, "A WorkPackage:P04 trace edge must not double-count a DeliveryCard:P04 risk.");
+        TestAssert.Equal("P03", string.Join(",", p04Risks[0].ReasonWorkItemIds), "DeliveryCard P04 risk must use the card predecessor only.");
+        TestAssert.Equal(1, p07Risks.Length, "Two delayed predecessors must create one AT_RISK alert for successor P07.");
+        TestAssert.Equal("P05,P06", string.Join(",", p07Risks[0].ReasonWorkItemIds), "The aggregated risk must preserve both delayed card predecessors.");
+        TestAssert.Equal(2, analysis.ExecutionStatus.AtRisk, "At-risk count must count distinct successors, not dependency edges.");
+    }
+
     private static DateTimeOffset UpdatedAt() => new(2026, 9, 28, 10, 0, 0, TimeSpan.Zero);
 
     private static CanonicalProject Apply(CanonicalProject project, ExecutionUpdate update)
@@ -137,9 +179,9 @@ internal static class AnalysisTests
         return result.Project;
     }
 
-    private static CanonicalProject CaptureCanonicalProject()
+    private static CanonicalProject CaptureCanonicalProject(string fixtureName = "ideaengineering")
     {
-        var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");
+        var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", fixtureName);
         var snapshot = new LocalRepositorySourceAdapter()
             .CaptureAsync(new SourceRequest { Location = root }, CancellationToken.None)
             .GetAwaiter()

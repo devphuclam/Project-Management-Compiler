@@ -53,6 +53,7 @@ internal static class ManagementProjectionTests
         TestAssert.Equal(1, views.Kanban.Columns.Single(column => column.Id == "IN_PROGRESS").WipLimit, "Kanban must use the canonical WIP policy rather than a hardcoded limit.");
         TestAssert.Equal(analysis.CalculatedFinish, views.Dashboard.CpmFinish, "Dashboard CPM finish must remain separate from forecast finish.");
         TestAssert.Equal(null, views.Dashboard.ForecastFinish, "Dashboard forecast must remain unknown without forecast evidence.");
+        TestAssert.False(typeof(DashboardProjection).GetProperty("CompletionPercentage") is not null, "Dashboard API must not expose an ambiguous overall completion percentage.");
         TestAssert.Equal(analysis.CriticalPathIds.Count, views.Cpm.Rows.Count(row => row.IsCritical), "CPM view must preserve critical-path flags.");
     }
 

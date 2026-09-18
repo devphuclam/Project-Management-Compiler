@@ -165,6 +165,25 @@ internal static class CanonicalValidationTests
         }, "DUPLICATE_EXECUTION_RECORD");
     }
 
+    public static void CanonicalValidatorUsesTypedIdsForRealShapedP04AndDependencies()
+    {
+        var project = CaptureCanonicalProject("ideaengineering-real-shaped");
+        var diagnostics = CanonicalProjectValidator.Validate(project);
+
+        TestAssert.False(diagnostics.Any(diagnostic => diagnostic.Code is "INVALID_DEPENDENCY_SUBJECT_KIND" or "INVALID_DEPENDENCY_PREDECESSOR_KIND" or "DUPLICATE_DEPENDENCY"), "Cross-kind P04 dependencies must remain valid and distinct.");
+        TestAssert.True(project.DeliveryCards.Any(card => card.Id == "P04"), "The real-shaped fixture must retain DeliveryCard P04.");
+        TestAssert.True(project.WorkPackages.Any(workPackage => workPackage.Id == "P04"), "The real-shaped fixture must retain WorkPackage P04.");
+        TestAssert.True(project.Assignments.Any(assignment => assignment.WorkItemId == "P04"), "The responsibility matrix must contain an assignment for DeliveryCard P04.");
+
+        var cardDependency = project.Dependencies.Single(dependency =>
+            dependency.SubjectKind == "DeliveryCard" && dependency.SubjectId == "P04");
+        var duplicateDiagnostics = CanonicalProjectValidator.Validate(project with
+        {
+            Dependencies = project.Dependencies.Append(cardDependency).ToArray()
+        });
+        TestAssert.True(duplicateDiagnostics.Any(diagnostic => diagnostic.Code == "DUPLICATE_DEPENDENCY"), "An identical typed dependency must still be diagnosed as a duplicate.");
+    }
+
     private static void AssertHasCode(CanonicalProject project, string code)
     {
         var diagnostics = CanonicalProjectValidator.Validate(project);
@@ -173,9 +192,9 @@ internal static class CanonicalValidationTests
             $"Canonical validation must emit '{code}'. Actual codes: {string.Join(", ", diagnostics.Select(diagnostic => diagnostic.Code).Distinct(StringComparer.Ordinal))}");
     }
 
-    private static CanonicalProject CaptureCanonicalProject()
+    private static CanonicalProject CaptureCanonicalProject(string fixtureName = "ideaengineering")
     {
-        var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");
+        var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", fixtureName);
         var snapshot = new LocalRepositorySourceAdapter()
             .CaptureAsync(new SourceRequest { Location = root }, CancellationToken.None)
             .GetAwaiter()
