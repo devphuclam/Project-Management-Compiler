@@ -59,6 +59,28 @@ internal static class ExtractionParserTests
         TestAssert.Equal("table-01", diagnostic.SourceReferences.Single().Table, "Duplicate attribute diagnostics must identify the source table.");
     }
 
+    public static void HtmlParserParsesQuotedAndUnquotedDataAttributesAndRejectsUnquotedDuplicates()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr data-phase=a data-gate=G1 data-owner='Team Alpha'><td>A01</td><td>Valid attributes</td></tr>"
+            + "<tr data-phase=a data-phase=b><td>A02</td><td>Duplicate attributes</td></tr>"
+            + "<tr data-last=z data-first=x><td>A03</td><td>Following row</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(2, result.Rows.Count, "Rows with valid quoted and unquoted data attributes plus a following valid row should be emitted.");
+        TestAssert.Equal("A01", result.Rows[0].Cells["ID"], "The valid attribute row should be retained.");
+        TestAssert.Equal("a", result.Rows[0].DataAttributes["data-phase"], "Unquoted data-* values should be parsed.");
+        TestAssert.Equal("G1", result.Rows[0].DataAttributes["data-gate"], "Unquoted data-* values should preserve their text.");
+        TestAssert.Equal("Team Alpha", result.Rows[0].DataAttributes["data-owner"], "Quoted data-* values should preserve spaces.");
+        TestAssert.Equal("data-phase,data-gate,data-owner", string.Join(",", result.Rows[0].DataAttributes.Keys), "Valid data attributes must preserve source order across value forms.");
+        TestAssert.Equal("A03", result.Rows[1].Cells["ID"], "An unquoted duplicate-attribute row must not drop a following valid row.");
+        var diagnostic = result.Diagnostics.Single(diagnostic => diagnostic.Code == "DUPLICATE_DATA_ATTRIBUTE");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Unquoted duplicate data-* attributes must remain an Error diagnostic.");
+    }
+
     public static void HtmlParserRejectsMismatchedCellTagsWithoutGuessingRows()
     {
         var document = Document(
@@ -74,6 +96,36 @@ internal static class ExtractionParserTests
         var diagnostic = result.Diagnostics.Single(d => d.Code == "MISMATCHED_HTML_CELL_TAG");
         TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Mismatched HTML cell tags must be explicit errors.");
         TestAssert.Equal(document.Source.RelativeFile, diagnostic.SourceReferences.Single().RelativeFile, "Mismatched-cell diagnostics must retain source metadata.");
+    }
+
+    public static void HtmlParserRejectsExtraCellTagsAndPreservesFollowingRows()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</th></tr>"
+            + "<tr><td>A01</td><td>Extra close</td></td></tr>"
+            + "<tr><td>A02</td><td>Valid</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "A row with an extra cell tag must be skipped without dropping later valid rows.");
+        TestAssert.Equal("A02", result.Rows[0].Cells["ID"], "The valid row after an unbalanced row must be emitted.");
+        var diagnostic = result.Diagnostics.Single(diagnostic => diagnostic.Code == "UNBALANCED_HTML_CELL_TAG");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Unbalanced HTML cell tags must be explicit Error diagnostics.");
+    }
+
+    public static void HtmlParserRejectsMalformedHeaderCellTags()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1><table><tr><th>ID</th><th>Name</td></tr>"
+            + "<tr><td>A01</td><td>Should not be emitted</td></tr></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(0, result.Rows.Count, "A malformed header row must not be used to parse data rows.");
+        var diagnostic = result.Diagnostics.Single(diagnostic => diagnostic.Code == "UNBALANCED_HTML_CELL_TAG");
+        TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "Malformed header cell tags must be explicit Error diagnostics.");
     }
 
     public static void ParsersDiagnoseMissingHeadingsAndMalformedCells()
@@ -212,6 +264,25 @@ internal static class ExtractionParserTests
         TestAssert.Equal(0, result.Rows.Count, "An unclosed HTML table must not silently appear to have no parsed rows.");
         var diagnostic = result.Diagnostics.Single(d => d.Code == "UNCLOSED_HTML_TABLE");
         TestAssert.Equal(WarningSeverity.Error, diagnostic.Severity, "An unclosed HTML table must be an explicit Error diagnostic.");
+    }
+
+    public static void HtmlParserDiagnosesUnclosedRowsInsideMatchedTables()
+    {
+        var document = Document(
+            "docs/product/instances/idea-engineering/planning/idea-roadmap-december-2026.html",
+            "<h1>Gantt</h1>"
+            + "<table><tr><th>ID</th><th>Name</th></tr><tr><td>A01</td><td>Missing row close</td></table>"
+            + "<table><tr><th>ID</th><th>Name</th></tr><tr><td>A02</td><td>Valid</td></tr></table>"
+            + "<table><tr><td>A03</td></table>");
+
+        var result = HtmlTableParser.Parse(document);
+
+        TestAssert.Equal(1, result.Rows.Count, "Only the valid table row should be emitted.");
+        TestAssert.Equal("A02", result.Rows[0].Cells["ID"], "A valid table after malformed rows must remain parseable.");
+        var diagnostics = result.Diagnostics.Where(diagnostic => diagnostic.Code == "UNCLOSED_HTML_ROW").ToArray();
+        TestAssert.Equal(2, diagnostics.Length, "Each unclosed row inside a matched table must be diagnosed.");
+        TestAssert.True(diagnostics.All(diagnostic => diagnostic.Severity == WarningSeverity.Error), "Unclosed HTML rows must be explicit Error diagnostics.");
+        TestAssert.False(result.Diagnostics.Any(diagnostic => diagnostic.Code == "UNCLOSED_HTML_ROW" && diagnostic.SourceReferences.Any(reference => reference.Table == "table-02")), "A valid table must remain free of unclosed-row diagnostics.");
     }
 
     public static void DiscoveryIgnoresUnrecognizedCapturedDocuments()

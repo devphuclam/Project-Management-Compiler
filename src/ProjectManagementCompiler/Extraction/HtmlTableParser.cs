@@ -9,10 +9,12 @@ public static class HtmlTableParser
     private static readonly Regex HeadingPattern = new(@"<h[1-6][^>]*>(?<text>.*?)</h[1-6]>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex TablePattern = new(@"<table\b[^>]*>(?<body>(?:(?!<table\b).)*?)</table>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex TableTagPattern = new(@"</?table\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex RowTagPattern = new(@"</?tr\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex RowPattern = new(@"<tr\b(?<attributes>[^>]*)>(?<body>.*?)</tr>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex CellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</\k<kind>>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex AnyCellPattern = new(@"<(?<kind>th|td)\b[^>]*>(?<text>.*?)</(?<close>th|td)>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-    private static readonly Regex DataAttributePattern = new(@"(?<name>data-[A-Za-z0-9_-]+)\s*=\s*[""'](?<value>.*?)[""']", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex CellTagPattern = new(@"<(?<closing>/)?(?<kind>th|td)\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex DataAttributePattern = new(@"(?<name>data-[A-Za-z0-9_-]+)\s*=\s*(?:(?<quote>[""'])(?<quotedValue>.*?)\k<quote>|(?<unquotedValue>[^\s""'`=<>]+))", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled | RegexOptions.Singleline);
 
     public static PlanningParseResult Parse(PlanningDocument document)
@@ -53,10 +55,25 @@ public static class HtmlTableParser
                 section = null;
             }
 
+            diagnostics.AddRange(UnclosedRowDiagnostics(document, tableIndex, tableMatch.Groups["body"], content));
             var tableRows = RowPattern.Matches(tableMatch.Groups["body"].Value).Cast<Match>().ToArray();
             if (tableRows.Length == 0)
             {
                 continue;
+            }
+
+            var unbalancedCellRows = new HashSet<int>();
+            for (var index = 0; index < tableRows.Length; index++)
+            {
+                var rowMatch = tableRows[index];
+                if (!HasBalancedCellTags(rowMatch.Groups["body"].Value))
+                {
+                    unbalancedCellRows.Add(index);
+                    diagnostics.Add(UnbalancedCellDiagnostic(
+                        document,
+                        tableIndex,
+                        index));
+                }
             }
 
             var headerPosition = Array.FindIndex(tableRows, row => CellPattern.Matches(row.Groups["body"].Value).Cast<Match>().Any(cell => cell.Groups["kind"].Value.Equals("th", StringComparison.OrdinalIgnoreCase)));
@@ -75,6 +92,11 @@ public static class HtmlTableParser
                         ExtractionRule = "idea-planning-html-table-header"
                     }]
                 });
+                continue;
+            }
+
+            if (unbalancedCellRows.Contains(headerPosition))
+            {
                 continue;
             }
 
@@ -107,6 +129,11 @@ public static class HtmlTableParser
                             ExtractionRule = "idea-planning-html-cell-shape"
                         }]
                     });
+                    continue;
+                }
+
+                if (unbalancedCellRows.Contains(index))
+                {
                     continue;
                 }
 
@@ -147,7 +174,10 @@ public static class HtmlTableParser
                 var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var attribute in dataAttributes)
                 {
-                    attributes.Add(attribute.Groups["name"].Value, WebUtility.HtmlDecode(attribute.Groups["value"].Value));
+                    var value = attribute.Groups["quotedValue"].Success
+                        ? attribute.Groups["quotedValue"].Value
+                        : attribute.Groups["unquotedValue"].Value;
+                    attributes.Add(attribute.Groups["name"].Value, WebUtility.HtmlDecode(value));
                 }
                 var row = PlanningParserSupport.CreateRow(document, section, tableIndex, rowIndex, sourceLine, headers, values, attributes);
                 rows.Add(row);
@@ -157,6 +187,90 @@ public static class HtmlTableParser
 
         diagnostics.InsertRange(0, PlanningParserSupport.MissingHeadings(document, headings.Select(heading => heading.Text)));
         return new PlanningParseResult { Rows = rows, Diagnostics = diagnostics };
+    }
+
+    private static ImportWarning UnbalancedCellDiagnostic(
+        PlanningDocument document,
+        int tableIndex,
+        int rowIndex) => new()
+        {
+            Id = $"UNBALANCED_HTML_CELL_TAG:{document.Source.RelativeFile}:{tableIndex}:{rowIndex}",
+            Severity = WarningSeverity.Error,
+            Code = "UNBALANCED_HTML_CELL_TAG",
+            Message = $"HTML table {tableIndex} row {rowIndex} in '{document.Source.RelativeFile}' contains unbalanced cell tags; the row was skipped.",
+            SourceReferences = [document.Source.SourceReference with
+            {
+                RelativeFile = document.Source.RelativeFile,
+                Table = $"table-{tableIndex:D2}",
+                Item = $"row-{rowIndex:D3}",
+                ExtractionRule = "idea-planning-html-cell-shape"
+            }]
+        };
+
+    private static bool HasBalancedCellTags(string html)
+    {
+        var openCells = new Stack<string>();
+        foreach (Match tag in CellTagPattern.Matches(html))
+        {
+            var kind = tag.Groups["kind"].Value;
+            if (tag.Groups["closing"].Success)
+            {
+                if (openCells.Count == 0 || !openCells.Peek().Equals(kind, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                openCells.Pop();
+                continue;
+            }
+
+            openCells.Push(kind);
+        }
+
+        return openCells.Count == 0;
+    }
+
+    private static IReadOnlyList<ImportWarning> UnclosedRowDiagnostics(
+        PlanningDocument document,
+        int tableIndex,
+        Group tableBody,
+        string content)
+    {
+        var openRows = new Stack<(int RowIndex, int SourceLine)>();
+        var rowIndex = 0;
+        foreach (Match tag in RowTagPattern.Matches(tableBody.Value))
+        {
+            if (tag.Value.StartsWith("</", StringComparison.Ordinal))
+            {
+                if (openRows.Count > 0)
+                {
+                    openRows.Pop();
+                }
+
+                continue;
+            }
+
+            rowIndex++;
+            openRows.Push((rowIndex, content[..(tableBody.Index + tag.Index)].Count(character => character == '\n') + 1));
+        }
+
+        return openRows
+            .Reverse()
+            .Select(unclosed => new ImportWarning
+            {
+                Id = $"UNCLOSED_HTML_ROW:{document.Source.RelativeFile}:{tableIndex}:{unclosed.RowIndex}",
+                Severity = WarningSeverity.Error,
+                Code = "UNCLOSED_HTML_ROW",
+                Message = $"HTML table {tableIndex} row {unclosed.RowIndex} in '{document.Source.RelativeFile}' is not closed; the row was not parsed.",
+                SourceReferences = [document.Source.SourceReference with
+                {
+                    RelativeFile = document.Source.RelativeFile,
+                    Table = $"table-{tableIndex:D2}",
+                    Item = $"row-{unclosed.RowIndex:D3}",
+                    ExtractionRule = "idea-planning-html-row-shape"
+                }]
+            })
+            .ToArray();
     }
 
     private static IReadOnlyList<ImportWarning> UnclosedTableDiagnostics(PlanningDocument document, string content)
