@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-mvp1-project-management-compiler`  
 **Created**: 2026-09-17  
-**Status**: Approved MVP1 scope with execution-overlay amendment; corrective source-contract remediation in progress
+**Status**: Approved MVP1 scope with execution-overlay amendment; final correctness hardening verified
 **Input**: Approved architecture and MVP1 scope for a local project-management intelligence tool
 
 ## User problem

@@ -39,8 +39,8 @@ this checkpoint.
 
 The following status is based on focused implementation tests, the dependency-
 free test harness, the solution build, and the loopback verification workflow.
-`COMPLETE` means the implementation and focused acceptance evidence exist;
-`PARTIAL` means the implementation exists but the final gate is still open.
+`COMPLETE` means the implementation and acceptance evidence exist; the final
+hardening gate is now closed by fresh candidate verification.
 
 | Task | Classification | Evidence / remaining gate |
 |---|---|---|
@@ -63,9 +63,9 @@ free test harness, the solution build, and the loopback verification workflow.
 | T029 | COMPLETE | Shared WBS/Gantt/Kanban/dependency/CPM/dashboard projections are rendered. |
 | T030 | COMPLETE | UI JSON reopen uses `/api/reopen` and recalculates from an explicit as-of date. |
 | T031 | COMPLETE | Primary fixture E2E script uses `ideaengineering-real-shaped` and covers analyze/update/alert/reopen/XLSX plus UI labels `Delivery cards completed X/53`. |
-| T032 | PARTIAL | The verification workflow exists and the hardening pass has a passing local run; final fresh-candidate verification remains open. |
-| T033 | PARTIAL | The prior review is recorded; the final hardening review must still check typed identity, graph leakage, finish semantics, mapping warnings, and source safety. |
-| T034 | PARTIAL | The runbook is updated; final candidate verification and repository hygiene evidence remain open until the hardening branch is complete. |
+| T032 | COMPLETE | Fresh candidate restore, build, 149-test run, real-shaped web/API flow, JSON reopen, CARIO XLSX, and security/source-safety checks pass. |
+| T033 | COMPLETE | Focused review checked typed identity, graph leakage, inclusive finish semantics, mapping warnings, source safety, browser DOM safety, and schema compatibility. |
+| T034 | COMPLETE | Runbook and final handoff evidence are current; the hardening branch is ready for normal push and merge. |
 
 ## Foundation
 
@@ -126,9 +126,8 @@ free test harness, the solution build, and the loopback verification workflow.
 ## Final MVP1 hardening / correctness remediation — 2026-09-18
 
 These tasks supersede the earlier broad completion labels where the audit found
-semantic gaps. Each checked item has implementation and regression evidence in
-the hardening branch; H012 remains open until the final candidate verification
-and focused manual review are complete.
+semantic gaps. Each checked item has implementation, regression, review, and
+fresh candidate-verification evidence in the hardening branch.
 
 Optional Level-B compatibility check (read-only, not copied or committed): the
 available `devphuclam/IDEAEngineering` checkout at reference commit
@@ -147,4 +146,4 @@ milestones, 512 authoritative hours, 88 reserve hours, and 600 capacity hours.
 - [x] H009 Remove the ambiguous dashboard project completion percentage and retain card counts.
 - [x] H010 Add typed endpoint columns to CARIO dependency export and contract tests.
 - [x] H011 Update source review metadata, JSON filename contract, real-shaped runbook/verify-web flow, and optional HTTPS traceability.
-- [ ] H012 Run fresh restore/build/tests/verify, focused manual code review, secret/source-safety review, and final git handoff.
+- [x] H012 Run fresh restore/build/tests/verify, focused manual code review, secret/source-safety review, and final git handoff.
