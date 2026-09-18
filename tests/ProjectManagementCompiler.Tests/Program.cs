@@ -119,6 +119,7 @@ internal static class Program
         ,("InvalidDependencyEvidenceCannotFabricateDownstreamRisk", AnalysisTests.InvalidDependencyEvidenceCannotFabricateDownstreamRisk)
         ,("WbsProjectionBuildsPhasePackageCardAndMilestoneTree", ManagementProjectionTests.WbsProjectionBuildsPhasePackageCardAndMilestoneTree)
         ,("WbsProjectionDoesNotDoubleCountExecutableCards", ManagementProjectionTests.WbsProjectionDoesNotDoubleCountExecutableCards)
+        ,("SharedManagementViewsPreservePlanningExecutionAndRiskSemantics", ManagementProjectionTests.SharedManagementViewsPreservePlanningExecutionAndRiskSemantics)
         ,("CpmUsesNormalizedDurationAndExcludesInvalidSourceEdges", CpmTests.CpmUsesNormalizedDurationAndExcludesInvalidSourceEdges)
         ,("CpmDetectsCyclesAndLeavesBaselineUntouched", CpmTests.CpmDetectsCyclesAndLeavesBaselineUntouched)
         ,("CpmRejectsUnsupportedEligibleEdges", CpmTests.CpmRejectsUnsupportedEligibleEdges)

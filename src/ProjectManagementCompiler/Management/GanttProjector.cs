@@ -33,9 +33,22 @@ public sealed record GanttItem
     public IReadOnlyList<GanttLaneEntry> Lanes { get; init; } = Array.Empty<GanttLaneEntry>();
 }
 
+public sealed record GanttMilestoneEntry
+{
+    public string MilestoneId { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public MilestoneKind Kind { get; init; }
+    public string? ParentId { get; init; }
+    public DateOnly? PlannedDate { get; init; }
+    public bool IsCritical { get; init; }
+    public IReadOnlyList<string> DependencyIds { get; init; } = Array.Empty<string>();
+    public DataState State { get; init; } = DataState.Unknown;
+}
+
 public sealed record GanttProjection
 {
     public IReadOnlyList<GanttItem> Items { get; init; } = Array.Empty<GanttItem>();
+    public IReadOnlyList<GanttMilestoneEntry> Milestones { get; init; } = Array.Empty<GanttMilestoneEntry>();
     public IReadOnlyList<ImportWarning> Diagnostics { get; init; } = Array.Empty<ImportWarning>();
 }
 
@@ -50,7 +63,6 @@ public sealed class GanttProjector
             .GroupBy(alert => alert.WorkItemId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(alert => alert.AlertCode, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
         var dependenciesBySubject = project.Dependencies
-            .Where(dependency => string.Equals(dependency.SubjectKind, "DeliveryCard", StringComparison.OrdinalIgnoreCase))
             .GroupBy(dependency => dependency.SubjectId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 group => group.Key,
@@ -122,9 +134,28 @@ public sealed class GanttProjector
             });
         }
 
+        var milestoneEntries = project.Milestones
+            .OrderBy(milestone => milestone.PlannedDate)
+            .ThenBy(milestone => milestone.Id, StringComparer.Ordinal)
+            .Select(milestone => new GanttMilestoneEntry
+            {
+                MilestoneId = milestone.Id,
+                Name = milestone.Name,
+                Kind = milestone.Kind,
+                ParentId = milestone.ParentId,
+                PlannedDate = ValidDate(milestone.PlannedDate) ? milestone.PlannedDate : null,
+                IsCritical = criticalPathIds.Contains(milestone.Id),
+                DependencyIds = dependenciesBySubject.TryGetValue(milestone.Id, out var dependencyIds)
+                    ? dependencyIds
+                    : Array.Empty<string>(),
+                State = ValidDate(milestone.PlannedDate) ? DataState.Known : DataState.Unknown
+            })
+            .ToArray();
+
         return new GanttProjection
         {
             Items = items,
+            Milestones = milestoneEntries,
             Diagnostics = analysis.Diagnostics
         };
     }

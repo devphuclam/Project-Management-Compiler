@@ -44,7 +44,7 @@ public sealed class WbsProjector
         var cardsByWorkPackage = project.DeliveryCards
             .GroupBy(card => card.WorkPackageId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(card => card.Id, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
-        var milestonesByPhase = project.Milestones
+        var milestonesByParent = project.Milestones
             .Where(milestone => milestone.ParentId is not null)
             .GroupBy(milestone => milestone.ParentId!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.OrderBy(milestone => milestone.PlannedDate).ThenBy(milestone => milestone.Id, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
@@ -63,6 +63,11 @@ public sealed class WbsProjector
                         cards.AddRange(packageCards.Select(CreateCardNode));
                     }
 
+                    if (milestonesByParent.TryGetValue(workPackage.Id, out var packageMilestones))
+                    {
+                        cards.AddRange(packageMilestones.Select(CreateMilestoneNode));
+                    }
+
                     workPackages.Add(CreatePlannedNode(
                         workPackage.Id,
                         workPackage.Name,
@@ -79,7 +84,7 @@ public sealed class WbsProjector
             }
 
             var milestones = new List<WbsNode>();
-            if (milestonesByPhase.TryGetValue(phase.Id, out var phaseMilestones))
+            if (milestonesByParent.TryGetValue(phase.Id, out var phaseMilestones))
             {
                 milestones.AddRange(phaseMilestones.Select(CreateMilestoneNode));
             }
@@ -109,7 +114,7 @@ public sealed class WbsProjector
             AddMissingParentDiagnostic(diagnostics, "MISSING_WBS_WORK_PACKAGE", card.Id, card.WorkPackageId, "delivery card");
         }
 
-        foreach (var milestone in project.Milestones.Where(milestone => milestone.ParentId is null || !phaseIds.Contains(milestone.ParentId)))
+        foreach (var milestone in project.Milestones.Where(milestone => milestone.ParentId is null || (!phaseIds.Contains(milestone.ParentId) && !workPackageIds.Contains(milestone.ParentId))))
         {
             AddMissingParentDiagnostic(diagnostics, "MISSING_WBS_PHASE", milestone.Id, milestone.ParentId ?? string.Empty, "milestone");
         }

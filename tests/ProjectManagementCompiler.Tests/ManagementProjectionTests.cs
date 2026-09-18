@@ -37,6 +37,25 @@ internal static class ManagementProjectionTests
         TestAssert.False(AllNodes(projection.Root).Any(node => node.Kind == WbsNodeKind.WorkPackage && node.Id.EndsWith("-A", StringComparison.Ordinal)), "Delivery cards must not be reclassified as work packages.");
     }
 
+    public static void SharedManagementViewsPreservePlanningExecutionAndRiskSemantics()
+    {
+        var project = CaptureCanonicalProject();
+        var analysis = new ManagementAnalysisOrchestrator().Analyze(project, new DateOnly(2026, 9, 28));
+        var views = new ManagementViewProjector().Build(project, analysis, new DateOnly(2026, 9, 28));
+
+        TestAssert.Equal(53, views.Gantt.Items.Count, "Shared Gantt projection must expose every delivery card.");
+        TestAssert.Equal(7, views.Gantt.Milestones.Count, "Shared Gantt projection must expose milestone markers.");
+        TestAssert.Equal(7, views.DependencyNetwork.Nodes.Count(node => node.IsMilestone), "Dependency network must retain milestone nodes.");
+        TestAssert.True(
+            views.DependencyNetwork.Edges.Any(edge => edge.PredecessorId == "X99" && !edge.IncludedInAnalysis && edge.Reason == "INVALID_SOURCE_EVIDENCE"),
+            "Dependency network must retain and explain excluded invalid source evidence.");
+        TestAssert.Equal(1, views.Kanban.Columns.Single(column => column.Id == "IN_PROGRESS").WipLimit, "Kanban must use the canonical WIP policy rather than a hardcoded limit.");
+        TestAssert.Equal(null, views.Dashboard.CompletionPercentage, "Planning-only dashboards must not fabricate a completion percentage.");
+        TestAssert.Equal(analysis.CalculatedFinish, views.Dashboard.CpmFinish, "Dashboard CPM finish must remain separate from forecast finish.");
+        TestAssert.Equal(null, views.Dashboard.ForecastFinish, "Dashboard forecast must remain unknown without forecast evidence.");
+        TestAssert.Equal(analysis.CriticalPathIds.Count, views.Cpm.Rows.Count(row => row.IsCritical), "CPM view must preserve critical-path flags.");
+    }
+
     private static IEnumerable<WbsNode> AllNodes(WbsNode node) =>
         new[] { node }.Concat(node.Children.SelectMany(AllNodes));
 
