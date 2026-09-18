@@ -43,6 +43,14 @@
         <div class="control-submit">
           <button id="analyze-button" class="primary">Analyze source</button>
         </div>
+        <label class="wide">
+          Reopen saved canonical JSON
+          <input id="reopen-json" type="file" accept="application/json,.json">
+          <small>Loads a previously saved project.json and recalculates derived views locally.</small>
+        </label>
+        <div class="control-submit">
+          <button id="reopen-button" class="secondary" type="button">Reopen JSON</button>
+        </div>
       </div>
       <p id="error-message" class="error" role="alert" hidden></p>
     </section>

@@ -130,6 +130,19 @@ try {
 
         $sheetNames = @($workbookXml.SelectNodes("//*[local-name()='sheet']") | ForEach-Object { $_.name })
         Assert-Condition (([string]::Join(',', $sheetNames)) -eq '01_TASKS,02_ASSIGNMENTS,03_CHILDREN_MILESTONES,04_DEPENDENCIES,05_PROJECT_INFO,06_IMPORT_WARNINGS') 'XLSX worksheet names are not the exact six-sheet contract.'
+
+        $taskEntry = $archive.GetEntry('xl/worksheets/sheet1.xml')
+        $taskReader = [IO.StreamReader]::new($taskEntry.Open())
+        try {
+            $taskXml = [xml] $taskReader.ReadToEnd()
+        }
+        finally {
+            $taskReader.Dispose()
+        }
+
+        $taskHeader = @($taskXml.SelectNodes("//*[local-name()='row'][1]//*[local-name()='t']") | ForEach-Object { $_.'#text' })
+        Assert-Condition (([string]::Join('|', $taskHeader)) -eq 'Work Item Type|Task ID|Phase|Work Package|Nội dung công việc|Ngày bắt đầu dự kiến|Deadline|Mức độ ưu tiên|Đơn vị / Phòng ban|Ban|Ghi chú|Trạng thái ban đầu|Planned Effort (hours)|Baseline / Analysis State|Source Reference') '01_TASKS headers do not match the CARIO contract.'
+        Assert-Condition ($taskXml.OuterXml.Contains('Decision', [StringComparison]::Ordinal) -or $taskXml.OuterXml.Contains('Milestone', [StringComparison]::Ordinal)) '01_TASKS must include decision/milestone records.'
     }
     finally {
         $archive.Dispose()
@@ -138,6 +151,8 @@ try {
 
     $appJs = Get-Content -LiteralPath $appJsPath -Raw
     Assert-Condition (-not $appJs.Contains('innerHTML', [StringComparison]::OrdinalIgnoreCase)) 'Browser UI must not use unsafe innerHTML rendering.'
+    Assert-Condition ($appJs.Contains('Delivery cards completed', [StringComparison]::Ordinal)) 'Browser UI must label completion as Delivery cards completed X/53.'
+    Assert-Condition ($appJs.Contains('/api/reopen', [StringComparison]::Ordinal)) 'Browser UI must expose canonical JSON reopen.'
     $program = Get-Content -LiteralPath $programPath -Raw
     Assert-Condition ($program.Contains('http://127.0.0.1:5050', [StringComparison]::Ordinal)) 'Program must bind to the loopback address.'
     Assert-Condition (-not $program.Contains('0.0.0.0', [StringComparison]::Ordinal)) 'Program must not bind to all interfaces.'

@@ -52,7 +52,7 @@
     const values = [
       ["Project", summary.project.name || summary.project.id],
       ["Cards", dashboard.totalCards],
-      ["Completed", dashboard.completed],
+      ["Delivery cards completed", dashboard.completed + "/" + dashboard.totalCards],
       ["In progress", dashboard.inProgress],
       ["Overdue", dashboard.overdue],
       ["At risk", dashboard.atRisk]
@@ -90,7 +90,7 @@
       ["Completed", view.completed], ["In progress", view.inProgress], ["Not started", view.notStarted],
       ["Suspended", view.suspended], ["Cancelled", view.cancelled], ["Late to start", view.lateToStart],
       ["Overdue", view.overdue], ["At risk", view.atRisk], ["Completed late", view.completedLate],
-      ["Completion %", view.completionPercentage === null ? "UNKNOWN" : view.completionPercentage + "%"],
+      ["Delivery cards completed", view.completed + "/" + view.totalCards],
       ["Baseline finish", view.baselineFinish || "UNKNOWN"], ["CPM finish", view.cpmFinish || "UNKNOWN"],
       ["Forecast finish", view.forecastFinish || "UNKNOWN"]
     ];
@@ -280,6 +280,31 @@
     }
   }
 
+  async function reopenJson() {
+    showError(null);
+    const input = byId("reopen-json");
+    const file = input.files && input.files[0];
+    if (!file) {
+      showError(new Error("Choose a saved canonical JSON file first."));
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showError(new Error("The selected JSON file exceeds the 8 MiB local limit."));
+      return;
+    }
+    try {
+      setStatus("Reopening canonical project…");
+      const json = await file.text();
+      const asOfDate = byId("as-of-date").value || null;
+      const summary = await request("/api/reopen", jsonOptions({ json, asOfDate }));
+      applySummary(summary);
+      setStatus("Reopened " + (summary.project.name || summary.project.id) + ".");
+    } catch (error) {
+      showError(error);
+      setStatus("Reopen failed.");
+    }
+  }
+
   async function applyExecution(event) {
     event.preventDefault();
     showError(null);
@@ -313,6 +338,7 @@
   }));
   byId("analyze-button").addEventListener("click", analyze);
   byId("refresh-button").addEventListener("click", refresh);
+  byId("reopen-button").addEventListener("click", reopenJson);
   byId("execution-form").addEventListener("submit", applyExecution);
   byId("save-json-button").addEventListener("click", () => { window.location.href = "/api/exports/project.json"; });
   byId("export-xlsx-button").addEventListener("click", () => { window.location.href = "/api/exports/cario.xlsx"; });
