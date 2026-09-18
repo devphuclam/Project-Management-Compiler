@@ -87,6 +87,11 @@ internal static class Program
         ,("ProjectNameFallbackIgnoresHeadingsInsideMarkdownFences", AuthorityResolutionTests.ProjectNameFallbackIgnoresHeadingsInsideMarkdownFences)
         ,("UnmatchedHtmlClosingTagsDisableCanonicalBaseline", AuthorityResolutionTests.UnmatchedHtmlClosingTagsDisableCanonicalBaseline)
         ,("ControlledFixtureResolvesBaselinePhasesAndPolicyFacts", AuthorityResolutionTests.ControlledFixtureResolvesBaselinePhasesAndPolicyFacts)
+        ,("ControlledFixtureExtractsCanonicalPlanningRecords", ExtractionFixtureTests.ControlledFixtureExtractsCanonicalPlanningRecords)
+        ,("ExtractionRetainsInvalidSourceDependencyEvidence", ExtractionFixtureTests.ExtractionRetainsInvalidSourceDependencyEvidence)
+        ,("CanonicalNormalizationPreservesIndependentEffortAndDuration", NormalizationTests.CanonicalNormalizationPreservesIndependentEffortAndDuration)
+        ,("CanonicalNormalizationRetainsPolicyReserveStatesAndDeterministicRelationships", NormalizationTests.CanonicalNormalizationRetainsPolicyReserveStatesAndDeterministicRelationships)
+        ,("WorkingCalendarNormalizesAuthoredHalfDaysWithoutUsingEffort", NormalizationTests.WorkingCalendarNormalizesAuthoredHalfDaysWithoutUsingEffort)
     ];
 
     public static int Main()
