@@ -80,6 +80,16 @@ try {
     Assert-Condition (-not ($summaryJson -match '"content"\s*:')) 'Application source metadata must not expose captured document content.'
     Assert-Condition (@($summary.sources.documents.relativeFile | Where-Object { [IO.Path]::IsPathRooted($_) }).Count -eq 0) 'Application source metadata must expose relative document paths only.'
 
+    $disabledReadinessSummary = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/compile' -Method Post -Body @{
+        sourcePath = $fixture
+        asOfDate = '2026-09-28'
+        includeManagementEvidence = $false
+        managementEvidenceIncrementPath = 'specs/004-technical-pilot-readiness'
+    }
+    Assert-Condition ($disabledReadinessSummary.managementControl.discoveryState -eq 'NOT_REQUESTED') 'A disabled readiness switch must remain NOT_REQUESTED even when a path is supplied.'
+    Assert-Condition (@($disabledReadinessSummary.managementEvidence.observations).Count -eq 0) 'A disabled readiness switch must not attach management evidence.'
+    Assert-Condition (@($disabledReadinessSummary.sources.documents.relativeFile | Where-Object { $_ -like 'specs/004-technical-pilot-readiness/*' }).Count -eq 0) 'A disabled readiness switch must not capture readiness increment files.'
+
     $readinessSummary = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/compile' -Method Post -Body @{
         sourcePath = $fixture
         asOfDate = '2026-09-28'
@@ -269,12 +279,19 @@ try {
     $indexHtml = Get-Content -LiteralPath $indexHtmlPath -Raw
     $stylesCss = Get-Content -LiteralPath $stylesCssPath -Raw
     Assert-Condition (-not $appJs.Contains('innerHTML', [StringComparison]::OrdinalIgnoreCase)) 'Browser UI must not use unsafe innerHTML rendering.'
+    Assert-Condition ($appJs.Contains('const rawPath = byId("management-evidence-path").value.trim();', [StringComparison]::Ordinal)) 'Frontend intake must normalize the readiness path independently from the checkbox.'
+    Assert-Condition ($appJs.Contains('includeManagementEvidence: includeManagementEvidence,', [StringComparison]::Ordinal)) 'Frontend intake must send the checkbox as the authoritative enable/disable switch.'
+    Assert-Condition ($appJs.Contains('managementEvidenceIncrementPath: includeManagementEvidence ? rawPath : null', [StringComparison]::Ordinal)) 'Frontend intake must ignore the readiness path when the switch is disabled.'
+    Assert-Condition (-not $appJs.Contains('includeManagementEvidence: includeManagementEvidence || Boolean(managementEvidenceIncrementPath)', [StringComparison]::Ordinal)) 'Frontend intake must not enable readiness from path presence alone.'
+    Assert-Condition ($indexHtml.Contains('When disabled, this path is ignored.', [StringComparison]::Ordinal)) 'Readiness path helper text must explain disabled-switch semantics.'
+    Assert-Condition ($appJs.Contains('Readiness and gate evidence are shown separately.', [StringComparison]::Ordinal) -and $appJs.Contains('Current gate evidence is shown separately.', [StringComparison]::Ordinal)) 'Loaded readiness wording must keep baseline and gate evidence separate.'
+    Assert-Condition ($appJs.Contains('Actual phase entry and gate authorization are not loaded.', [StringComparison]::Ordinal) -and $appJs.Contains('Authoritative gate evidence is not loaded.', [StringComparison]::Ordinal)) 'Unloaded readiness wording must remain truthful.'
     Assert-Condition ($appJs.Contains('renderManagementControl', [StringComparison]::Ordinal) -and $appJs.Contains('management-control', [StringComparison]::Ordinal)) 'Browser UI must expose the bounded management control view.'
     Assert-Condition ($appJs.Contains('READINESS CONTEXT', [StringComparison]::Ordinal) -and $appJs.Contains('CURRENT GATE EVIDENCE', [StringComparison]::Ordinal)) 'Overview must distinguish evidence-derived readiness context and current gate evidence.'
     Assert-Condition ($appJs.Contains('renderReadinessAttentionQueue', [StringComparison]::Ordinal) -and $appJs.Contains('PARENT CONTEXT · READINESS', [StringComparison]::Ordinal)) 'Browser UI must expose grouped readiness attention and typed parent context.'
     Assert-Condition ($appJs.Contains('P01–P07 readiness', [StringComparison]::Ordinal) -and $appJs.Contains('Evidence inspector', [StringComparison]::Ordinal)) 'Browser UI must expose readiness and inspector sections.'
     Assert-Condition ($indexHtml.Contains('management-evidence-path', [StringComparison]::Ordinal) -and $indexHtml.Contains('Include repository readiness evidence', [StringComparison]::Ordinal)) 'Source intake must expose the explicit repository-readiness evidence profile.'
-    Assert-Condition ($indexHtml.Contains('Required when repository readiness evidence is enabled', [StringComparison]::Ordinal)) 'Source intake must explain that the readiness path is required when enabled.'
+    Assert-Condition ($indexHtml.Contains('Required only when repository readiness evidence is enabled', [StringComparison]::Ordinal)) 'Source intake must explain that the readiness path is required when enabled.'
     Assert-Condition ($appJs.Contains('MANAGEMENT_EVIDENCE_PATH_REQUIRED', [StringComparison]::Ordinal) -or $appJs.Contains('Select the readiness increment path', [StringComparison]::Ordinal)) 'Browser intake must expose a clear missing-readiness-path validation.'
     Assert-Condition ($indexHtml.Contains('Readiness control', [StringComparison]::Ordinal)) 'Browser UI must expose the readiness control tab.'
     Assert-Condition ($appJs.Contains('gantt-timeline', [StringComparison]::Ordinal)) 'Gantt renderer must expose a split timeline surface.'

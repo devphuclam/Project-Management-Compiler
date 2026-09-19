@@ -73,6 +73,12 @@ specification discovery. In the source-intake panel:
 3. select **Include repository readiness evidence**;
 4. choose an as-of date and select **Analyze source**.
 
+The **Include repository readiness evidence** checkbox is the authoritative
+enable/disable switch. If it is off, the readiness path is ignored and the
+compile remains planning-only with **Repository readiness: Not requested**,
+even when the path text is retained in the field. If it is on, the path is
+required and must identify the bounded readiness increment.
+
 The checkbox without a path is rejected with
 `MANAGEMENT_EVIDENCE_PATH_REQUIRED` and the message “Select the readiness
 increment path before including repository readiness evidence.” The bounded

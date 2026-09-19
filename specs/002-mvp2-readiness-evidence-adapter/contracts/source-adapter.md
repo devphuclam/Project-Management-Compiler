@@ -45,6 +45,15 @@ compile contract fails before capture with `MANAGEMENT_EVIDENCE_PATH_REQUIRED`
 and instructs the operator to select the readiness increment path. This is a
 configuration error, not an unknown active increment.
 
+`includeManagementEvidence` is the authoritative enable/disable switch for a
+fresh source compilation. When it is `false`,
+`managementEvidenceIncrementPath` is ignored, even when a path value is
+present, and capture remains planning-only with discovery state
+`NOT_REQUESTED`. When it is `true`, the path is required and the bounded
+readiness profile is captured and adapted. A saved canonical JSON reopen uses
+the evidence already persisted in that JSON; the fresh-compilation switch does
+not strip stored evidence.
+
 ## Safe result boundary
 
 The result may contain typed facts, diagnostic codes, repository-relative
