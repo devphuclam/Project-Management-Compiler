@@ -62,6 +62,30 @@ _Avoid_: source note, comment
 A structured diagnostic that explains missing, ambiguous, conflicting, unsupported, or unresolved source information without silently guessing a business value.
 _Avoid_: log message, validation noise
 
+**Source Manifest**:
+The sole discovery entry point for a manifest import. It declares the source
+contract version, snapshot policy, exact source roles, expected totals, and
+paths relative to one repository root. A source manifest does not become a
+planning authority; the roles it declares assign field-level authority.
+_Avoid_: optional index, repository scan hint, file-order configuration
+
+**Import Context**:
+The explicit snapshot selector supplied with an import: either one exact Git
+commit or a working-tree preview. It is not inferred from file timestamps or
+the newest visible branch.
+_Avoid_: current folder state, latest file, implicit HEAD
+
+**Official Snapshot**:
+A validated manifest import whose declared inputs all come from one committed
+source snapshot and whose Source Readiness Gate permits official handoff. A
+failed candidate never replaces the last valid official snapshot.
+_Avoid_: latest import attempt, working-tree preview
+
+**Uncommitted Preview**:
+A validated view of working-tree source that remains visibly non-authoritative
+and cannot replace the official snapshot.
+_Avoid_: draft baseline, current official project
+
 **Actual Work**:
 Recorded execution evidence for effort spent or work accepted. It is unknown when the source contains planning only.
 _Avoid_: elapsed calendar time, commit count
@@ -94,9 +118,30 @@ _Avoid_: authored workflow state
 
 ## Execution overlay amendment
 
-**Execution Overlay**:
-Mutable manual evidence maintained by the Compiler for an executable delivery card. It is keyed by canonical work-item ID and never replaces or edits the source baseline.
-_Avoid_: actual task copy, second task store
+**Source Execution Snapshot**:
+Recorded execution facts imported from the manifest's `EXECUTION_AUTHORITY`.
+It preserves `NOT_RECORDED` separately from every execution state and never
+replaces or edits the source baseline.
+_Avoid_: inferred progress, manual overlay, second plan
+
+**Execution Proposal Overlay**:
+Mutable local proposals maintained by the Compiler for executable delivery
+cards. A proposal is keyed by canonical identity and base Snapshot ID. It can
+support an explicitly labelled scenario preview, but it is not official actual
+evidence until reviewed, merged into IDEAEngineering, and reimported.
+_Avoid_: execution authority, automatic write-back, current actuals
+
+**Recording State**:
+Whether attributable execution evidence exists for a delivery card. The
+controlled values are `RECORDED` and `NOT_RECORDED`; the latter never implies
+`NOT_STARTED`.
+_Avoid_: execution state, missing parser value
+
+**Result State**:
+The recorded outcome of work or verification, independent from Execution
+State. Controlled values are `NOT_RUN`, `PASS`, `FAIL`, `BLOCKED`, and
+`NOT_APPLICABLE`.
+_Avoid_: execution state, readiness summary
 
 **Variance**:
 Calculated information comparing actual or derived schedule information with the immutable baseline. Variance does not change execution state.
@@ -110,13 +155,18 @@ _Avoid_: persisted status, work item
 The explicit date supplied to analysis for late-start, active-overdue, and in-progress actual-lane calculations. Analysis never silently substitutes wall-clock time.
 _Avoid_: implicit current date
 
-Execution overlay, actual, and forecast remain separate from plan. Planned and actual effort remain separate from planned and actual working duration. CARIO output stays plan-focused: planned start and deadline are never replaced with actual dates.
+Source execution, proposal preview, actual, and forecast remain separate from
+plan. Planned and actual effort remain separate from planned and actual working
+duration. CARIO output stays plan-focused: planned start and deadline are never
+replaced with actual dates.
 
 **Field-level Authority**:
-Authority is assigned per semantic field, not by a blind document rank. DOC-07
-owns planning control, baseline, phase and gate policy; Appendix A owns work
-packages; the Kanban/CARIO register owns delivery cards and responsibility
-matrices; Gantt cross-checks; README discovers.
+Authority is assigned per semantic field, not by a blind document rank. The
+manifest discovers; DOC-07 owns roadmap and baseline fields; Appendix A owns
+work packages; the Kanban/CARIO register owns delivery cards and responsibility
+matrices; the Execution Register owns attributable actual execution facts;
+Gantt cross-checks; readiness supplies readiness evidence; navigation files own
+no planning or execution field.
 
 **Unknown Authored Date**:
 A missing or unsafe source date is null with an explicit state/diagnostic. It is
