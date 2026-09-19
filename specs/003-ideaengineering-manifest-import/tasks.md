@@ -150,7 +150,7 @@ subagents, and collect fresh evidence before integration.
 - [X] T047 [US1] Run Spec Kit converge against implementation and append any missing work to `specs/003-ideaengineering-manifest-import/tasks.md`; acceptance: the implementation converged after reconciling stale generated file references, so no additional convergence phase was required.
 - [X] T048 [US5] Perform manual code review of `src/ProjectManagementCompiler/` and `tests/ProjectManagementCompiler.Tests/` against repository standards and spec/ADR authority, including Git argument safety, path containment, no fallback, state retention, proposal isolation, and serialization safety; acceptance: no blocking finding remains.
 - [X] T049 [US5] Run `git diff --check`, changed-file secret/absolute-path/raw-source scans, fresh `git status --short --branch`, `git diff --stat main...HEAD`, and `git log --oneline main..HEAD`; acceptance: only intended public source/docs/tests are changed and no sensitive artifact is present.
-- [ ] T050 [US5] Fetch `origin/main`, fast-forward local `main` only after all checks, merge the implementation branch with `--ff-only`, push `main`, and verify remote SHA; acceptance: remote `main` points at the verified final commit with no force push.
+- [X] T050 [US5] Fetch `origin/main`, fast-forward local `main` only after all checks, merge the implementation branch with `--ff-only`, push `main`, and verify remote SHA; acceptance: remote `main` points at the verified final commit with no force push.
 
 ## Dependencies and execution order
 
