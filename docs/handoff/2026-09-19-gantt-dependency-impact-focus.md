@@ -1,5 +1,7 @@
 # Handoff — Focused Gantt workspace and dependency impact
 
+Status: superseded by `2026-09-19-gantt-visual-redesign.md`, which records the approved drawer-based production implementation.
+
 ## What changed
 
 The Gantt view now follows the dependency-reading pattern used by established project-management tools:

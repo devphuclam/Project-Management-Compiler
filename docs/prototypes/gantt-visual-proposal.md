@@ -1,6 +1,6 @@
 # Gantt visual proposal
 
-Status: reviewable visual prototype, 2026-09-19. Open `gantt-visual-proposal.html` in a browser. Click `P04` to compare the default schedule with a selected task and its direct dependency links.
+Status: approved and implemented in the production Gantt, 2026-09-19. Open `gantt-visual-proposal.html` to review the original visual direction, or run the application to exercise the source-backed implementation. Click `P04` to compare the default schedule with a selected task and its direct dependency links.
 
 ## Why this composition
 
@@ -16,7 +16,7 @@ The controlled public fixture provides the prototype names, dates, and links: `P
 
 These are interaction references. The prototype is an original composition in the Compiler's visual language, not a copy of another product's assets or source.
 
-## Production acceptance after visual review
+## Production acceptance — verified
 
 1. A 1280-pixel viewport shows the project header, toolbar, PH0 task names, dates, and P04 bar without a permanently open inspector.
 2. Selecting P04 opens a narrow, dismissible drawer. `P03 → P04 → P06` is readable in text, with matching direct links on the chart. The full downstream chain stays a separate disclosure.
@@ -24,4 +24,4 @@ These are interaction references. The prototype is an original composition in th
 4. Optional metadata columns can be shown or hidden without clipping the header. Keyboard focus remains visible.
 5. PLAN, ACTUAL, ALERT, provenance, and CPM retain their existing semantic boundaries when the visual design is implemented in the application.
 
-The HTML is a visual prototype with public fixture data. Its controls illustrate the proposed layout; it is not wired to the compiler API or ready to replace the production Gantt.
+The HTML remains a standalone design artifact with public fixture data. The source-backed implementation now lives in `src/ProjectManagementCompiler/wwwroot/app.js` and `styles.css`, with regression coverage in `GanttUiRegressionTests.cs` and the local web verification gate.
