@@ -70,11 +70,7 @@ public sealed class ManagementEvidenceReconciler
 
             var rule = observation.EvidenceKind switch
             {
-                ManagementEvidenceKind.DecisionRecord => "DECISION_NO_DEFAULT_TARGET",
-                ManagementEvidenceKind.GateExecution or ManagementEvidenceKind.GateOutcome => "GATE_NO_DEFAULT_TARGET",
-                ManagementEvidenceKind.HumanAction => "HUMAN_ACTION_NO_DEFAULT_TARGET",
-                ManagementEvidenceKind.ChecklistContext => "CHECKLIST_NO_DEFAULT_TARGET",
-                ManagementEvidenceKind.ControlEnvelope => "CONTROL_ENVELOPE_NO_DEFAULT_TARGET",
+                ManagementEvidenceKind.ReadinessCheck => "READINESS_NO_EXPLICIT_TARGET",
                 _ => "EVIDENCE_NO_EXPLICIT_TARGET"
             };
             return Unmatched(observation, rule, "No explicit typed target was supplied.", diagnostics);
