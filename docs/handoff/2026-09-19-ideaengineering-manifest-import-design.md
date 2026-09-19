@@ -134,8 +134,9 @@ promote proposal or readiness evidence into source execution.
 The original implementation, MVP2.2 hardening, and final micro-pass were
 completed locally; this handoff does not claim remote CI. The final micro-pass
 artifact gate, TDD regressions, post-implementation analyze/converge, review,
-and fresh verification are green on the dedicated branch. The branch is ready
-for fast-forward integration only after the final main-branch preflight.
+and fresh verification are green on the dedicated branch. The implementation
+was then fast-forward integrated into compiler `main` at
+`a99a5e0de2d4f8f019f07747084f7fb83846ed1f`.
 
 Fresh local verification recorded for this pass:
 
@@ -151,9 +152,10 @@ Fresh local verification recorded for this pass:
 ## Git and local workspace notes
 
 The final micro-pass is isolated in the managed worktree for
-`codex/feature003-final-micro-pass`. At handoff time the compiler main baseline is
-`d4acdda85a39b5543253e63cc292bf8d3fdd6338`; final integration is permitted only
-after the post-pass analyze/converge, code review, and fresh verification gates.
+`codex/feature003-final-micro-pass`. The compiler main baseline before this
+pass was `d4acdda85a39b5543253e63cc292bf8d3fdd6338`; final integration is
+complete at `a99a5e0de2d4f8f019f07747084f7fb83846ed1f` after the post-pass
+analyze/converge, code review, and fresh verification gates.
 The main checkout and the separately checked-out IDEAEngineering source repository
 must remain untouched by implementation.
 
