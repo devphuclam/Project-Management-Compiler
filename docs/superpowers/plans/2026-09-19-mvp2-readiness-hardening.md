@@ -44,11 +44,11 @@
 - `EvidenceReconciliationStatus.Standalone` represents valid management evidence without a canonical work-item target.
 - `EffectiveEvidenceResolver.Resolve(ManagementEvidence)` returns immutable field selections with `SelectedObservation`, `SelectedValue`, `Status` (`RESOLVED`, `CONFLICT`, or `MISSING`), and source references.
 
-- [ ] Write tests proving role separation, standalone Gate/Decision/HumanAction, canonical-kind allow-list, field-level state/result conflict identity, and actual-vs-equal-authority effective selection.
-- [ ] Run the focused custom tests and confirm they fail for the missing enum/fields/resolver behavior.
-- [ ] Implement the smallest domain and resolver changes that make the tests pass; preserve observations and never select by document/parser order.
-- [ ] Run the focused tests and the existing reconciliation/JSON tests.
-- [ ] Commit with `feat: add effective management evidence semantics`.
+- [x] Write tests proving role separation, standalone Gate/Decision/HumanAction, canonical-kind allow-list, field-level state/result conflict identity, and actual-vs-equal-authority effective selection.
+- [x] Run the focused custom tests and confirm they fail for the missing enum/fields/resolver behavior.
+- [x] Implement the smallest domain and resolver changes that make the tests pass; preserve observations and never select by document/parser order.
+- [x] Run the focused tests and the existing reconciliation/JSON tests.
+- [x] Commit with `feat: add effective management evidence semantics`.
 
 ### Task 2: Source adapter, safe semantic extraction, and bounded gate paths
 
@@ -66,12 +66,12 @@
 - The adapter parses explicit `PG\\d+` gate labels, actual root gate records, summary rows, contract rows, and control-envelope successor fields.
 - Safe semantic text is normalized to bounded display text; raw table rows are never put in an observation.
 
-- [ ] Add failing fixture/adapter tests for P01 owner vs waiting-for, pending reviewer disposition, blocker summary, D0/HA summaries, parsed gate ID, explicit successor, missing actual gate record without noisy warning, and contract-not-current-state.
-- [ ] Run focused adapter tests and confirm the current implementation loses role/pending/successor meaning and hard-codes PG4.
-- [ ] Implement bounded path policy and source precedence metadata; retain contract capture but classify it as semantic contract, not current state.
-- [ ] Implement safe extraction rules with conservative ambiguity diagnostics rather than blind slash splitting.
-- [ ] Run adapter, fixture-safety, source-capture, and JSON tests.
-- [ ] Commit with `feat: preserve readiness meaning and gate provenance`.
+- [x] Add failing fixture/adapter tests for P01 owner vs waiting-for, pending reviewer disposition, blocker summary, D0/HA summaries, parsed gate ID, explicit successor, missing actual gate record without noisy warning, and contract-not-current-state.
+- [x] Run focused adapter tests and confirm the current implementation loses role/pending/successor meaning and hard-codes PG4.
+- [x] Implement bounded path policy and source precedence metadata; retain contract capture but classify it as semantic contract, not current state.
+- [x] Implement safe extraction rules with conservative ambiguity diagnostics rather than blind slash splitting.
+- [x] Run adapter, fixture-safety, source-capture, and JSON tests.
+- [x] Commit with `feat: preserve readiness meaning and gate provenance`.
 
 ### Task 3: Explicit intake contract, persistence, and compatibility
 
@@ -82,12 +82,12 @@
 - Modify: `src/ProjectManagementCompiler/Outputs/CanonicalJsonDigest.cs` only if new semantic fields need explicit digest coverage
 - Test: `tests/ProjectManagementCompiler.Tests/Mvp21HardeningTests.cs`
 
-- [ ] Add failing tests for checkbox-without-path, explicit path loading, save/reopen of new semantic fields, baseline semantic equality, overlay preservation, and no absolute-path/raw-row serialization.
-- [ ] Run those tests and record the expected red failures.
-- [ ] Reject `IncludeManagementEvidence=true` without a non-empty path with `MANAGEMENT_EVIDENCE_PATH_REQUIRED` and the exact user-facing guidance; preserve baseline-only when the checkbox is false.
-- [ ] Ensure newly added semantic fields participate in canonical JSON and digest while capture timestamps remain excluded.
-- [ ] Run compiler/application, legacy-schema, overlay, and digest tests.
-- [ ] Commit with `fix: require explicit readiness evidence intake`.
+- [x] Add failing tests for checkbox-without-path, explicit path loading, save/reopen of new semantic fields, baseline semantic equality, overlay preservation, and no absolute-path/raw-row serialization.
+- [x] Run those tests and record the expected red failures.
+- [x] Reject `IncludeManagementEvidence=true` without a non-empty path with `MANAGEMENT_EVIDENCE_PATH_REQUIRED` and the exact user-facing guidance; preserve baseline-only when the checkbox is false.
+- [x] Ensure newly added semantic fields participate in canonical JSON and digest while capture timestamps remain excluded.
+- [x] Run compiler/application, legacy-schema, overlay, and digest tests.
+- [x] Commit with `fix: require explicit readiness evidence intake`.
 
 ### Task 4: Effective management-control projection and UI copy
 
@@ -98,13 +98,13 @@
 - Modify: `src/ProjectManagementCompiler/wwwroot/styles.css` only for additive inspector/readiness fields if existing styles cannot display them
 - Test: `tests/ProjectManagementCompiler.Tests/Mvp21HardeningTests.cs`
 
-- [ ] Add failing projection tests for no fake PG4, effective gate state/outcome, proposed successor, compact readiness rows, source counts, meaningful decision/action attention, and detailed inspector fields.
-- [ ] Run focused projection tests and verify current `FirstOrDefault()`/hard-coded UI behavior fails them.
-- [ ] Project resolver selections and standalone reconciliation; show gate source/record status separately from next baseline control point.
-- [ ] Replace obsolete MVP1 intake wording with state-dependent repository-readiness wording and add path-required intake validation/helper.
-- [ ] Extend Gantt parent-context and management inspector details without changing execution state or layout architecture.
-- [ ] Run `node --check` when Node is available and web security checks.
-- [ ] Commit with `feat: project effective readiness control context`.
+- [x] Add failing projection tests for no fake PG4, effective gate state/outcome, proposed successor, compact readiness rows, source counts, meaningful decision/action attention, and detailed inspector fields.
+- [x] Run focused projection tests and verify current `FirstOrDefault()`/hard-coded UI behavior fails them.
+- [x] Project resolver selections and standalone reconciliation; show gate source/record status separately from next baseline control point.
+- [x] Replace obsolete MVP1 intake wording with state-dependent repository-readiness wording and add path-required intake validation/helper.
+- [x] Extend Gantt parent-context and management inspector details without changing execution state or layout architecture.
+- [x] Run `node --check` when Node is available and web security checks.
+- [x] Commit with `feat: project effective readiness control context`.
 
 ### Task 5: Spec/contract/runbook updates and full verification
 

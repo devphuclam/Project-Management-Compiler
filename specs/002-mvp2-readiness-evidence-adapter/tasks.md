@@ -42,3 +42,24 @@
 MVP2.1 is not complete while any checked item lacks test evidence, while the
 full verification is stale, or while the source/fixture safety review has not
 been performed. A later human approval is required before merging to `main`.
+
+## MVP2.1.1 evidence-fidelity hardening
+
+- [x] H001 Add explicit readiness-path validation and distinguish
+      `NOT_CONFIGURED` from unknown/ambiguous/unavailable discovery.
+- [x] H002 Preserve owner, waiting-for, required-authority, blocker, pending,
+      due, gate-effect, decision, and human-action meaning in bounded fields.
+- [x] H003 Add `STANDALONE` reconciliation for management-only objects and
+      remove unsupported canonical target kinds.
+- [x] H004 Parse source-derived gate IDs and capture the optional increment-root
+      actual gate record without treating its absence as a source failure.
+- [x] H005 Add field-level effective evidence selection with authority
+      precedence and honest equal-authority conflicts.
+- [x] H006 Project effective gate/readiness state, proposed successor, source
+      count, semantic attention, and inspector-safe provenance.
+- [x] H007 Update the public-safe fixture, contracts, runbook, compatibility
+      note, and verification evidence before the hardening closeout commit.
+
+The hardening closeout is limited to **MVP2.1 Repository Readiness /
+Management Evidence Ingestion + Evidence Fidelity Hardening**. It does not
+declare the whole MVP2 complete and does not authorize production readiness.

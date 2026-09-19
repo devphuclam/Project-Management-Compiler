@@ -2,9 +2,10 @@
 
 ## Status
 
-Approved for implementation on `codex/mvp2-readiness-evidence` after the MVP1
-baseline was verified green. This feature adds management evidence to the
-existing planning compiler; it does not reopen the MVP1 UI or planning model.
+Approved for implementation on the dedicated hardening branch
+`codex/mvp2-readiness-hardening` after the MVP1 baseline was verified green.
+This feature adds management evidence to the existing planning compiler; it
+does not reopen the planning model or change the approved UI architecture.
 
 ## Problem
 
@@ -65,6 +66,38 @@ The result must let an operator answer, from one compiled project:
 * importing the IDEAEngineering repository or copying its real private data;
 * a visual redesign or a second management dashboard;
 * declaring MVP2.1 complete before fresh build, tests, verification, and review.
+
+## MVP2.1 hardening amendments
+
+The readiness path is explicit for this increment. When repository readiness
+evidence is requested, the caller must provide a safe relative path below
+`specs/`; an empty path fails with `MANAGEMENT_EVIDENCE_PATH_REQUIRED`. The
+compiler does not auto-discover readiness packages. `NOT_CONFIGURED` is kept
+distinct from bounded-capture `UNKNOWN`, ambiguous identity, and unavailable
+source states.
+
+Management evidence preserves separate state, result, owner, waiting-for,
+required authority, blocker, pending action, due condition, gate effect, and
+bounded human-readable summaries. Role fields retain machine codes plus safe
+display/source wording. Decision, human-action, checklist, control-envelope,
+and gate records are valid standalone management evidence; only the canonical
+target kinds `Project`, `Phase`, `WorkPackage`, `DeliveryCard`, `Milestone`,
+and `Role` participate in canonical reconciliation.
+
+Gate IDs are extracted from explicit source labels (`PG\d+`). No generic gate
+view defaults to PG4. The bounded profile captures the gate contract and an
+optional expected-later actual record at the increment root. Contract/template
+files define permitted semantics but never current state. Effective gate and
+field values are derived by authority precedence: actual attributable record,
+readiness-register state/result, package README summary, contract/template
+semantics, then bounded prose/checklist context. Equal-authority disagreement
+returns `CONFLICT` with no selected value and preserves all observations and
+source references.
+
+The control view consumes only these derived selections. Proposed successor
+increment identity and scope are extracted from the control envelope and are
+not inferred from gate effect or planning documents. Baseline, execution
+overlay, CPM, and alert semantics remain unchanged.
 
 ## Inputs and outputs
 
@@ -139,11 +172,12 @@ mapping, and digest, with these additive values:
   string id.
 * FR-012: P01–P07 readiness work-package records map to
   `WorkPackage:P01`–`WorkPackage:P07` only when the canonical target exists.
-* FR-013: Decisions, PG4 records, and HA-* human actions remain unmatched by
-  default unless an explicit typed relationship is present.
+* FR-013: Decisions, PGn records, and HA-* human actions remain valid
+  standalone management evidence unless an explicit typed relationship is
+  present; they are not canonical planning work items.
 * FR-014: Every observation has exactly one reconciliation status:
-  `MATCHED`, `UNMATCHED`, `AMBIGUOUS`, or `INVALID`. Candidate targets and
-  the rule/reason are retained for non-matches.
+  `MATCHED`, `STANDALONE`, `UNMATCHED`, `AMBIGUOUS`, or `INVALID`. Candidate
+  targets and the rule/reason are retained for non-matches.
 * FR-015: Reconciliation never changes planning facts or creates a planning
   record from management evidence.
 
@@ -159,6 +193,13 @@ mapping, and digest, with these additive values:
   semantic digest equality. Execution updates preserve management evidence.
 * FR-020: The digest includes semantic evidence fields and excludes capture
   timestamps, analysis summaries, and UI-only ordering.
+* FR-021: `EffectiveEvidenceResolver` selects each semantic field by explicit
+  authority rank; equal-rank conflicting values produce `CONFLICT` with no
+  effective value and do not discard imported observations.
+* FR-022: A missing optional actual gate record before its owning task executes
+  is represented as `Not yet recorded`, not as a required-source failure.
+* FR-023: Proposed successor identity and bounded scope are projected only
+  when explicitly present in the control envelope.
 
 ## User scenarios and acceptance
 

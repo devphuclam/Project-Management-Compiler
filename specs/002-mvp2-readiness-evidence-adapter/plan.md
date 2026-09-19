@@ -18,6 +18,25 @@ The existing planning extractor remains the owner of the planning baseline.
 The existing `ExecutionOverlay` remains the owner of actual execution facts.
 The new adapter owns management/readiness evidence only.
 
+## Hardening amendment
+
+The implementation keeps imported observations immutable and derives effective
+field values through `EffectiveEvidenceResolver`. Readiness capture requires
+an explicit increment path below `specs/`; the empty-path compiler diagnostic
+is `MANAGEMENT_EVIDENCE_PATH_REQUIRED`. Canonical reconciliation supports only
+`Project`, `Phase`, `WorkPackage`, `DeliveryCard`, `Milestone`, and `Role`.
+Gate, decision, human-action, checklist-context, and control-envelope records
+are valid standalone management evidence.
+
+The bounded profile includes the six required readiness files and optionally
+the expected-later increment-root `pg4-gate-record.md`. Effective gate
+precedence is actual gate record, readiness-register state/result, README
+summary, contract/template semantics, then bounded prose/checklist context.
+Contract files never become current gate state. Equal-authority disagreement
+returns a conflict without an effective value; all source observations remain
+available for audit. Role, blocker, pending-action, decision, and human-action
+summaries are safe bounded semantic fields, not raw source rows.
+
 ## Work sequence
 
 ### 1. Contract and fixture foundations

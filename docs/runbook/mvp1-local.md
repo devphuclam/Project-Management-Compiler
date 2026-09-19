@@ -1,4 +1,4 @@
-# Run the local MVP1
+# Run the local Project Management Compiler (MVP1 + MVP2.1 readiness)
 
 Project Management Compiler is a dependency-free .NET 10 local application.
 It reads only the allow-listed planning documents from an IDEAEngineering-shaped
@@ -56,7 +56,33 @@ mapping warnings. WorkPackage `P04` and DeliveryCard `P04` intentionally coexist
 the dependency view distinguishes their typed identities.
 
 The older `tests\fixtures\ideaengineering` fixture remains available as a
-legacy regression fixture, but it is not the primary MVP1 acceptance source.
+legacy regression fixture, but it is not the primary acceptance source.
+
+## MVP2.1 repository-readiness demo
+
+Repository readiness is an explicit, bounded opt-in. It is not recursive
+specification discovery. In the source-intake panel:
+
+1. enter the source directory;
+2. enter `specs/004-technical-pilot-readiness` as the **Readiness increment
+   path**;
+3. select **Include repository readiness evidence**;
+4. choose an as-of date and select **Analyze source**.
+
+The checkbox without a path is rejected with
+`MANAGEMENT_EVIDENCE_PATH_REQUIRED` and the message “Select the readiness
+increment path before including repository readiness evidence.” The bounded
+profile reads the six declared readiness files and optionally the increment
+root `pg4-gate-record.md` when that actual record exists. The optional record
+is expected later in the workflow, so its absence is shown as “Not yet
+recorded”, not as a capture failure.
+
+The Management control view separates task state, readiness result, owner,
+waiting-for role, pending action, due condition, blocker, gate effect, and
+provenance. A gate/decision/human action is standalone management evidence;
+it is not converted into a DeliveryCard. Effective gate values use the
+attributable actual record before register/README summaries. Equal-authority
+conflicts remain visible and do not become an effective value.
 
 ## Browser workflow
 
@@ -121,7 +147,7 @@ local paths. The workbook contains exactly these sheets:
 Generated JSON/XLSX files, `bin/`, `obj/`, and temporary verification files are
 not repository inputs and must not be committed.
 
-## MVP1 boundaries
+## MVP1 / MVP2.1 boundaries
 
 MVP1 intentionally excludes databases, authentication, multi-user hosting,
 CARIO API/browser automation, provider integrations, AI extraction, advanced

@@ -22,9 +22,13 @@ may request only:
 * `contracts/decision-and-evidence-register.md`;
 * `contracts/pg4-gate-record.md`;
 * `tasks.md`;
-* `trace-matrix.md`.
+* `trace-matrix.md`;
+* optional expected-later `<increment>/pg4-gate-record.md`.
 
-Missing optional documents become safe diagnostics. No other file is read.
+The first six files are the required bounded profile. The root gate record is
+optional until the gate-record task executes; its absence is not a
+`SOURCE_FILE_MISSING` or `EVIDENCE_SOURCE_UNAVAILABLE` diagnostic. No other
+file is read, and no directory is recursively enumerated.
 
 ## Active increment resolution
 
@@ -36,12 +40,22 @@ Missing optional documents become safe diagnostics. No other file is read.
 4. No resolvable identity emits `ACTIVE_INCREMENT_UNKNOWN`.
 5. Multiple declared candidates emit `ACTIVE_INCREMENT_AMBIGUOUS`.
 
+If management evidence is requested without a non-empty increment path, the
+compile contract fails before capture with `MANAGEMENT_EVIDENCE_PATH_REQUIRED`
+and instructs the operator to select the readiness increment path. This is a
+configuration error, not an unknown active increment.
+
 ## Safe result boundary
 
 The result may contain typed facts, diagnostic codes, repository-relative
 source references, ref, line/table metadata, and normalized display values.
 It must not contain raw Markdown, absolute local roots, credentials, or private
 environment values.
+
+Safe semantic summaries are bounded and may retain management meaning such as
+`T006 requires project reviewer disposition`. Owner, waiting-for, required
+authority, blocker, pending action, due condition, gate effect, decision, and
+human-action meaning remain separate fields.
 
 ## Failure behavior
 
