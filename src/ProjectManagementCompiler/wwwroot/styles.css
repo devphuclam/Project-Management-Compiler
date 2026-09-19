@@ -627,6 +627,43 @@ th, td { border-bottom-color: var(--line); }
 .summary-inventory > span:last-child { flex-basis: 100%; font-size: 11px; }
 .attention-scope { margin: 3px 0 0; font-size: 11px; line-height: 1.35; }
 .readiness-attention-queue { border-color: #d8c99e; }
+
+/* Manifest trust surface: source identity is visible before derived management signals. */
+.manifest-import-block { display: grid; gap: 14px; padding: 16px; border: 1px solid #cfe1d7; border-radius: 10px; background: rgba(255, 255, 255, .56); }
+.manifest-import-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.manifest-import-heading h3 { margin: 0 0 3px; }
+.manifest-import-heading p:last-child { max-width: 760px; margin: 0; }
+.manifest-controls-grid { margin-top: 2px; }
+.manifest-submit { align-self: end; }
+.manifest-import-note { margin: 0; padding-top: 11px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.intake-divider { height: 1px; margin: 4px 0; background: var(--line); }
+.legacy-intake-heading { display: flex; align-items: baseline; gap: 10px; }
+.legacy-intake-heading p { margin: 0; }
+.manifest-trust-strip { display: grid; gap: 14px; padding: 15px 16px; border: 1px solid #cfe1d7; border-radius: 10px; background: #f4faf6; }
+.manifest-trust-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.manifest-trust-copy { display: grid; gap: 2px; min-width: 0; }
+.manifest-trust-copy h3 { margin: 0; }
+.manifest-trust-copy span { font-size: 11px; }
+.manifest-trust-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.manifest-trust-field { display: grid; min-width: 0; gap: 3px; padding-top: 8px; border-top: 1px solid #d5e6dc; }
+.manifest-trust-label { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.manifest-trust-value { overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.manifest-failure-state { display: grid; gap: 9px; padding: 20px; border: 1px solid #e8a4b2; border-radius: 10px; background: #fff1f4; }
+.manifest-failure-state h2 { margin: 0; color: var(--danger); }
+.proposal-result-panel { display: grid; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.proposal-result-panel h3, .proposal-result-panel p { margin-bottom: 0; }
+.proposal-result-panel .table-wrap { margin-top: 2px; }
+.proposal-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.proposal-preview-note { padding: 10px 12px; border: 1px solid #d8c99e; border-radius: 8px; background: #fff9e9; color: #72500e; }
+
+@media (max-width: 1020px) {
+  .manifest-trust-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .manifest-import-heading, .manifest-trust-heading { flex-direction: column; }
+  .manifest-trust-grid { grid-template-columns: 1fr; }
+}
 .readiness-attention-item .attention-code { color: var(--accent-strong); }
 .management-control-value { display: block; margin-top: 6px; font-size: 14px; }
 .gantt-detail-readiness { border-left: 3px solid var(--accent-strong); padding-left: 10px; }

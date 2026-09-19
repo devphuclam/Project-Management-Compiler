@@ -137,41 +137,6 @@ try {
     Assert-Condition (@($views.gantt.milestones | Where-Object { @($_.sourceReferences).Count -gt 0 }).Count -eq 7) 'Gantt milestones must expose safe item-level source references.'
     Assert-Condition (@($views.dependencyNetwork.nodes | Where-Object { $_.id -eq 'P04' }).Count -eq 2) 'Dependency network must retain both typed P04 nodes.'
 
-    $execution = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
-        workItemId = 'P04'
-        executionState = 'IN_PROGRESS'
-        actualStart = '2026-09-25'
-        lastUpdatedAt = '2026-09-28T10:00:00Z'
-    }
-    Assert-Condition ($execution.analysis.executionStatus.overdue -eq 1) 'API execution update did not recalculate overdue status.'
-    $executionP04 = @($execution.views.gantt.items | Where-Object { $_.workItemId -eq 'P04' })[0]
-    $executionP04Plan = @($executionP04.lanes | Where-Object { $_.lane -eq 'PLAN' })[0]
-    Assert-Condition ($executionP04Plan.start -eq $ganttP04Plan[0].start -and $executionP04Plan.finish -eq $ganttP04Plan[0].finish) 'Execution update must not mutate the P04 PLAN lane.'
-    Assert-Condition ($executionP04.hasExecutionEvidence) 'Execution update must mark P04 as carrying explicit execution evidence.'
-    Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $_.start -eq '2026-09-25' }).Count -eq 1) 'API execution update did not produce the P04 ACTUAL lane.'
-    Assert-Condition (@($executionP04.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $null -eq $_.finish -and $_.isOpenEnded }).Count -eq 1) 'In-progress ACTUAL evidence must remain open-ended while the browser displays it through as-of.'
-    Assert-Condition (@($execution.analysis.alerts | Where-Object { $_.workItemId -eq 'P04' -and $_.alertCode -eq 'OVERDUE' }).Count -eq 1) 'API execution update did not produce the P04 OVERDUE alert.'
-
-    $completedFinishOnly = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
-        workItemId = 'P05'
-        executionState = 'COMPLETED'
-        actualFinish = '2026-09-28'
-        lastUpdatedAt = '2026-09-28T10:00:30Z'
-    }
-    Assert-Condition ($completedFinishOnly.analysis.executionStatus.completed -eq 1) 'Completed execution with finish-only evidence must count as completed.'
-    $completedP05 = @($completedFinishOnly.views.gantt.items | Where-Object { $_.workItemId -eq 'P05' })[0]
-    Assert-Condition (@($completedP05.lanes | Where-Object { $_.lane -eq 'ACTUAL' -and $null -eq $_.start -and $_.finish -eq '2026-09-28' }).Count -eq 1) 'Finish-only completion must retain its ACTUAL finish without fabricating an actual start.'
-    Assert-Condition (@($completedFinishOnly.analysis.healthIndicators | Where-Object { $_.id -eq 'health.overall' -and $_.status -eq 'KNOWN' }).Count -eq 1) 'Finish-only execution evidence must make canonical health known.'
-
-    $atRisk = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
-        workItemId = 'P06'
-        executionState = 'NOT_STARTED'
-        lastUpdatedAt = '2026-09-28T10:01:00Z'
-    }
-    Assert-Condition ($atRisk.analysis.executionStatus.atRisk -eq 1) 'API execution flow did not recalculate dependent AT_RISK status.'
-    $p06Risk = @($atRisk.analysis.alerts | Where-Object { $_.workItemId -eq 'P06' -and $_.alertCode -eq 'AT_RISK' })
-    Assert-Condition ($p06Risk.Count -eq 1 -and $p06Risk[0].reasonWorkItemIds -contains 'P04') 'Dependent P06 AT_RISK alert did not name delayed P04.'
-
     $jsonResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/exports/project.json' -TimeoutSec 30
     $jsonText = [string] $jsonResponse.Content
     $contentDisposition = [string] $jsonResponse.Headers['Content-Disposition']
@@ -190,8 +155,7 @@ try {
     Assert-Condition ($reopened.baseline.version -eq $summary.baseline.version -and $reopened.baseline.plannedEffortHours -eq $summary.baseline.plannedEffortHours) 'API reopen changed immutable baseline values.'
     Assert-Condition ($reopened.managementEvidence.incrementId -eq 'IE-INC-READY-001' -and @($reopened.managementEvidence.observations | Where-Object { $_.evidenceKind -eq 'READINESS_CHECK' }).Count -eq 7) 'API reopen did not preserve management evidence.'
     Assert-Condition ($reopened.views.managementControl.currentGate.executionState -eq 'NOT-RUN' -and $reopened.views.managementControl.currentGate.outcome -eq 'NOT-APPLICABLE') 'API reopen did not preserve separate gate evidence.'
-    Assert-Condition ($reopened.analysis.executionStatus.overdue -eq 1) 'API reopen did not recalculate the overdue alert.'
-    Assert-Condition ($reopened.analysis.executionStatus.atRisk -eq 1) 'API reopen did not recalculate the dependent at-risk alert.'
+    Assert-Condition ($reopened.analysis.executionStatus.overdue -eq 0 -and $reopened.analysis.executionStatus.atRisk -eq 0) 'Planning-only API reopen must not fabricate execution alerts.'
 
     $temporaryFile = New-TemporaryFile
     $temporaryXlsx = $temporaryFile.FullName
@@ -275,6 +239,87 @@ try {
         $fileStream.Dispose()
     }
 
+    $sourceRoot = $null
+    $sourceSearch = [IO.DirectoryInfo]$repositoryRoot
+    for ($depth = 0; $depth -lt 8 -and $null -eq $sourceRoot -and $null -ne $sourceSearch; $depth++) {
+        $candidate = Join-Path $sourceSearch.FullName 'IDEAEngineering'
+        if (Test-Path -LiteralPath (Join-Path $candidate '.git') -PathType Container) {
+            $sourceRoot = [IO.Path]::GetFullPath($candidate)
+        }
+        $sourceSearch = $sourceSearch.Parent
+    }
+    Assert-Condition ($null -ne $sourceRoot) 'Accepted IDEAEngineering checkout was not found beside the product repository.'
+    $sourceRemote = (& git -C $sourceRoot remote get-url origin 2>$null | Out-String).Trim()
+    Assert-Condition ($sourceRemote -match 'github\.com/devphuclam/IDEAEngineering(?:\.git)?$') 'The selected IDEAEngineering checkout has an unexpected origin remote.'
+    $acceptedCommit = '0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4'
+    & git -C $sourceRoot cat-file -e ($acceptedCommit + '^{commit}')
+    Assert-Condition ($LASTEXITCODE -eq 0) 'The accepted IDEAEngineering compatibility commit is not available as a commit object.'
+
+    $manifestImport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
+        repositoryRoot = $sourceRoot
+        manifestPath = 'planning/project-management-compiler-manifest.json'
+        mode = 'GIT_COMMIT'
+        requestedCommit = $acceptedCommit
+    }
+    Assert-Condition ($manifestImport.classification -eq 'OFFICIAL_COMMIT') ("Manifest API did not classify the accepted commit as official. Actual: $($manifestImport.classification). Diagnostics: $((@($manifestImport.diagnostics) | ForEach-Object { $_.code + ':' + $_.message }) -join ' | ')")
+    Assert-Condition ($manifestImport.snapshot.metadata.sourceIdentity -eq $acceptedCommit) 'Manifest API did not retain the exact accepted source commit.'
+    Assert-Condition ($manifestImport.snapshot.metadata.sourceReadiness -eq 'PASS') 'Manifest API did not retain source readiness PASS.'
+    Assert-Condition ($manifestImport.snapshot.metadata.validationResult -eq 'PASS_WITH_WARNINGS') 'Manifest API did not retain PASS_WITH_WARNINGS validation.'
+    Assert-Condition ($manifestImport.snapshot.project.phases.Count -eq 6 -and $manifestImport.snapshot.project.workPackages.Count -eq 35 -and $manifestImport.snapshot.project.deliveryCards.Count -eq 53 -and $manifestImport.snapshot.project.milestones.Count -eq 7) 'Manifest API did not preserve exact planning totals.'
+    Assert-Condition ($manifestImport.snapshot.project.baseline.plannedEffortHours -eq 512 -and $manifestImport.snapshot.project.baseline.reserveHours -eq 88 -and $manifestImport.snapshot.project.baseline.capacityHours -eq 600) 'Manifest API did not preserve exact baseline totals.'
+    $manifestP01 = @($manifestImport.snapshot.sourceExecution.records | Where-Object { $_.entity.id -eq 'P01' })[0]
+    Assert-Condition ($manifestP01.recordingState -eq 'RECORDED' -and $manifestP01.executionState -eq 'IN_PROGRESS' -and $manifestP01.resultState -eq 'NOT_APPLICABLE') 'Manifest API did not preserve P01 execution truth.'
+    Assert-Condition ($null -eq $manifestP01.actualEffortHours -and $null -eq $manifestP01.remainingEffortHours) 'Manifest API must not invent P01 effort.'
+    Assert-Condition (@($manifestImport.snapshot.sourceExecution.records | Where-Object { $_.recordingState -eq 'NOT_RECORDED' }).Count -eq 52) 'Manifest API must retain 52 NOT_RECORDED cards.'
+    Assert-Condition ($manifestImport.snapshot.project.managementEvidence.discoveryState -eq 'KNOWN' -and $manifestImport.snapshot.project.managementEvidence.incrementId -eq 'IE-INC-READY-001') 'Manifest API must retain the declared readiness register as independent management evidence.'
+    Assert-Condition (@($manifestImport.snapshot.diagnostics | Where-Object { $_.code -eq 'PMC-FIXTURE-001' }).Count -eq 0) 'Fixture catalogue oracle reported a mismatch for the accepted commit.'
+    $manifestJson = $manifestImport | ConvertTo-Json -Depth 60 -Compress
+    Assert-Condition (-not $manifestJson.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Manifest response must not expose the local source root.'
+    Assert-Condition (-not ($manifestJson -match '"content"\s*:')) 'Manifest response must not expose raw source bodies.'
+
+    $officialSnapshot = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    Assert-Condition ($officialSnapshot.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Official snapshot inspection returned a different snapshot.'
+    $officialExport = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/manifest-import/exports/official.json' -TimeoutSec 30
+    $officialExportText = [string]$officialExport.Content
+    Assert-Condition ([string]$officialExport.Headers['Content-Disposition'] -match 'manifest-official\.json') 'Official manifest export must use an authority-specific filename.'
+    Assert-Condition ($officialExportText.Contains('"schema":"2.0"', [StringComparison]::Ordinal)) 'Official manifest export must use canonical schema 2.0.'
+    Assert-Condition (-not $officialExportText.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Official manifest export must not expose the local source root.'
+    Assert-Condition (-not ($officialExportText -match '"content"\s*:')) 'Official manifest export must not expose raw source bodies.'
+
+    $failedManifestImport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
+        repositoryRoot = $sourceRoot
+        manifestPath = 'planning/project-management-compiler-manifest.json'
+        mode = 'GIT_COMMIT'
+        requestedCommit = ('0' * 40)
+    }
+    Assert-Condition ($failedManifestImport.classification -eq 'FAILED' -and $null -eq $failedManifestImport.snapshot) 'An invalid source commit must fail without producing a snapshot.'
+    $officialAfterFailure = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    Assert-Condition ($officialAfterFailure.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'A failed candidate must retain the last valid official snapshot.'
+
+    $proposal = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/proposals' -Method Post -Body @{
+        targetKind = 'DeliveryCard'
+        targetId = 'P01'
+        proposedChanges = @{ executionState = 'COMPLETED'; actualFinish = '2026-09-20' }
+        requestedLifecycle = 'READY_FOR_REVIEW'
+    }
+    Assert-Condition ($proposal.lifecycle -eq 'DRAFT') 'An incomplete completion proposal must remain DRAFT.'
+    Assert-Condition (@($proposal.diagnostics | Where-Object { $_.code -eq 'PMC-PROPOSAL-002' }).Count -eq 1) 'Proposal completion rules must explain missing evidence.'
+    $proposalPreview = Invoke-JsonApi -Uri ('http://127.0.0.1:5050/api/proposals/{0}/preview' -f $proposal.id) -Method Post
+    Assert-Condition (-not $proposalPreview.isAuthoritative -and $proposalPreview.isEstimated) 'Proposal preview must be visibly estimated and non-authoritative.'
+    $proposalExport = Invoke-WebRequest -Uri ('http://127.0.0.1:5050/api/proposals/{0}/export' -f $proposal.id) -TimeoutSec 30
+    $proposalExportText = [string]$proposalExport.Content
+    $proposalExportPayload = $proposalExportText | ConvertFrom-Json
+    Assert-Condition ($proposalExportPayload.proposalOnly -and $proposalExportPayload.authority -eq 'LOCAL_PROPOSAL') 'Proposal export must retain local proposal authority.'
+    Assert-Condition (-not $proposalExportText.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Proposal export must not expose the local source root.'
+    $compatibilityProposal = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
+        workItemId = 'P02'
+        executionState = 'IN_PROGRESS'
+        actualStart = '2026-09-19'
+        lastUpdatedAt = '2026-09-19T10:00:00Z'
+    }
+    Assert-Condition ($compatibilityProposal.proposalOnly -and -not $compatibilityProposal.authoritative) '/api/execution must be a proposal-only compatibility alias.'
+    Assert-Condition ((Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get).metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Creating and previewing proposals must not change official snapshot identity.'
+
     $appJs = Get-Content -LiteralPath $appJsPath -Raw
     $indexHtml = Get-Content -LiteralPath $indexHtmlPath -Raw
     $stylesCss = Get-Content -LiteralPath $stylesCssPath -Raw
@@ -340,6 +385,10 @@ try {
     Assert-Condition ($indexHtml.Contains('id="as-of-date" type="date" required', [StringComparison]::Ordinal)) 'Browser as-of date must be visibly required.'
     Assert-Condition ($appJs.Contains('/api/reopen', [StringComparison]::Ordinal)) 'Browser UI must expose canonical JSON reopen.'
     Assert-Condition ($appJs.Contains('Captured source metadata', [StringComparison]::Ordinal)) 'Browser Source / Warnings view must expose captured source metadata.'
+    Assert-Condition ($appJs.Contains('/api/manifest-import', [StringComparison]::Ordinal) -and $appJs.Contains('renderManifestTrust', [StringComparison]::Ordinal)) 'Browser UI must expose the dedicated manifest import and trust surface.'
+    Assert-Condition ($appJs.Contains('Source snapshot', [StringComparison]::Ordinal) -and $appJs.Contains('Snapshot ID', [StringComparison]::Ordinal) -and $appJs.Contains('sourceReadiness', [StringComparison]::Ordinal)) 'Browser UI must expose official/preview snapshot metadata.'
+    Assert-Condition ($appJs.Contains('proposalOnly', [StringComparison]::Ordinal) -and $appJs.Contains('previewProposal', [StringComparison]::Ordinal) -and $appJs.Contains('non-authoritative', [StringComparison]::OrdinalIgnoreCase)) 'Browser execution editing must remain proposal-only with an explicit preview action.'
+    Assert-Condition ($appJs.Contains('Recording state', [StringComparison]::Ordinal) -and $appJs.Contains('Result state', [StringComparison]::Ordinal) -and $appJs.Contains('forecastFinish', [StringComparison]::Ordinal) -and $appJs.Contains('sourceExecution', [StringComparison]::Ordinal)) 'Row inspector must expose source execution truth separately from planning and proposals.'
     Assert-Condition ($appJs.Contains('relativeFile', [StringComparison]::Ordinal) -and $appJs.Contains('documentId', [StringComparison]::Ordinal)) 'Browser source review must expose document ID and relative file metadata.'
     Assert-Condition (-not $appJs.Contains('source.Content', [StringComparison]::OrdinalIgnoreCase)) 'Browser source review must not render captured source content.'
     Assert-Condition (-not $appJs.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Browser source review must not embed an absolute source path.'
@@ -350,7 +399,10 @@ try {
     Assert-Condition ($appJs.Contains('Select a task to inspect its direct links', [StringComparison]::Ordinal)) 'Gantt detail flow must explain how to inspect a task.'
     Assert-Condition ($indexHtml.Contains('Project control center', [StringComparison]::OrdinalIgnoreCase)) 'Browser shell must label the project control center.'
     Assert-Condition ($stylesCss.Contains('.summary-hero', [StringComparison]::Ordinal) -and $stylesCss.Contains('.attention-queue', [StringComparison]::Ordinal)) 'Browser UI must style the control center and attention queue.'
+    Assert-Condition ($stylesCss.Contains('.manifest-trust-strip', [StringComparison]::Ordinal) -and $stylesCss.Contains('.proposal-result-panel', [StringComparison]::Ordinal)) 'Browser UI must style trust metadata and proposal review surfaces.'
     Assert-Condition ($indexHtml.Contains('id="source-intake-panel"', [StringComparison]::Ordinal)) 'Loaded projects must have a collapsible source-intake panel.'
+    Assert-Condition ($indexHtml.Contains('id="manifest-repository-root"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="manifest-path"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="manifest-source-commit"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="manifest-mode"', [StringComparison]::Ordinal)) 'Manifest import form must expose repository, manifest, commit and mode inputs.'
+    Assert-Condition ($indexHtml.Contains('No write-back', [StringComparison]::Ordinal) -and $indexHtml.Contains('review artifact', [StringComparison]::OrdinalIgnoreCase)) 'Manifest and execution UI must state the no-write-back boundary.'
     Assert-Condition ($indexHtml.Contains('id="source-intake-toggle"', [StringComparison]::Ordinal)) 'Source-intake collapse control must be keyboard-addressable.'
     Assert-Condition ($indexHtml.Contains('data-nav-group="plan"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="execution"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="analysis"', [StringComparison]::Ordinal)) 'Primary navigation must group plan, execution, and analysis views.'
     Assert-Condition ($appJs.Contains('No active schedule alerts', [StringComparison]::Ordinal)) 'Project health must stay scoped to derived schedule alerts rather than whole-project health.'
@@ -435,8 +487,9 @@ try {
         Health = $health.status
         ProjectId = $summary.project.id
         Cards = $summary.views.dashboard.totalCards
-        OverdueAfterExecution = $execution.analysis.executionStatus.overdue
-        AtRiskAfterExecution = $atRisk.analysis.executionStatus.atRisk
+        ManifestClassification = $manifestImport.classification
+        OfficialSnapshot = $manifestImport.snapshot.metadata.snapshotId
+        ProposalLifecycle = $proposal.lifecycle
         ReopenOverdue = $reopened.analysis.executionStatus.overdue
         ReopenAtRisk = $reopened.analysis.executionStatus.atRisk
         JsonBytes = $jsonText.Length

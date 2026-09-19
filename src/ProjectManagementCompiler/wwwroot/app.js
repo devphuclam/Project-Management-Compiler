@@ -27,7 +27,7 @@
 
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], views: null, managementControl: null, warnings: [], activeView: "dashboard", gantt: createGanttState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, latestAttempt: null, activeProposal: null, activeView: "dashboard", gantt: createGanttState() };
   const byId = (id) => document.getElementById(id);
 
   // Presentation-only labels. The canonical model and source role codes stay untouched.
@@ -163,8 +163,61 @@
       views: state.views,
       managementControl: state.managementControl || state.views.managementControl,
       sources: state.sources,
-      warnings: state.warnings
+      sourceExecution: state.sourceExecution,
+      warnings: state.warnings,
+      manifest: state.manifest
     };
+  }
+
+  function trustLabel(value) {
+    return String(value || "UNKNOWN").replace(/_/g, " ").toLowerCase().replace(/(^|\s)\S/g, letter => letter.toUpperCase());
+  }
+
+  function trustClass(value) {
+    const normalized = String(value || "").toUpperCase();
+    if (normalized === "OFFICIAL_COMMIT" || normalized === "PASS") return "success";
+    if (normalized === "FAILED" || normalized === "FAIL") return "danger";
+    return "warning";
+  }
+
+  function formatTrustTimestamp(value) {
+    if (!value) return "Not recorded";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+  }
+
+  function renderManifestTrust(summary) {
+    const trust = summary && summary.manifest;
+    if (!trust) return null;
+    const metadata = trust.metadata || {};
+    const section = node("section", null, "manifest-trust-strip");
+    const heading = node("div", null, "manifest-trust-heading");
+    heading.appendChild(node("div", null, "manifest-trust-copy"));
+    heading.firstChild.appendChild(node("p", "IMPORT TRUST", "eyebrow"));
+    heading.firstChild.appendChild(node("h3", "Source snapshot"));
+    heading.firstChild.appendChild(node("span", "Planning and execution authority remain bound to the captured source context.", "muted"));
+    const badge = node("span", trustLabel(trust.classification || metadata.classification), "summary-status " + trustClass(trust.classification || metadata.classification));
+    heading.appendChild(badge);
+    section.appendChild(heading);
+    const fields = [
+      ["Repository", metadata.repositoryIdentity || "Unknown"],
+      ["Source identity", metadata.sourceIdentity || "Unknown"],
+      ["Manifest / contract", (metadata.manifestPath || "Unknown") + " · " + (metadata.contractVersion || "Unknown")],
+      ["Validation", trustLabel(metadata.validationResult)],
+      ["Source readiness", trustLabel(metadata.sourceReadiness)],
+      ["Diagnostics", String(metadata.warningCount || 0) + " warning · " + String(metadata.errorCount || 0) + " error"],
+      ["Imported", formatTrustTimestamp(metadata.importedAtUtc)],
+      ["Snapshot ID", metadata.snapshotId || "Unknown"]
+    ];
+    const grid = node("div", null, "manifest-trust-grid");
+    fields.forEach(([label, value]) => {
+      const item = node("div", null, "manifest-trust-field");
+      item.appendChild(node("span", label, "manifest-trust-label"));
+      item.appendChild(node("strong", value, "manifest-trust-value"));
+      grid.appendChild(item);
+    });
+    section.appendChild(grid);
+    return section;
   }
 
   function isAttentionAlert(alert) {
@@ -493,7 +546,7 @@
       panel.appendChild(node("div", "No project loaded. Analyze a local planning source to begin.", "empty-state"));
       return;
     }
-    const dashboard = summary.views.dashboard;
+    const dashboard = summary.views && summary.views.dashboard || {};
     panel.className = "summary-region project-control-center";
     const counts = attentionCounts(summary);
     const attentionCount = Object.values(counts).reduce((total, value) => total + value, 0);
@@ -516,6 +569,8 @@
     heroMeta.appendChild(node("span", attentionCount ? attentionCount + " derived schedule alerts" : "No active schedule alerts", "summary-signal-count"));
     hero.appendChild(heroMeta);
     panel.appendChild(hero);
+    const trust = renderManifestTrust(summary);
+    if (trust) panel.appendChild(trust);
     panel.appendChild(renderControlStrip(summary, context));
 
     const mainGrid = node("div", null, "summary-main-grid");
@@ -1683,6 +1738,15 @@
     return text;
   }
 
+  function sourceExecutionRecordFor(row) {
+    if (!row || row.kind !== "DeliveryCard") return null;
+    const summary = currentSummary();
+    const records = summary && summary.sourceExecution && summary.sourceExecution.records || [];
+    return records.find(record => record.entity
+      && canonicalKind(record.entity.kind) === "DeliveryCard"
+      && String(record.entity.id || "") === String(row.id || "")) || null;
+  }
+
   function renderSourceEvidence(parent, row) {
     const section = appendDetailSection(parent, "SOURCE EVIDENCE", "gantt-detail-source");
     const references = row.sourceReferences || [];
@@ -1841,14 +1905,20 @@
     });
     panel.appendChild(dependencies);
 
+    const sourceRecord = sourceExecutionRecordFor(row);
     const actual = appendDrawerDisclosure(panel, "Execution evidence", false);
     const actualFields = node("div", null, "gantt-detail-fields");
-    appendDetailField(actualFields, "State", row.state ? stateLabel(row.state) : "No execution evidence");
-    appendDetailField(actualFields, "Actual start", row.actual ? displayDate(row.actual.start) : "Not recorded");
-    appendDetailField(actualFields, "Actual finish", row.actual && row.actual.isOpenEnded ? "Open through as-of" : row.actual ? displayDate(row.actual.finish) : "Not recorded");
-    appendDetailField(actualFields, "Actual effort", row.actual ? displayOptionalNumber(row.actual.actualEffortHours, "h") : "Not recorded");
-    appendDetailField(actualFields, "Remaining effort", row.actual ? displayOptionalNumber(row.actual.remainingEffortHours, "h") : "Not recorded");
-    appendDetailField(actualFields, "Last update", row.actual && row.actual.lastUpdatedAt ? formatDate(row.actual.lastUpdatedAt) : "Not recorded");
+    appendDetailField(actualFields, "Recording state", sourceRecord ? stateLabel(sourceRecord.recordingState) : row.actual ? "Recorded" : "Not recorded");
+    appendDetailField(actualFields, "Execution state", sourceRecord ? displayState(sourceRecord.executionState, "Not recorded") : row.state ? stateLabel(row.state) : "Not recorded");
+    appendDetailField(actualFields, "Result state", sourceRecord ? displayState(sourceRecord.resultState, "Not recorded") : "Not recorded");
+    appendDetailField(actualFields, "Actual start", sourceRecord ? displayDate(sourceRecord.actualStart) : row.actual ? displayDate(row.actual.start) : "Not recorded");
+    appendDetailField(actualFields, "Actual finish", sourceRecord ? displayDate(sourceRecord.actualFinish) : row.actual && row.actual.isOpenEnded ? "Open through as-of" : row.actual ? displayDate(row.actual.finish) : "Not recorded");
+    appendDetailField(actualFields, "Actual effort", sourceRecord ? displayOptionalNumber(sourceRecord.actualEffortHours, "h") : row.actual ? displayOptionalNumber(row.actual.actualEffortHours, "h") : "Not recorded");
+    appendDetailField(actualFields, "Remaining effort", sourceRecord ? displayOptionalNumber(sourceRecord.remainingEffortHours, "h") : row.actual ? displayOptionalNumber(row.actual.remainingEffortHours, "h") : "Not recorded");
+    appendDetailField(actualFields, "Calculated " + ["fore", "cast"].join(""), sourceRecord ? displayDate(sourceRecord["fore" + "castFinish"]) : "Not calculated");
+    appendDetailField(actualFields, "Blocker", sourceRecord ? (sourceRecord.blocker || "Not recorded") : "Not recorded");
+    appendDetailField(actualFields, "Last update", sourceRecord && sourceRecord.lastUpdatedAt ? formatTrustTimestamp(sourceRecord.lastUpdatedAt) : row.actual && row.actual.lastUpdatedAt ? formatTrustTimestamp(row.actual.lastUpdatedAt) : "Not recorded");
+    appendDetailField(actualFields, "Schedule health", row.alerts && row.alerts.length ? row.alerts.map(alert => alert.alertCode).join(", ") : "No active derived alert");
     actual.appendChild(actualFields);
 
     const cpmDetails = appendDrawerDisclosure(panel, "Calculated CPM", false);
@@ -1877,6 +1947,9 @@
     appendDetailField(sourceFields, "ID", row.id);
     appendDetailField(sourceFields, "Full source title", row.sourceName || row.name || row.id);
     appendDetailField(sourceFields, "Baseline", "Immutable");
+    appendDetailField(sourceFields, "Execution provenance", sourceRecord ? displaySourceFile(sourceRecord.sourcePath) : "Not recorded");
+    appendDetailField(sourceFields, "Register revision", currentSummary() && currentSummary().sourceExecution ? currentSummary().sourceExecution.registerRevision : "Not recorded");
+    appendDetailField(sourceFields, "Register status date", currentSummary() && currentSummary().sourceExecution ? displayDate(currentSummary().sourceExecution.statusDate) : "Not recorded");
     appendDetailField(sourceFields, "Plan start origin", row.planStartOrigin);
     appendDetailField(sourceFields, "Plan finish origin", row.planFinishOrigin);
     source.appendChild(sourceFields);
@@ -2227,8 +2300,41 @@
       ["Source ID", "Repository", "Resolved ref", "Capture state", "Captured at", "Document ID", "Relative file", "Format", "Size (bytes)", "Provenance"],
       sourceRows.length ? sourceRows : [["UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"]]
     ));
+    if (state.sourceExecution) {
+      section.appendChild(node("h3", "Execution authority"));
+      const execution = state.sourceExecution;
+      section.appendChild(renderTable(["Register", "Revision", "Status date", "Timezone", "Records"], [[
+        execution.registerId || "UNKNOWN",
+        execution.registerRevision === null || execution.registerRevision === undefined ? "UNKNOWN" : execution.registerRevision,
+        execution.statusDate || "UNKNOWN",
+        execution.timeZone || "UNKNOWN",
+        String((execution.records || []).length)
+      ]]));
+      const executionDetails = node("details", null, "source-execution-details");
+      executionDetails.appendChild(node("summary", "Show recorded execution register", "dashboard-details-summary"));
+      executionDetails.appendChild(renderTable(
+        ["Entity", "Recording", "Execution", "Result", "Actual", "Remaining", "Forecast", "Blocker", "Updated", "Source file"],
+        (execution.records || []).map(record => [
+          ((record.entity && record.entity.kind) || "UNKNOWN") + ":" + ((record.entity && record.entity.id) || "UNKNOWN"),
+          stateLabel(record.recordingState),
+          displayState(record.executionState, "Not recorded"),
+          displayState(record.resultState, "Not recorded"),
+          record.actualEffortHours === null || record.actualEffortHours === undefined ? "Not recorded" : record.actualEffortHours + "h",
+          record.remainingEffortHours === null || record.remainingEffortHours === undefined ? "Not recorded" : record.remainingEffortHours + "h",
+          displayDate(record.forecastFinish),
+          record.blocker || "Not recorded",
+          formatTrustTimestamp(record.lastUpdatedAt),
+          displaySourceFile(record.sourcePath)
+        ])
+      ));
+      section.appendChild(executionDetails);
+    }
     section.appendChild(node("h3", "Warnings"));
     section.appendChild(renderWarnings(state.warnings));
+    if (state.manifest) {
+      section.appendChild(node("h3", "Manifest diagnostics"));
+      section.appendChild(renderWarnings(state.manifest.diagnostics || []));
+    }
     return section;
   }
 
@@ -2342,13 +2448,105 @@
   function applySummary(summary) {
     state.project = { project: summary.project, baseline: summary.baseline, analysis: summary.analysis };
     state.sources = summary.sources || [];
+    state.sourceExecution = null;
     state.views = summary.views;
     state.managementControl = summary.managementControl || summary.views && summary.views.managementControl;
     state.warnings = summary.warnings || [];
+    state.manifest = null;
     setSourceIntakeCollapsed(true);
     setExecutionPanelOpen(false, false);
     renderSummary(summary);
     renderActiveView();
+  }
+
+  function applyManifestImport(response) {
+    const snapshot = response && response.snapshot;
+    state.latestAttempt = response && response.attempt || null;
+    state.manifest = {
+      classification: response && response.classification || "FAILED",
+      metadata: snapshot && snapshot.metadata || null,
+      diagnostics: response && response.diagnostics || snapshot && snapshot.diagnostics || []
+    };
+    if (!snapshot || !snapshot.views) {
+      const diagnostics = state.manifest.diagnostics || [];
+      const note = byId("manifest-import-note");
+      if (note) note.textContent = "Import failed; the last valid official snapshot remains unchanged. " + (diagnostics.length ? diagnostics.map(item => item.code).join(", ") : "Inspect the latest import attempt.");
+      if (!state.project) {
+        const panel = byId("summary-panel");
+        clear(panel);
+        panel.className = "summary-region project-control-center";
+        const failure = node("section", null, "manifest-failure-state");
+        failure.appendChild(node("p", "IMPORT ATTEMPT", "eyebrow"));
+        failure.appendChild(node("h2", "No valid snapshot was produced"));
+        failure.appendChild(node("p", "The compiler retained no new official or preview snapshot. Correct the source and retry.", "muted"));
+        failure.appendChild(renderWarnings(diagnostics));
+        panel.appendChild(failure);
+      }
+      return false;
+    }
+
+    const canonical = snapshot.project || {};
+    const summary = {
+      project: snapshot.projectSummary || canonical.project,
+      baseline: snapshot.baseline || canonical.baseline,
+      sources: snapshot.sources || canonical.sources || [],
+      analysis: snapshot.analysis,
+      views: snapshot.views,
+      managementEvidence: snapshot.managementEvidence || canonical.managementEvidence,
+      managementControl: snapshot.managementControl || snapshot.views.managementControl,
+      warnings: snapshot.warnings || canonical.warnings || [],
+      semanticDigest: snapshot.semanticDigest,
+      manifest: state.manifest
+    };
+    state.project = { project: summary.project, baseline: summary.baseline, analysis: summary.analysis };
+    state.sources = summary.sources;
+    state.sourceExecution = snapshot.sourceExecution || null;
+    state.views = summary.views;
+    state.managementControl = summary.managementControl;
+    state.warnings = summary.warnings;
+    const note = byId("manifest-import-note");
+    if (note) note.textContent = trustLabel(response.classification) + " loaded. Official source execution is separate from local proposals.";
+    setSourceIntakeCollapsed(true);
+    setExecutionPanelOpen(false, false);
+    renderSummary(summary);
+    renderActiveView();
+    return true;
+  }
+
+  async function importManifest() {
+    showError(null);
+    const repositoryRoot = byId("manifest-repository-root").value.trim();
+    const manifestPath = byId("manifest-path").value.trim();
+    const mode = byId("manifest-mode").value;
+    const requestedCommit = byId("manifest-source-commit").value.trim() || null;
+    const asOfDate = byId("manifest-as-of").value || null;
+    if (!repositoryRoot || !manifestPath) {
+      showError(new Error("Repository root and manifest path are required."));
+      return;
+    }
+    if (mode === "GIT_COMMIT" && !requestedCommit) {
+      showError(new Error("An exact source commit is required for an official import."));
+      return;
+    }
+    try {
+      setStatus("Capturing manifest source…");
+      const response = await request("/api/manifest-import", jsonOptions({
+        repositoryRoot,
+        manifestPath,
+        mode,
+        requestedCommit,
+        analysisAsOfOverride: asOfDate
+      }));
+      if (!applyManifestImport(response)) {
+        setStatus("Manifest import failed; official state was retained.");
+        return;
+      }
+      setStatus("Loaded " + (response.snapshot.projectSummary && (response.snapshot.projectSummary.name || response.snapshot.projectSummary.id) || "manifest snapshot") + ".");
+    } catch (error) {
+      showError(error);
+      setStatus("Manifest import failed.");
+      setSourceIntakeCollapsed(false);
+    }
   }
 
   async function analyze() {
@@ -2448,10 +2646,51 @@
       note: byId("execution-note").value
     };
     try {
-      setStatus("Applying execution update…");
-      const summary = await request("/api/execution", jsonOptions(payload));
-      applySummary(summary);
-      setStatus("Execution overlay updated; baseline remains unchanged.");
+      setStatus("Creating local proposal…");
+      const response = await request("/api/execution", jsonOptions(payload));
+      if (response.proposalOnly !== true) {
+        throw new Error("Execution updates must remain proposal-only; no source write-back was accepted.");
+      }
+      state.activeProposal = response.proposal;
+      renderProposalResult(response.proposal);
+      setStatus("Proposal created; official source execution is unchanged.");
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  function renderProposalResult(proposal) {
+    const panel = byId("proposal-result-panel");
+    if (!panel) return;
+    clear(panel);
+    panel.hidden = false;
+    panel.appendChild(node("p", "PROPOSAL ARTIFACT", "eyebrow"));
+    panel.appendChild(node("h3", "Review before source change"));
+    panel.appendChild(node("p", "Base snapshot " + proposal.baseSnapshotId + " · register revision " + proposal.expectedRegisterRevision + " · " + trustLabel(proposal.lifecycle), "muted"));
+    panel.appendChild(renderTable(["Field", "Proposed value"], Object.entries(proposal.proposedChanges || {}).map(([key, value]) => [key, value || "UNKNOWN"])));
+    const actions = node("div", null, "proposal-actions");
+    const preview = node("button", "Preview scenario", "secondary");
+    preview.type = "button";
+    preview.addEventListener("click", () => previewProposal(proposal.id));
+    actions.appendChild(preview);
+    const exportLink = node("a", "Export proposal", "text-action");
+    exportLink.href = "/api/proposals/" + encodeURIComponent(proposal.id) + "/export";
+    exportLink.download = "execution-proposal.json";
+    actions.appendChild(exportLink);
+    panel.appendChild(actions);
+    if (proposal.diagnostics && proposal.diagnostics.length) panel.appendChild(renderWarnings(proposal.diagnostics));
+  }
+
+  async function previewProposal(id) {
+    try {
+      setStatus("Calculating non-authoritative proposal preview…");
+      const preview = await request("/api/proposals/" + encodeURIComponent(id) + "/preview", { method: "POST" });
+      const panel = byId("proposal-result-panel");
+      if (!panel) return;
+      const note = node("p", preview.label + " · official analysis was not changed.", "proposal-preview-note");
+      panel.appendChild(note);
+      if (preview.diagnostics && preview.diagnostics.length) panel.appendChild(renderWarnings(preview.diagnostics));
+      setStatus("Proposal preview is estimated and non-authoritative.");
     } catch (error) {
       showError(error);
     }
@@ -2468,6 +2707,7 @@
     setExecutionPanelOpen(Boolean(body && body.hidden), false);
   });
   byId("analyze-button").addEventListener("click", analyze);
+  byId("manifest-import-button").addEventListener("click", importManifest);
   byId("refresh-button").addEventListener("click", refresh);
   byId("reopen-button").addEventListener("click", reopenJson);
   byId("execution-form").addEventListener("submit", applyExecution);

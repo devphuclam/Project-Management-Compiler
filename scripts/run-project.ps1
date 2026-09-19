@@ -1,6 +1,14 @@
 [CmdletBinding()]
 param(
-    [switch] $NoBrowser
+    [switch] $NoBrowser,
+    [Alias('SourcePath')]
+    [string] $RepositoryRoot,
+    [string] $ManifestPath = 'planning/project-management-compiler-manifest.json',
+    [string] $SourceCommit,
+    [ValidateSet('GIT_COMMIT', 'UNCOMMITTED_PREVIEW')]
+    [string] $ImportMode = 'GIT_COMMIT',
+    [string] $AnalysisAsOfOverride,
+    [switch] $ImportManifest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,6 +20,14 @@ $expectedBinding = $appUrl.TrimEnd('/')
 $process = $null
 
 try {
+    if ([string]::IsNullOrWhiteSpace($RepositoryRoot) -and $ImportManifest) {
+        throw 'RepositoryRoot is required when ImportManifest is specified.'
+    }
+
+    if ($ImportManifest -and $ImportMode -eq 'GIT_COMMIT' -and [string]::IsNullOrWhiteSpace($SourceCommit)) {
+        throw 'SourceCommit is required for a GIT_COMMIT manifest import.'
+    }
+
     if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
         throw "Project file was not found at '$projectPath'."
     }
@@ -50,6 +66,24 @@ try {
 
     if (-not $ready) {
         throw "The application did not become ready within 60 seconds. Check the application output above."
+    }
+
+    if ($ImportManifest) {
+        $body = @{
+            repositoryRoot = $RepositoryRoot
+            manifestPath = $ManifestPath
+            mode = $ImportMode
+            requestedCommit = if ([string]::IsNullOrWhiteSpace($SourceCommit)) { $null } else { $SourceCommit }
+            analysisAsOfOverride = if ([string]::IsNullOrWhiteSpace($AnalysisAsOfOverride)) { $null } else { $AnalysisAsOfOverride }
+        } | ConvertTo-Json -Depth 20 -Compress
+        $import = Invoke-RestMethod -Uri ($appUrl + 'api/manifest-import') -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 30
+        if ($null -eq $import.snapshot) {
+            $codes = @($import.diagnostics | ForEach-Object { $_.code }) -join ', '
+            throw "Manifest import did not produce a valid snapshot. Diagnostics: $codes"
+        }
+
+        Write-Host "Manifest imported: $($import.classification)" -ForegroundColor Green
+        Write-Host "Snapshot: $($import.snapshot.metadata.snapshotId)"
     }
 
     if (-not $NoBrowser) {

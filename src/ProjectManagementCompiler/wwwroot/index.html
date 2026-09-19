@@ -38,6 +38,55 @@
         </div>
       </div>
       <div id="source-intake-body" class="source-intake-body">
+        <section class="manifest-import-block" aria-labelledby="manifest-import-heading">
+          <div class="manifest-import-heading">
+            <div>
+              <p class="eyebrow">SOURCE-OF-TRUTH IMPORT</p>
+              <h3 id="manifest-import-heading">Import IDEAEngineering manifest</h3>
+              <p class="muted">Read one exact commit as official, or inspect a stable working tree as a non-authoritative preview. The source repository is never modified.</p>
+            </div>
+            <span class="local-only">No write-back</span>
+          </div>
+          <div class="controls-grid manifest-controls-grid">
+            <label class="wide">
+              Repository root
+              <input id="manifest-repository-root" type="text" autocomplete="off" placeholder="C:\\path\\to\\IDEAEngineering">
+              <small>Local checkout used only as a bounded read source.</small>
+            </label>
+            <label>
+              Import context
+              <select id="manifest-mode">
+                <option value="GIT_COMMIT">Official Git commit</option>
+                <option value="UNCOMMITTED_PREVIEW">Working-tree preview</option>
+              </select>
+              <small>Preview never replaces the current official snapshot.</small>
+            </label>
+            <label>
+              Source commit
+              <input id="manifest-source-commit" type="text" autocomplete="off" placeholder="Required for official commit">
+              <small>Use an exact commit object, not a branch name.</small>
+            </label>
+            <label class="wide">
+              Manifest path
+              <input id="manifest-path" type="text" value="planning/project-management-compiler-manifest.json" autocomplete="off">
+              <small>The manifest is the sole discovery entry point.</small>
+            </label>
+            <label>
+              Analysis as-of override
+              <input id="manifest-as-of" type="date">
+              <small>Leave blank to use the Execution Register status date.</small>
+            </label>
+            <div class="control-submit manifest-submit">
+              <button id="manifest-import-button" class="primary" type="button">Import manifest</button>
+            </div>
+          </div>
+          <p id="manifest-import-note" class="manifest-import-note" role="status">Official source metadata will appear above the management views after import.</p>
+        </section>
+        <div class="intake-divider" aria-hidden="true"></div>
+        <div class="legacy-intake-heading">
+          <p class="eyebrow">COMPATIBILITY FLOW</p>
+          <p class="muted">Legacy local-directory analysis remains available for existing projects.</p>
+        </div>
         <div class="controls-grid">
           <label class="wide">
             Source directory
@@ -47,7 +96,7 @@
           <label>
             As-of date
             <input id="as-of-date" type="date" required>
-            <small>Used for late-start, overdue and actual Gantt calculations.</small>
+            <small>Legacy flow only; manifest imports default to source status date.</small>
           </label>
           <div class="control-submit">
             <button id="analyze-button" class="primary">Analyze source</button>
@@ -113,12 +162,12 @@
     <section id="execution-panel" class="panel execution-panel">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">EXECUTION OVERLAY</p>
-          <h2>Record manual update</h2>
-          <p class="panel-subtitle">Open this updater only when you have a real delivery signal to record.</p>
+          <p class="eyebrow">LOCAL PROPOSAL</p>
+          <h2>Draft an execution proposal</h2>
+          <p class="panel-subtitle">This creates a review artifact against the current official snapshot. It never changes IDEAEngineering actuals.</p>
         </div>
         <div class="panel-heading-actions">
-          <span class="muted">Baseline stays immutable</span>
+          <span class="muted">Source actuals stay immutable</span>
           <button id="execution-panel-toggle" class="secondary compact-action" type="button" aria-expanded="false" aria-controls="execution-panel-body">Open updater</button>
         </div>
       </div>
@@ -139,8 +188,9 @@
           <label>Actual effort (hours)<input id="actual-effort" type="number" min="0" step="0.25"></label>
           <label>Remaining effort (hours)<input id="remaining-effort" type="number" min="0" step="0.25"></label>
           <label class="wide">Note<textarea id="execution-note" rows="2"></textarea></label>
-          <div class="control-submit"><button class="primary" type="submit">Apply update</button></div>
+          <div class="control-submit"><button class="primary" type="submit">Create proposal</button></div>
         </form>
+        <section id="proposal-result-panel" class="proposal-result-panel" hidden aria-live="polite"></section>
       </div>
     </section>
   </main>

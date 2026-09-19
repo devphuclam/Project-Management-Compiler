@@ -1,13 +1,14 @@
 # Handoff — IDEAEngineering manifest import design
 
-## Pause point
+## Implementation status
 
-The authority model and feature specification for the IDEAEngineering manifest
-integration are approved and committed. Implementation has **not** started.
-This is an intentional pause before Spec Kit planning, not a partially shipped
-runtime feature.
+The authority model, feature specification, implementation plan, and runtime
+continuation are complete. The importer is implemented behind the public
+`IIdeaEngineeringManifestImporter.ImportAsync` seam and verified against the
+accepted source commit. The executable quickstart is in
+`specs/003-ideaengineering-manifest-import/quickstart.md`.
 
-The committed design increment is:
+The design increment is:
 
 - commit `67495c1` — `docs: define manifest import authority and specification`;
 - accepted ADR: `docs/adr/0006-manifest-source-and-execution-authority.md`;
@@ -16,9 +17,12 @@ The committed design increment is:
   `specs/003-ideaengineering-manifest-import/checklists/requirements.md`;
 - updated shared vocabulary and settled decisions in `CONTEXT.md`.
 
-The generated but unfilled `plan.md` template was deliberately removed before
-handoff. It must be regenerated and completed when work resumes; it is not
-evidence that planning was finished.
+The implementation plan, data model, contracts, tasks, and quickstart now live
+under `specs/003-ideaengineering-manifest-import/`.
+
+The runtime keeps official source execution separate from local proposal
+previews, retains failed candidates without replacing official state, and
+captures the manifest-declared readiness register as independent evidence.
 
 ## Source compatibility evidence
 
@@ -35,8 +39,8 @@ Accepted compatibility baseline:
 
 The source-owned validator was run with fixtures and exited successfully with
 `PASS_WITH_WARNINGS`. The only warning was the accepted calendar difference
-`PMC-CALENDAR-001`; no errors were reported. This is compatibility-oracle
-evidence, not proof that the Compiler importer has been implemented.
+`PMC-CALENDAR-001`; no errors were reported. The Compiler importer independently
+replays the seven source-owned fixture outcomes and preserves that warning.
 
 ## Decisions that must not be reopened silently
 
@@ -80,35 +84,15 @@ atomic snapshot assembly. Tests should enter through this public seam and
 through public application operations; Git and filesystem boundaries may use
 small fakes. Do not write tests against internal implementation details.
 
-## Resume workflow
+## Maintenance workflow
 
-1. Create a new implementation branch from the pushed `main`.
-2. Regenerate the plan template:
+For future source-contract changes, update the manifest contract and its fixture
+catalogue first, add a public-seam regression test, then rerun the full
+`scripts/verify.ps1` gate. Do not make the legacy fixed-path compiler an
+automatic fallback, do not mutate the IDEAEngineering checkout, and do not
+promote proposal or readiness evidence into source execution.
 
-   ```powershell
-   .\.specify\scripts\powershell\setup-plan.ps1 -Json
-   ```
-
-3. Complete and commit:
-
-   - `specs/003-ideaengineering-manifest-import/plan.md`;
-   - `research.md`;
-   - `data-model.md`;
-   - `contracts/`;
-   - `quickstart.md`.
-
-4. Re-run the constitution gate, generate `tasks.md` with
-   `.\.specify\scripts\powershell\setup-tasks.ps1 -Json`, and run the
-   non-destructive Spec Kit analysis before implementation.
-5. Implement in dependency-ordered TDD slices. Start with a failing contract
-   test for `ImportAsync`; then add safe commit capture, manifest/schema and
-   semantic validation, source execution, last-valid state, proposals,
-   canonical v2 migration, APIs, UI, exports, launcher parameters, fixtures,
-   and verifier checks.
-6. Finish with Spec Kit converge, the full repository verification gate,
-   public-repository secret/path inspection, and a focused code review.
-
-No subagent is required for this continuation.
+No subagent was required for this implementation.
 
 ## Git and local workspace notes
 

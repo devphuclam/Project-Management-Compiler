@@ -1,9 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ProjectManagementCompiler.Application;
+using ProjectManagementCompiler.Application.ManifestImport;
 using ProjectManagementCompiler.Domain;
 using ProjectManagementCompiler.Management;
 using ProjectManagementCompiler.Outputs;
+using ProjectManagementCompiler.Sources;
 
 const long MaximumRequestBodyBytes = 8 * 1024 * 1024;
 
@@ -16,8 +18,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNameCaseInsensitive = true;
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper));
 });
-builder.Services.AddSingleton<IProjectCompiler, ProjectCompiler>();
+builder.Services.AddSingleton<ProjectCompiler>();
+builder.Services.AddSingleton<IProjectCompiler>(services => services.GetRequiredService<ProjectCompiler>());
 builder.Services.AddSingleton<CompilerApplicationState>();
+builder.Services.AddSingleton<IManifestSourceReader, ManifestSourceReader>();
+builder.Services.AddSingleton<IIdeaEngineeringManifestImporter, IdeaEngineeringManifestImporter>();
+builder.Services.AddSingleton<ManifestImportApplicationService>();
+builder.Services.AddSingleton<ExecutionProposalService>();
 
 var app = builder.Build();
 app.Use(async (context, next) =>
@@ -45,6 +52,79 @@ app.MapGet("/api/health", () => Results.Ok(new
     binding = "http://127.0.0.1:5050",
     publicNetworkBinding = false
 }));
+
+app.MapPost("/api/manifest-import", async (
+    ManifestImportApiRequest request,
+    ManifestImportApplicationService service,
+    CompilerApplicationState state,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await service.ImportAsync(new ManifestImportRequest
+        {
+            RepositoryRoot = request.RepositoryRoot,
+            ManifestPath = request.ManifestPath,
+            Mode = request.Mode,
+            RequestedCommit = request.RequestedCommit,
+            AnalysisAsOfOverride = request.AnalysisAsOfOverride,
+            MaxFileBytes = request.MaxFileBytes,
+            MaxTotalBytes = request.MaxTotalBytes
+        }, request.Mapping, cancellationToken);
+        return Results.Ok(ToManifestImportResponse(result, state));
+    }
+    catch (ProjectCompilationException exception)
+    {
+        return Results.UnprocessableEntity(ToError(exception));
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(new ApiErrorResponse
+        {
+            Code = "INVALID_MANIFEST_IMPORT_REQUEST",
+            Message = exception.Message,
+            Phase = "manifest-import"
+        });
+    }
+});
+
+app.MapGet("/api/manifest-import/official", (CompilerApplicationState state) =>
+{
+    var snapshot = state.CurrentOfficialSnapshot;
+    return snapshot is null
+        ? Results.NotFound(new ApiErrorResponse { Code = "NO_OFFICIAL_SNAPSHOT", Message = "No official manifest snapshot is loaded.", Phase = "manifest-import" })
+        : Results.Ok(ToManifestSnapshotResponse(snapshot, ManifestImportClassification.OfficialCommit, state.CurrentOfficialResult));
+});
+
+app.MapGet("/api/manifest-import/latest", (CompilerApplicationState state) =>
+{
+    var attempt = state.LatestImportAttempt;
+    return attempt is null
+        ? Results.NotFound(new ApiErrorResponse { Code = "NO_IMPORT_ATTEMPT", Message = "No manifest import has been attempted.", Phase = "manifest-import" })
+        : Results.Ok(new { classification = attempt.Classification, attempt, diagnostics = attempt.Diagnostics });
+});
+
+app.MapGet("/api/manifest-import/preview", (CompilerApplicationState state) =>
+{
+    var preview = state.ActivePreview;
+    return preview is null
+        ? Results.NotFound(new ApiErrorResponse { Code = "NO_ACTIVE_PREVIEW", Message = "No candidate or working-tree preview is active.", Phase = "manifest-import" })
+        : Results.Ok(ToManifestSnapshotResponse(preview, preview.Metadata.Classification, state.ActivePreviewResult));
+});
+
+app.MapGet("/api/manifest-import/official/latest/preview", (CompilerApplicationState state) =>
+{
+    var preview = state.ActivePreview;
+    return preview is null
+        ? Results.NotFound(new ApiErrorResponse { Code = "NO_ACTIVE_PREVIEW", Message = "No candidate or working-tree preview is active.", Phase = "manifest-import" })
+        : Results.Ok(ToManifestSnapshotResponse(preview, preview.Metadata.Classification, state.ActivePreviewResult));
+});
+
+app.MapDelete("/api/manifest-import/preview", (ManifestImportApplicationService service) =>
+{
+    service.ClearPreview();
+    return Results.NoContent();
+});
 
 app.MapPost("/api/compile", async (
     CompileApiRequest request,
@@ -126,34 +206,129 @@ app.MapPost("/api/reopen", (
 
 app.MapPost("/api/execution", (
     ExecutionUpdate update,
-    IProjectCompiler compiler,
+    ExecutionProposalService proposals,
     CompilerApplicationState state) =>
 {
-    var current = state.Current;
-    if (current is null)
+    if (state.CurrentOfficialSnapshot is null)
     {
         return Results.Conflict(new ApiErrorResponse
         {
-            Code = "NO_PROJECT",
-            Message = "Compile or reopen a project before applying execution updates.",
+            Code = "NO_OFFICIAL_SNAPSHOT",
+            Message = "Import an official manifest snapshot before creating proposal-only execution updates.",
             Phase = "execution"
         });
     }
 
-    var result = compiler.ApplyExecutionUpdate(current, update, current.Analysis.AsOfDate);
-    if (!result.Accepted)
+    try
+    {
+        var proposal = proposals.Create(new CreateExecutionProposalRequest
+        {
+            TargetKind = "DeliveryCard",
+            TargetId = update.WorkItemId,
+            ProposedChanges = new Dictionary<string, string?>
+            {
+                ["executionState"] = FormatExecutionState(update.ExecutionState),
+                ["actualStart"] = update.ActualStart?.ToString("yyyy-MM-dd"),
+                ["actualFinish"] = update.ActualFinish?.ToString("yyyy-MM-dd"),
+                ["actualEffortHours"] = update.ActualEffortHours?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["remainingEffortHours"] = update.RemainingEffortHours?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["blocker"] = update.Note
+            },
+            Evidence = update.EvidenceReference is null
+                ? Array.Empty<SourceExecutionEvidence>()
+                : [new SourceExecutionEvidence
+                {
+                    EvidenceId = $"compat-{update.WorkItemId}",
+                    Type = "COMPATIBILITY_UPDATE",
+                    RepositoryPath = update.EvidenceReference.RelativeFile,
+                    Description = update.Note,
+                    RecordedAt = update.LastUpdatedAt
+                }]
+        });
+        return Results.Ok(new { proposalOnly = true, authoritative = false, proposal });
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
     {
         return Results.UnprocessableEntity(new ApiErrorResponse
         {
-            Code = "INVALID_EXECUTION_UPDATE",
-            Message = "Execution update was rejected.",
-            Phase = "execution",
-            Diagnostics = result.Diagnostics
+            Code = "INVALID_EXECUTION_PROPOSAL",
+            Message = exception.Message,
+            Phase = "execution"
         });
     }
+});
 
-    state.Set(result.Result);
-    return Results.Ok(ToApplicationSummary(result.Result));
+app.MapGet("/api/proposals", (string? snapshotId, ExecutionProposalService proposals) => Results.Ok(proposals.List(snapshotId)));
+
+app.MapPost("/api/proposals", (CreateExecutionProposalRequest request, ExecutionProposalService proposals) =>
+{
+    try
+    {
+        return Results.Ok(proposals.Create(request));
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse { Code = "INVALID_PROPOSAL", Message = exception.Message, Phase = "proposal" });
+    }
+});
+
+app.MapPut("/api/proposals/{id}", (string id, UpdateExecutionProposalRequest request, ExecutionProposalService proposals) =>
+{
+    try
+    {
+        return Results.Ok(proposals.Update(id, request));
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse { Code = "INVALID_PROPOSAL", Message = exception.Message, Phase = "proposal" });
+    }
+});
+
+app.MapPost("/api/proposals/{id}/preview", (string id, ExecutionProposalService proposals) =>
+{
+    try
+    {
+        return Results.Ok(proposals.Preview(id));
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse { Code = "INVALID_PROPOSAL_PREVIEW", Message = exception.Message, Phase = "proposal" });
+    }
+});
+
+app.MapGet("/api/proposals/{id}/export", (string id, ExecutionProposalService proposals) =>
+{
+    try
+    {
+        return Results.Text(proposals.Export(id), "application/json");
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse { Code = "INVALID_PROPOSAL_EXPORT", Message = exception.Message, Phase = "proposal" });
+    }
+});
+
+app.MapGet("/api/manifest-import/exports/official.json", (IProjectCompiler compiler, CompilerApplicationState state) =>
+{
+    var current = state.CurrentOfficialResult;
+    return current is null
+        ? Results.NotFound(new ApiErrorResponse { Code = "NO_OFFICIAL_SNAPSHOT", Message = "No official manifest snapshot is loaded.", Phase = "export" })
+        : Results.File(
+            System.Text.Encoding.UTF8.GetBytes(compiler.SaveJson(current)),
+            "application/json",
+            "manifest-official.json");
+});
+
+app.MapGet("/api/manifest-import/exports/preview.json", (IProjectCompiler compiler, CompilerApplicationState state) =>
+{
+    var current = state.ActivePreviewResult;
+    var preview = state.ActivePreview;
+    return current is null || preview is null
+        ? Results.NotFound(new ApiErrorResponse { Code = "NO_ACTIVE_PREVIEW", Message = "No valid preview snapshot is available for export.", Phase = "export" })
+        : Results.File(
+            System.Text.Encoding.UTF8.GetBytes(compiler.SaveJson(current)),
+            "application/json",
+            $"manifest-preview-{preview.Metadata.SnapshotId}.json");
 });
 
 app.MapGet("/api/project", (CompilerApplicationState state) =>
@@ -268,6 +443,40 @@ static object ToApplicationSummary(CompilationResult result) => new
     semanticDigest = result.SemanticDigest
 };
 
+static object ToManifestImportResponse(ManifestImportResult result, CompilerApplicationState state) => new
+{
+    classification = result.Classification,
+    snapshot = result.Snapshot is null ? null : ToManifestSnapshotResponse(
+        result.Snapshot,
+        result.Classification,
+        result.Classification == ManifestImportClassification.OfficialCommit
+            ? state.CurrentOfficialResult
+            : state.ActivePreviewResult),
+    attempt = result.Attempt,
+    diagnostics = result.Diagnostics
+};
+
+static object ToManifestSnapshotResponse(
+    IdeaEngineeringSnapshot snapshot,
+    ManifestImportClassification classification,
+    CompilationResult? compiled = null) => new
+{
+    classification,
+    metadata = snapshot.Metadata,
+    project = snapshot.Project,
+    projectSummary = compiled?.Project.Project ?? snapshot.Project.Project,
+    baseline = compiled?.Project.Baseline ?? snapshot.Project.Baseline,
+    sources = compiled?.Project.Sources ?? snapshot.Project.Sources,
+    analysis = compiled?.Analysis ?? snapshot.Project.Analysis,
+    views = compiled?.Views,
+    managementEvidence = compiled?.Project.ManagementEvidence ?? snapshot.Project.ManagementEvidence,
+    managementControl = compiled?.Views.ManagementControl,
+    warnings = compiled?.Warnings ?? snapshot.Project.Warnings,
+    semanticDigest = compiled?.SemanticDigest,
+    sourceExecution = snapshot.SourceExecution,
+    diagnostics = snapshot.Diagnostics
+};
+
 static string SafeRepositoryIdentity(ProjectSource source)
 {
     var repository = source.Repository?.Trim() ?? string.Empty;
@@ -317,6 +526,16 @@ static string SanitizeFileName(string value)
     return string.IsNullOrWhiteSpace(safe) ? "Project" : safe;
 }
 
+static string FormatExecutionState(ExecutionState state) => state switch
+{
+    ExecutionState.NotStarted => "NOT_STARTED",
+    ExecutionState.InProgress => "IN_PROGRESS",
+    ExecutionState.Completed => "COMPLETED",
+    ExecutionState.Suspended => "SUSPENDED",
+    ExecutionState.Cancelled => "CANCELLED",
+    _ => state.ToString().ToUpperInvariant()
+};
+
 public sealed record CompileApiRequest
 {
     public string SourcePath { get; init; } = string.Empty;
@@ -326,6 +545,18 @@ public sealed record CompileApiRequest
     public string? ManagementEvidenceIncrementPath { get; init; }
     public int MaxDocumentBytes { get; init; } = 2 * 1024 * 1024;
     public int MaxTotalDocumentBytes { get; init; } = 8 * 1024 * 1024;
+    public CarioMappingConfiguration? Mapping { get; init; }
+}
+
+public sealed record ManifestImportApiRequest
+{
+    public string RepositoryRoot { get; init; } = string.Empty;
+    public string ManifestPath { get; init; } = "planning/project-management-compiler-manifest.json";
+    public ManifestImportMode Mode { get; init; } = ManifestImportMode.GitCommit;
+    public string? RequestedCommit { get; init; }
+    public DateOnly? AnalysisAsOfOverride { get; init; }
+    public int MaxFileBytes { get; init; } = 4 * 1024 * 1024;
+    public int MaxTotalBytes { get; init; } = 32 * 1024 * 1024;
     public CarioMappingConfiguration? Mapping { get; init; }
 }
 

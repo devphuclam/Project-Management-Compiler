@@ -6,21 +6,24 @@ From the Project Management Compiler repository:
 
 ```powershell
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-project.ps1 `
-  -SourcePath D:\Work\Projects\IDEAEngineering `
+  -RepositoryRoot C:\path\to\IDEAEngineering `
   -ManifestPath planning/project-management-compiler-manifest.json `
   -SourceCommit 0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4 `
-  -ImportMode GIT_COMMIT
+  -ImportMode GIT_COMMIT `
+  -ImportManifest
 ```
 
-The source path is a local input only. It is never persisted in canonical output.
-Use `UNCOMMITTED_PREVIEW` to inspect a working tree without changing official state.
-The existing legacy `run-project.ps1` invocation remains supported.
+The repository root is a local input only. It is never persisted in canonical output.
+Use `-ImportMode UNCOMMITTED_PREVIEW` to inspect a working tree without changing official state.
+Omit `-ImportManifest` to start the legacy browser shell without an automatic import; the
+source-of-truth form remains available in the UI. `-SourcePath` is retained as an alias for
+`-RepositoryRoot`.
 
 ## Import through the API
 
 ```powershell
 $body = @{
-  repositoryRoot = 'D:\Work\Projects\IDEAEngineering'
+  repositoryRoot = 'C:\path\to\IDEAEngineering'
   manifestPath = 'planning/project-management-compiler-manifest.json'
   mode = 'GIT_COMMIT'
   requestedCommit = '0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4'
