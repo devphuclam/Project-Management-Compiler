@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gantt visual proposal · Project Management Compiler</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #21313b;
+      --muted: #687b84;
+      --line: #dfe7e8;
+      --line-soft: #edf1f1;
+      --canvas: #f5f8f8;
+      --teal: #147a77;
+      --teal-dark: #0d5d5b;
+      --teal-soft: #e9f5f2;
+      --blue: #4e7fa0;
+      --blue-soft: #eef5fa;
+      --amber: #a16a21;
+      --pane: 400px;
+      --day: 52px;
+      --row: 48px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font-family: "Segoe UI Variable", "Segoe UI", Arial, sans-serif; font-size: 13px; }
+    button, select, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+    .app-top { display: flex; align-items: center; justify-content: space-between; height: 58px; padding: 0 29px; border-bottom: 1px solid #e5ebeb; background: #fff; }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+    .brand-mark { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; background: var(--teal-dark); color: #fff; font-size: 12px; letter-spacing: -.04em; }
+    .top-meta { color: var(--muted); font-size: 12px; }
+    .top-meta strong { color: #42625e; font-weight: 600; }
+    main { margin: 0 auto; max-width: 1600px; padding: 24px 29px 30px; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--teal-dark); font-weight: 650; }
+    .project-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 21px; }
+    .project-heading h1 { margin: 0; max-width: 900px; color: #1b2c34; font-size: clamp(21px, 2vw, 27px); font-weight: 690; letter-spacing: -.035em; line-height: 1.25; text-wrap: balance; }
+    .project-heading p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+    .heading-period { flex: 0 0 auto; padding-bottom: 3px; color: #50626b; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .heading-period strong { color: var(--ink); }
+    .workspace { position: relative; min-height: 688px; overflow: hidden; border: 1px solid #d9e3e3; border-radius: 11px; background: #fff; box-shadow: 0 8px 30px rgba(37, 66, 70, .035); }
+    .workspace-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 59px; padding: 0 17px; border-bottom: 1px solid var(--line); }
+    .view-title { display: flex; align-items: center; gap: 15px; min-width: 0; }
+    .view-title strong { font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+    .view-title .subtle { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .bar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+    .control { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 0 11px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: #354a52; font-size: 12px; font-weight: 560; white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+    .control:hover { border-color: #a9c9c5; background: #f7fbfa; }
+    .control.active { border-color: #a8d3c9; background: var(--teal-soft); color: var(--teal-dark); }
+    .control.quiet { border-color: transparent; color: #53676e; }
+    .control.quiet:hover { background: #f2f6f6; }
+    .mini-chevron { color: #70858b; font-size: 10px; }
+    .menu { position: relative; }
+    .menu > summary { list-style: none; }
+    .menu > summary::-webkit-details-marker { display: none; }
+    .menu-panel { position: absolute; z-index: 30; top: 39px; right: 0; min-width: 180px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 12px 28px rgba(30, 58, 65, .14); }
+    .menu-panel p { margin: 3px 8px 9px; color: var(--muted); font-size: 11px; }
+    .menu-panel label { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 5px; color: #32464e; white-space: nowrap; }
+    .menu-panel label:hover { background: #f2f7f7; }
+    .menu-panel input { accent-color: var(--teal); }
+    .select-wrap select { min-height: 32px; padding: 0 25px 0 9px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: #354a52; font-size: 12px; }
+    .mode-strip { display: flex; align-items: center; gap: 22px; min-height: 45px; padding: 0 18px; border-bottom: 1px solid var(--line-soft); }
+    .mode-tab { height: 45px; padding: 0 1px; border: 0; border-bottom: 2px solid transparent; background: none; color: #6b7d84; font-size: 12px; font-weight: 610; }
+    .mode-tab.active { border-bottom-color: var(--teal); color: var(--teal-dark); }
+    .mode-hint { margin-left: auto; color: #7a8c90; font-size: 11px; }
+    .chart-frame { position: relative; min-height: 580px; overflow: hidden; }
+    .chart-scroll { width: 100%; height: 580px; overflow: auto; }
+    .chart { min-width: calc(var(--pane) + 780px); }
+    .chart-head, .chart-body { display: grid; grid-template-columns: var(--pane) minmax(780px, 1fr); }
+    .chart-head { position: sticky; top: 0; z-index: 15; height: 69px; border-bottom: 1px solid var(--line); background: #fbfdfd; }
+    .task-head, .task-list { position: sticky; left: 0; z-index: 7; background: #fff; box-shadow: 5px 0 11px -12px #49656a; }
+    .task-head { display: grid; grid-template-columns: minmax(0, 1fr) 83px; align-items: end; gap: 8px; padding: 0 18px 13px; border-right: 1px solid var(--line); color: #698087; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+    .task-head span:not(:first-child) { text-align: right; }
+    .axis { position: relative; overflow: hidden; background: #fbfdfd; font-variant-numeric: tabular-nums; }
+    .axis-month { position: relative; height: 29px; padding: 9px 16px 0; color: #435b64; font-size: 11px; font-weight: 660; }
+    .axis-month .october { position: absolute; left: calc(13 * var(--day) + 12px); top: 9px; }
+    .axis-days { position: relative; height: 40px; display: grid; grid-template-columns: repeat(15, var(--day)); border-top: 1px solid var(--line-soft); }
+    .axis-day { display: flex; align-items: center; justify-content: center; color: #698087; font-size: 11px; }
+    .axis-day.weekend { background: #f4f7f7; color: #9aabad; }
+    .axis-day.today { color: var(--teal-dark); font-weight: 700; }
+    .axis-week { position: absolute; top: 29px; bottom: 0; width: 1px; background: #d5e2e3; }
+    .axis-week.one { left: calc(3 * var(--day)); }
+    .axis-week.two { left: calc(10 * var(--day)); }
+    .task-list { border-right: 1px solid var(--line); }
+    .task-row, .timeline-row { height: var(--row); border-bottom: 1px solid var(--line-soft); }
+    .task-row { display: grid; grid-template-columns: minmax(0, 1fr) 83px; align-items: center; gap: 8px; padding: 0 16px; background: #fff; }
+    .task-row.phase { background: #f8fbfa; }
+    .task-row.selected { background: #eaf6f2; box-shadow: inset 3px 0 0 var(--teal); }
+    .task-row.related-up { background: #f0f6fa; box-shadow: inset 3px 0 0 var(--blue); }
+    .task-row.related-down { background: #eef8f4; box-shadow: inset 3px 0 0 #319579; }
+    .row-button { display: flex; align-items: center; min-width: 0; width: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; }
+    .row-button:hover .row-name { color: var(--teal-dark); text-decoration: underline; text-decoration-color: #a0c9be; text-underline-offset: 3px; }
+    .row-caret { flex: 0 0 25px; color: #698087; font-size: 11px; }
+    .row-caret.blank { color: transparent; }
+    .row-id { flex: 0 0 42px; color: #1e5f67; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .row-name { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 12px; font-weight: 520; line-height: 1.25; }
+    .phase .row-name { font-weight: 690; }
+    .row-state { color: #75888e; font-size: 11px; text-align: right; white-space: nowrap; }
+    .row-state.gate { color: var(--amber); font-weight: 630; }
+    .task-row:not(.phase) .row-button { padding-left: 14px; }
+    .timeline { position: relative; min-height: calc(11 * var(--row)); overflow: hidden; background: #fff; }
+    .bands { position: absolute; inset: 0 auto 0 0; display: grid; width: calc(15 * var(--day)); grid-template-columns: repeat(15, var(--day)); pointer-events: none; }
+    .band.weekend { background: #f6f8f8; }
+    .week-line { position: absolute; top: 0; bottom: 0; width: 1px; background: #dfebeb; pointer-events: none; }
+    .week-line.one { left: calc(3 * var(--day)); }
+    .week-line.two { left: calc(10 * var(--day)); }
+    .timeline-rows { position: relative; z-index: 2; }
+    .timeline-row { position: relative; }
+    .timeline-row.phase { background: rgba(236, 246, 243, .37); }
+    .timeline-row.selected { background: rgba(227, 246, 239, .8); }
+    .timeline-row.related-up { background: rgba(238, 246, 250, .58); }
+    .timeline-row.related-down { background: rgba(238, 248, 244, .6); }
+    .bar { position: absolute; top: 18px; height: 12px; border-radius: 3px; background: #85abb0; }
+    .bar.phase-bar { top: 21px; height: 6px; border-radius: 2px; background: #9cbdb6; }
+    .bar.selected-bar { top: 16px; height: 16px; background: var(--teal); box-shadow: 0 0 0 2px #d2ede3; }
+    .bar.related-up-bar { background: var(--blue); }
+    .bar.related-down-bar { background: #45a58d; }
+    .bar.one-day { width: 30px; }
+    .bar.two-day { width: 82px; }
+    .bar.long { width: 498px; }
+    .bar.shift-0 { left: 11px; } .bar.shift-3 { left: calc(3 * var(--day) + 11px); }
+    .bar.shift-4 { left: calc(4 * var(--day) + 11px); }
+    .bar.shift-5 { left: calc(5 * var(--day) + 11px); }
+    .bar.shift-6 { left: calc(6 * var(--day) + 11px); }
+    .bar.shift-7 { left: calc(7 * var(--day) + 11px); }
+    .bar.shift-11 { left: calc(11 * var(--day) + 11px); }
+    .bar.shift-17 { left: calc(17 * var(--day) + 11px); }
+    .milestone { position: absolute; left: calc(7 * var(--day) + 23px); top: 18px; width: 13px; height: 13px; border: 2px solid #ae7b37; background: #fffaf2; transform: rotate(45deg); }
+    .as-of { position: absolute; z-index: 4; top: 0; bottom: 0; left: var(--day); width: 2px; background: #62b3aa; pointer-events: none; }
+    .as-of-label { position: absolute; z-index: 5; top: 40px; left: calc(var(--day) + 5px); padding: 2px 5px; border-radius: 3px; background: #e5f5f0; color: var(--teal-dark); font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .links { position: absolute; z-index: 5; top: 0; left: 0; width: 780px; height: calc(11 * var(--row)); overflow: visible; pointer-events: none; opacity: 0; transition: opacity .18s; }
+    .selected-mode.show-links .links { opacity: 1; }
+    .links path { fill: none; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+    .links .up { stroke: var(--blue); }
+    .links .down { stroke: #258d74; }
+    .links circle { fill: #fff; stroke-width: 2; }
+    .links circle.up { stroke: var(--blue); }
+    .links circle.down { stroke: #258d74; }
+    .drawer { position: absolute; z-index: 20; top: 0; right: 0; bottom: 0; width: min(374px, 92vw); padding: 0; border-left: 1px solid #d7e4e1; background: #fff; box-shadow: -17px 0 35px rgba(37, 66, 70, .13); transform: translateX(105%); transition: transform .2s ease; }
+    .selected-mode .drawer { transform: translateX(0); }
+    .drawer-inner { height: 100%; overflow-y: auto; padding: 20px 23px 27px; }
+    .drawer-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 17px; }
+    .drawer-type { color: var(--teal-dark); font-size: 11px; font-weight: 740; letter-spacing: .065em; text-transform: uppercase; }
+    .drawer-close { width: 29px; height: 29px; padding: 0; border: 0; border-radius: 5px; background: #f3f7f7; color: #61767c; font-size: 17px; }
+    .drawer-close:hover { background: #e8f1ef; color: var(--ink); }
+    .drawer h2 { margin: 0; color: #1c3138; font-size: 20px; font-weight: 710; letter-spacing: -.03em; line-height: 1.33; }
+    .drawer-sub { margin: 9px 0 19px; color: var(--muted); font-size: 12px; }
+    .drawer-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 13px; padding: 14px 0 16px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .drawer-summary div { display: grid; gap: 3px; }
+    .drawer-summary span { color: var(--muted); font-size: 10px; }
+    .drawer-summary strong { color: #344b53; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .drawer-section { padding: 18px 0 16px; border-bottom: 1px solid var(--line); }
+    .drawer-section h3 { margin: 0 0 3px; color: #1f363d; font-size: 14px; font-weight: 710; letter-spacing: -.014em; }
+    .drawer-section > p { margin: 0 0 13px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .impact-flow { display: grid; grid-template-columns: 1fr 20px 1fr 20px 1fr; align-items: center; gap: 3px; }
+    .impact-item { display: grid; align-content: center; min-height: 62px; padding: 8px 7px; border: 1px solid #dce8e8; border-radius: 6px; background: #fbfdfc; text-align: center; }
+    .impact-item strong { font-size: 12px; }
+    .impact-item small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .impact-item.current { border-color: #a4d0c4; background: var(--teal-soft); color: var(--teal-dark); }
+    .impact-arrow { color: #6a8989; text-align: center; font-size: 18px; }
+    .impact-legend { display: flex; gap: 12px; margin-top: 12px; color: #61777e; font-size: 11px; }
+    .impact-legend span::before { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--blue); content: ""; }
+    .impact-legend span:last-child::before { background: #258d74; }
+    .drawer-link { display: inline-block; margin-top: 13px; padding: 0; border: 0; background: none; color: var(--teal-dark); font-size: 12px; font-weight: 650; text-align: left; }
+    .drawer-link:hover { text-decoration: underline; }
+    .downstream-chain { margin-top: 9px; padding: 9px 10px; border-left: 2px solid #6db59d; background: #f1f8f5; color: #375e58; font-size: 11px; font-weight: 620; }
+    .downstream-chain[hidden] { display: none; }
+    .drawer details { padding: 14px 0; border-bottom: 1px solid var(--line-soft); }
+    .drawer details summary { color: #3d5259; font-size: 12px; font-weight: 660; cursor: pointer; }
+    .drawer details p { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .prototype-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 3px 0; color: #7e9094; font-size: 11px; }
+    .prototype-foot strong { color: #5e767a; font-weight: 630; }
+    .owner-col, .attention-col { display: none; color: #75888e; font-size: 11px; text-align: right; white-space: nowrap; }
+    .show-owner { --pane: 450px; }
+    .show-attention { --pane: 452px; }
+    .show-owner.show-attention { --pane: 520px; }
+    .show-owner .task-head, .show-owner .task-row { grid-template-columns: minmax(0, 1fr) 83px 60px; }
+    .show-attention .task-head, .show-attention .task-row { grid-template-columns: minmax(0, 1fr) 83px 64px; }
+    .show-owner.show-attention .task-head, .show-owner.show-attention .task-row { grid-template-columns: minmax(0, 1fr) 83px 60px 64px; }
+    .show-owner .owner-col, .show-attention .attention-col { display: block; }
+    @media (max-width: 1050px) {
+      :root { --pane: 354px; }
+      .project-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+      .view-title .subtle, .mode-hint { display: none; }
+      .bar-actions { gap: 4px; }
+    }
+    @media (max-width: 720px) {
+      main { padding: 17px 10px; }
+      .app-top { padding-inline: 12px; }
+      .top-meta { display: none; }
+      .workspace-bar { align-items: flex-start; flex-direction: column; padding: 10px; }
+      .chart-scroll { height: 62vh; }
+      .prototype-foot { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-top">
+    <div class="brand"><span class="brand-mark">PM</span><span>Project Management Compiler</span></div>
+    <div class="top-meta"><strong>Planning baseline</strong> · as of 19 Sep 2026</div>
+  </header>
+  <main>
+    <nav class="breadcrumb" aria-label="Breadcrumb"><span>Plan</span><span aria-hidden="true">/</span><strong>Gantt</strong></nav>
+    <div class="project-heading">
+      <div><h1>IDEA Engineering Analysis, Design and Core v0 Delivery Roadmap</h1><p>PH0–PH5 · 53 delivery cards · 7 control points</p></div>
+      <div class="heading-period">Baseline <strong>18 Sep — 31 Dec 2026</strong></div>
+    </div>
+    <section class="workspace" id="workspace" aria-label="Gantt visual proposal">
+      <div class="workspace-bar">
+        <div class="view-title"><strong>Project schedule</strong><span class="subtle">Plan dates from the authored baseline</span></div>
+        <div class="bar-actions">
+          <span class="select-wrap"><select aria-label="Timeline scale"><option>Week</option><option>Day</option><option>Month</option></select></span>
+          <button class="control quiet" type="button" id="fitButton">Fit project</button>
+          <button class="control" type="button" id="dependencyButton" aria-pressed="false">Dependencies</button>
+          <details class="menu" id="columnsMenu"><summary class="control">Columns <span class="mini-chevron">▾</span></summary><div class="menu-panel"><p>Visible in the task list</p><label><input type="checkbox" checked disabled> Task / ID</label><label><input type="checkbox" checked disabled> State</label><label><input type="checkbox" id="ownerOption"> Primary owner</label><label><input type="checkbox" id="attentionOption"> Attention</label></div></details>
+          <details class="menu"><summary class="control">View options <span class="mini-chevron">▾</span></summary><div class="menu-panel"><p>Additional views</p><label>Execution evidence</label><label>Needs attention</label><label>Critical path</label><label>Structure</label></div></details>
+        </div>
+      </div>
+      <div class="mode-strip"><button type="button" class="mode-tab active" id="planTab" aria-current="page">Plan</button><button type="button" class="mode-tab" id="impactTab">Dependency focus</button><span class="mode-hint" id="modeHint">Select a task to inspect its direct links</span></div>
+      <div class="chart-frame">
+        <div class="chart-scroll" id="chartScroll">
+          <div class="chart">
+            <div class="chart-head">
+              <div class="task-head"><span>Task / ID</span><span>State</span></div>
+              <div class="axis"><div class="axis-month">September 2026 <span class="october">October</span></div><div class="axis-days"><span class="axis-day">18</span><span class="axis-day weekend today">19</span><span class="axis-day weekend">20</span><span class="axis-day">21</span><span class="axis-day">22</span><span class="axis-day">23</span><span class="axis-day">24</span><span class="axis-day">25</span><span class="axis-day weekend">26</span><span class="axis-day weekend">27</span><span class="axis-day">28</span><span class="axis-day">29</span><span class="axis-day">30</span><span class="axis-day">1</span><span class="axis-day">2</span></div><i class="axis-week one"></i><i class="axis-week two"></i></div>
+            </div>
+            <div class="chart-body">
+              <div class="task-list">
+                <div class="task-row phase"><button type="button" class="row-button"><span class="row-caret">▾</span><span class="row-id">PH0</span><span class="row-name">Implementation readiness</span></button><span class="row-state">Phase</span></div>
+                <div class="task-row" data-id="P01"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">P01</span><span class="row-name">Chốt mục tiêu phân tích</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row" data-id="P02"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">P02</span><span class="row-name">Chốt vai trò và thuật ngữ</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row" data-id="P03"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">P03</span><span class="row-name">Chốt phạm vi kỹ thuật</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row" data-id="P04"><button type="button" class="row-button" id="p04Button"><span class="row-caret blank">·</span><span class="row-id">P04</span><span class="row-name">Chuẩn bị môi trường minh họa</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row" data-id="P05"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">P05</span><span class="row-name">Xác định dữ liệu đầu vào</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row" data-id="P06"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">P06</span><span class="row-name">Xác định tiêu chí kiểm chứng</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row" data-id="P07"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">P07</span><span class="row-name">Gói bằng chứng PH0</span></button><span class="row-state">Plan only</span></div>
+                <div class="task-row"><button type="button" class="row-button"><span class="row-caret blank">·</span><span class="row-id">D0</span><span class="row-name">Quyết định hướng roadmap</span></button><span class="row-state gate">Milestone</span></div>
+                <div class="task-row phase"><button type="button" class="row-button"><span class="row-caret">▸</span><span class="row-id">PH1</span><span class="row-name">Running foundation</span></button><span class="row-state">Phase</span></div>
+                <div class="task-row phase"><button type="button" class="row-button"><span class="row-caret">▸</span><span class="row-id">PH2</span><span class="row-name">Controlled-document core</span></button><span class="row-state">Phase</span></div>
+              </div>
+              <div class="timeline">
+                <div class="bands"><span></span><span class="band weekend"></span><span class="band weekend"></span><span></span><span></span><span></span><span></span><span></span><span class="band weekend"></span><span class="band weekend"></span><span></span><span></span><span></span><span></span><span></span></div>
+                <div class="week-line one"></div><div class="week-line two"></div><div class="as-of"></div><div class="as-of-label">As of 19 Sep</div>
+                <div class="timeline-rows">
+                  <div class="timeline-row phase"><span class="bar phase-bar shift-0 long"></span></div>
+                  <div class="timeline-row"><span class="bar one-day shift-0"></span></div>
+                  <div class="timeline-row"><span class="bar one-day shift-3"></span></div>
+                  <div class="timeline-row" data-id="P03"><span class="bar one-day shift-4" id="p03Bar"></span></div>
+                  <div class="timeline-row" data-id="P04"><span class="bar two-day shift-5" id="p04Bar"></span></div>
+                  <div class="timeline-row"><span class="bar one-day shift-6"></span></div>
+                  <div class="timeline-row" data-id="P06"><span class="bar one-day shift-7" id="p06Bar"></span></div>
+                  <div class="timeline-row"><span class="bar one-day shift-11"></span></div>
+                  <div class="timeline-row"><span class="milestone" aria-label="D0 milestone 25 Sep"></span></div>
+                  <div class="timeline-row phase"><span class="bar phase-bar shift-17 long"></span></div>
+                  <div class="timeline-row phase"></div>
+                </div>
+                <svg class="links" viewBox="0 0 780 528" aria-hidden="true"><defs><marker id="arrow-up" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#4e7fa0"/></marker><marker id="arrow-down" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#258d74"/></marker></defs><path class="up" d="M249 168 H255 Q259 168 259 173 V211 Q259 216 264 216 H271" marker-end="url(#arrow-up)"/><path class="down" d="M353 216 H359 Q364 216 364 221 V307 Q364 312 369 312 H375" marker-end="url(#arrow-down)"/><circle class="up" cx="249" cy="168" r="3"/><circle class="down" cx="353" cy="216" r="3"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="drawer" id="drawer" aria-label="Task details" aria-hidden="true" inert><div class="drawer-inner"><div class="drawer-top"><span class="drawer-type">Delivery card · P04</span><button class="drawer-close" type="button" id="closeDrawer" aria-label="Close details">×</button></div><h2>Chuẩn bị môi trường minh họa</h2><p class="drawer-sub">PH0 · Implementation readiness</p><div class="drawer-summary"><div><span>Planned start</span><strong>23 Sep 2026</strong></div><div><span>Planned finish</span><strong>24 Sep 2026</strong></div><div><span>Execution</span><strong>Not recorded</strong></div><div><span>Owner role</span><strong>DEV</strong></div></div><section class="drawer-section"><h3>Dependency impact</h3><p>Finish-to-Start links from the planning source.</p><div class="impact-flow"><div class="impact-item"><strong>P03</strong><small>Depends on</small></div><span class="impact-arrow">→</span><div class="impact-item current"><strong>P04</strong><small>Selected</small></div><span class="impact-arrow">→</span><div class="impact-item"><strong>P06</strong><small>Blocks</small></div></div><div class="impact-legend"><span>Predecessor</span><span>Successor</span></div><button type="button" class="drawer-link" id="impactLink" aria-expanded="false">Show downstream impact →</button><div class="downstream-chain" id="downstreamChain" hidden>P04 → P06 → P07</div></section><details><summary>Execution evidence</summary><p>No actual work has been recorded for P04. The plan dates above are the authored baseline.</p></details><details><summary>Calculated CPM</summary><p>Calculated dates and float belong to the analysis layer; they do not replace the authored plan.</p></details><details><summary>Source and provenance</summary><p>Planning card P04 in the controlled public fixture. The full source reference remains available in the application inspector.</p></details></div></aside>
+      </div>
+    </section>
+    <div class="prototype-foot"><span><strong>Visual proposal</strong> · realistic public-fixture data · interaction sample only</span><span>Click P04 to preview the selected state. Close the drawer to return to the default schedule.</span></div>
+  </main>
+  <script>
+    const workspace = document.getElementById("workspace");
+    const drawer = document.getElementById("drawer");
+    const dependencyButton = document.getElementById("dependencyButton");
+    const impactTab = document.getElementById("impactTab");
+    function showSelected(selected) {
+      workspace.classList.toggle("selected-mode", selected);
+      workspace.classList.toggle("show-links", selected);
+      drawer.setAttribute("aria-hidden", selected ? "false" : "true");
+      drawer.inert = !selected;
+      if (selected) drawer.querySelector(".drawer-inner").scrollTop = 0;
+      dependencyButton.classList.toggle("active", selected);
+      dependencyButton.setAttribute("aria-pressed", selected ? "true" : "false");
+      impactTab.classList.toggle("active", selected);
+      document.getElementById("modeHint").textContent = selected ? "P04 · 1 predecessor · 1 direct successor" : "Select a task to inspect its direct links";
+      document.getElementById("planTab").classList.toggle("active", !selected);
+      if (selected) document.getElementById("planTab").removeAttribute("aria-current");
+      else document.getElementById("planTab").setAttribute("aria-current", "page");
+      if (selected) impactTab.setAttribute("aria-current", "page");
+      else impactTab.removeAttribute("aria-current");
+      document.querySelectorAll('[data-id="P03"]').forEach(item => item.classList.toggle("related-up", selected));
+      document.querySelectorAll('[data-id="P04"]').forEach(item => item.classList.toggle("selected", selected));
+      document.querySelectorAll('[data-id="P06"]').forEach(item => item.classList.toggle("related-down", selected));
+      document.getElementById("p03Bar").classList.toggle("related-up-bar", selected);
+      document.getElementById("p04Bar").classList.toggle("selected-bar", selected);
+      document.getElementById("p06Bar").classList.toggle("related-down-bar", selected);
+    }
+    document.getElementById("p04Button").addEventListener("click", () => showSelected(true));
+    document.getElementById("closeDrawer").addEventListener("click", () => { showSelected(false); document.getElementById("p04Button").focus(); });
+    document.getElementById("planTab").addEventListener("click", () => showSelected(false));
+    impactTab.addEventListener("click", () => showSelected(true));
+    dependencyButton.addEventListener("click", () => {
+      if (!workspace.classList.contains("selected-mode")) return showSelected(true);
+      const visible = workspace.classList.toggle("show-links");
+      dependencyButton.classList.toggle("active", visible);
+      dependencyButton.setAttribute("aria-pressed", visible ? "true" : "false");
+    });
+    document.getElementById("fitButton").addEventListener("click", () => document.getElementById("chartScroll").scrollTo({left: 0, behavior: "smooth"}));
+    const ownerValues = {P01: "OWNER", P02: "OWNER", P03: "DEV", P04: "DEV", P05: "DATA", P06: "DATA", P07: "OWNER"};
+    const taskHead = document.querySelector(".task-head");
+    const ownerHead = document.createElement("span"); ownerHead.className = "owner-col"; ownerHead.textContent = "Owner"; taskHead.appendChild(ownerHead);
+    const attentionHead = document.createElement("span"); attentionHead.className = "attention-col"; attentionHead.textContent = "Attention"; taskHead.appendChild(attentionHead);
+    document.querySelectorAll(".task-row").forEach(row => {
+      const owner = document.createElement("span"); owner.className = "owner-col"; owner.textContent = ownerValues[row.dataset.id] || ""; row.appendChild(owner);
+      const attention = document.createElement("span"); attention.className = "attention-col"; attention.textContent = ""; row.appendChild(attention);
+    });
+    document.querySelectorAll(".row-caret").forEach(caret => caret.setAttribute("aria-hidden", "true"));
+    document.getElementById("ownerOption").addEventListener("change", event => workspace.classList.toggle("show-owner", event.target.checked));
+    document.getElementById("attentionOption").addEventListener("change", event => workspace.classList.toggle("show-attention", event.target.checked));
+    document.getElementById("impactLink").addEventListener("click", event => {
+      const chain = document.getElementById("downstreamChain");
+      chain.hidden = !chain.hidden;
+      event.currentTarget.setAttribute("aria-expanded", chain.hidden ? "false" : "true");
+      event.currentTarget.textContent = chain.hidden ? "Show downstream impact →" : "Hide downstream impact ↑";
+    });
+    document.addEventListener("keydown", event => { if (event.key === "Escape") showSelected(false); });
+  </script>
+</body>
+</html>
