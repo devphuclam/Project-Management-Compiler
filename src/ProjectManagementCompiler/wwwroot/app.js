@@ -286,7 +286,10 @@
     phaseCopy.appendChild(node("span", "SCHEDULED PHASE", "summary-control-kicker"));
     phaseCopy.appendChild(node("strong", context.scheduledPhase ? context.scheduledPhase.id + " · " + context.scheduledPhase.displayName : "Phase not identified"));
     phaseCopy.appendChild(node("span", context.scheduledPhase ? displayDate(context.scheduledPhase.plan.start) + " → " + displayDate(context.scheduledPhase.plan.finish) : "No dated phase evidence", "muted"));
-    phaseCopy.appendChild(node("span", "Derived from the immutable baseline; actual phase entry and gate authorization are not loaded.", "muted summary-semantic-note"));
+    const phaseSemanticMessage = context.readinessLoaded
+      ? "Derived from the immutable baseline. Readiness and gate evidence are shown separately."
+      : "Derived from the immutable baseline. Actual phase entry and gate authorization are not loaded.";
+    phaseCopy.appendChild(node("span", phaseSemanticMessage, "muted summary-semantic-note"));
     phaseCard.appendChild(phaseCopy);
     if (context.scheduledPhase) {
       const phaseAction = node("button", "View phase", "text-action");
@@ -304,7 +307,10 @@
     const noControlPointDetail = context.inventory.controlPoints ? "All baseline control points precede the reporting date." : "No dated milestone evidence is loaded.";
     gateCopy.appendChild(node("strong", context.nextBaselineControlPoint ? normalizeDisplayTitle(context.nextBaselineControlPoint.name, context.nextBaselineControlPoint.milestoneId) : noControlPointMessage));
     gateCopy.appendChild(node("span", context.nextBaselineControlPoint ? formatDate(context.nextBaselineControlPoint.plannedDate) + " · " + controlPointState(context.nextBaselineControlPoint) : noControlPointDetail, "muted"));
-    gateCopy.appendChild(node("span", "Baseline chronology only; authoritative gate outcome is not loaded.", "muted summary-semantic-note"));
+    const gateSemanticMessage = context.readinessLoaded
+      ? "Baseline chronology only. Current gate evidence is shown separately."
+      : "Baseline chronology only. Authoritative gate evidence is not loaded.";
+    gateCopy.appendChild(node("span", gateSemanticMessage, "muted summary-semantic-note"));
     gateCard.appendChild(gateCopy);
     if (context.nextBaselineControlPoint) {
       const gateAction = node("button", "View control point", "text-action");
@@ -2051,8 +2057,8 @@
     try {
       setStatus("Capturing and analyzing…");
       const includeManagementEvidence = byId("include-management-evidence").checked;
-      const managementEvidenceIncrementPath = byId("management-evidence-path").value.trim() || null;
-      if (includeManagementEvidence && !managementEvidenceIncrementPath) {
+      const rawPath = byId("management-evidence-path").value.trim();
+      if (includeManagementEvidence && !rawPath) {
         showError(new Error("Select the readiness increment path before including repository readiness evidence."));
         setStatus("Analysis failed.");
         return;
@@ -2060,8 +2066,8 @@
       const summary = await request("/api/compile", jsonOptions({
         sourcePath,
         asOfDate,
-        includeManagementEvidence: includeManagementEvidence || Boolean(managementEvidenceIncrementPath),
-        managementEvidenceIncrementPath
+        includeManagementEvidence: includeManagementEvidence,
+        managementEvidenceIncrementPath: includeManagementEvidence ? rawPath : null
       }));
       applySummary(summary);
       setStatus("Loaded " + (summary.project.name || summary.project.id) + ".");

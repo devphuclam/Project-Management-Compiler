@@ -77,19 +77,22 @@ public sealed class ProjectCompiler : IProjectCompiler
         }
 
         var asOfDate = RequireAsOfDate(request.AsOfDate, "compile-request");
+        var managementEvidenceIncrementPath = request.IncludeManagementEvidence
+            ? request.ManagementEvidenceIncrementPath
+            : null;
 
         var snapshot = await sourceAdapter.CaptureAsync(new SourceRequest
         {
             Location = request.SourcePath,
             Ref = request.Ref,
-            ManagementEvidenceIncrementPath = request.ManagementEvidenceIncrementPath,
+            ManagementEvidenceIncrementPath = managementEvidenceIncrementPath,
             MaxDocumentBytes = request.MaxDocumentBytes,
             MaxTotalDocumentBytes = request.MaxTotalDocumentBytes
         }, cancellationToken);
         var resolution = AuthorityResolution.Resolve(snapshot);
         var extracted = extractor.Extract(resolution);
         var project = normalizer.Normalize(extracted);
-        if (request.IncludeManagementEvidence || request.ManagementEvidenceIncrementPath is not null)
+        if (request.IncludeManagementEvidence)
         {
             var evidence = managementEvidenceAdapter.Adapt(snapshot, project).Evidence;
             project = project with
