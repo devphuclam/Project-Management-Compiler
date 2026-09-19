@@ -18,6 +18,9 @@ public sealed class IdeaEngineeringExtractor
     {
         var warnings = resolution.Diagnostics.ToList();
         var documents = resolution.Documents.Select(document => document.Source).ToArray();
+        var capturedDocuments = resolution.CapturedDocuments.Count > 0
+            ? resolution.CapturedDocuments
+            : documents;
         var source = documents.FirstOrDefault();
         var sourceId = source?.SourceReference.SourceId ?? string.Empty;
         var repository = source?.SourceReference.Repository ?? string.Empty;
@@ -73,7 +76,7 @@ public sealed class IdeaEngineeringExtractor
                 SourceId = sourceId,
                 Repository = repository,
                 ResolvedRef = resolvedRef,
-                SourceDocuments = documents,
+                SourceDocuments = capturedDocuments,
                 Project = project,
                 Baseline = baseline,
                 ValueProvenance = values,
@@ -121,7 +124,7 @@ public sealed class IdeaEngineeringExtractor
             Repository = repository,
             ResolvedRef = resolvedRef,
             CapturedAtUtc = resolution.CapturedAtUtc,
-            SourceDocuments = documents,
+            SourceDocuments = capturedDocuments,
             Project = project,
             Baseline = baseline,
             Phases = phases,

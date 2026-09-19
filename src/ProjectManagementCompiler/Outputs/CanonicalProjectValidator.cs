@@ -24,6 +24,7 @@ public static class CanonicalProjectValidator
         ValidateRolesAndAssignments(project, diagnostics, cardIds);
         ValidateDependencies(project, diagnostics, cardIds, workPackageIds, milestoneIds);
         ValidateSourceReferences(project, diagnostics, sourceIds);
+        ValidateManagementEvidence(project, diagnostics, sourceIds);
         ValidateOverlay(project, diagnostics, cardIds);
         ValidatePoliciesAndMeasures(project, diagnostics);
 
@@ -519,6 +520,183 @@ public static class CanonicalProjectValidator
         {
             Add(diagnostics, "INVALID_SOURCE_REFERENCE", $"{owner} references uncaptured source file '{reference.RelativeFile}'.", owner);
         }
+    }
+
+    private static void ValidateManagementEvidence(
+        CanonicalProject project,
+        ICollection<ImportWarning> diagnostics,
+        ISet<string> sourceIds)
+    {
+        var evidence = project.ManagementEvidence;
+        if (evidence is null)
+        {
+            Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE", "Canonical project management evidence cannot be null.", null);
+            return;
+        }
+
+        if (!Enum.IsDefined(evidence.DiscoveryState))
+        {
+            Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE_STATE", "Management evidence discoveryState is unsupported.", null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(evidence.IncrementPath) && !IsSafeManagementPath(evidence.IncrementPath))
+        {
+            Add(diagnostics, "INVALID_MANAGEMENT_INCREMENT_PATH", "Management evidence incrementPath must be a safe relative path below specs/.", evidence.IncrementPath);
+        }
+
+        var documentsBySource = project.Sources
+            .SelectMany(source => source.Documents.Select(document => (SourceId: source.Id, Document: document)))
+            .GroupBy(item => item.SourceId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Select(item => item.Document).ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        var observationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var observation in evidence.Observations ?? Array.Empty<ManagementEvidenceObservation>())
+        {
+            if (observation is null)
+            {
+                Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE_OBSERVATION", "Management evidence observations cannot contain null entries.", null);
+                continue;
+            }
+
+            var observationId = observation.Id?.Trim() ?? string.Empty;
+            if (observationId.Length == 0)
+            {
+                Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE_ID", "Every management evidence observation requires a non-empty ID.", null);
+            }
+            else if (!observationIds.Add(observationId))
+            {
+                Add(diagnostics, "DUPLICATE_MANAGEMENT_EVIDENCE_ID", $"Management evidence observation '{observationId}' is declared more than once.", observationId);
+            }
+
+            if (!Enum.IsDefined(observation.EvidenceKind))
+            {
+                Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE_KIND", $"Management evidence observation '{observationId}' has an unsupported evidence kind.", observationId);
+            }
+
+            if (!Enum.IsDefined(observation.ValidationState))
+            {
+                Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE_VALIDATION_STATE", $"Management evidence observation '{observationId}' has an unsupported validation state.", observationId);
+            }
+
+            if (observation.ExplicitTarget is not null)
+            {
+                ValidateEvidenceTarget(diagnostics, observation.ExplicitTarget, observationId, "explicit target");
+            }
+
+            foreach (var reference in observation.SourceReferences ?? Array.Empty<SourceReference>())
+            {
+                ValidateSourceReference(diagnostics, reference, sourceIds, documentsBySource, $"management evidence observation '{observationId}'");
+            }
+
+            foreach (var link in observation.EvidenceLinks ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(link) || !IsSafeEvidenceLink(link))
+                {
+                    Add(diagnostics, "INVALID_MANAGEMENT_EVIDENCE_LINK", $"Management evidence observation '{observationId}' contains an unsafe evidence link.", observationId);
+                }
+            }
+        }
+
+        var reconciliationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reconciliation in evidence.Reconciliations ?? Array.Empty<EvidenceReconciliation>())
+        {
+            if (reconciliation is null)
+            {
+                Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", "Evidence reconciliations cannot contain null entries.", null);
+                continue;
+            }
+
+            var observationId = reconciliation.ObservationId?.Trim() ?? string.Empty;
+            if (observationId.Length == 0 || !observationIds.Contains(observationId))
+            {
+                Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Evidence reconciliation '{observationId}' does not resolve to a captured observation.", observationId);
+            }
+            else if (!reconciliationIds.Add(observationId))
+            {
+                Add(diagnostics, "DUPLICATE_EVIDENCE_RECONCILIATION", $"Evidence observation '{observationId}' has more than one reconciliation result.", observationId);
+            }
+
+            if (!Enum.IsDefined(reconciliation.Status))
+            {
+                Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Evidence reconciliation '{observationId}' has an unsupported status.", observationId);
+            }
+
+            if (reconciliation.ResolvedTarget is not null)
+            {
+                ValidateEvidenceTarget(diagnostics, reconciliation.ResolvedTarget, observationId, "resolved target");
+            }
+
+            foreach (var candidate in reconciliation.CandidateTargets ?? Array.Empty<EvidenceTarget>())
+            {
+                ValidateEvidenceTarget(diagnostics, candidate, observationId, "candidate target");
+            }
+
+            var candidateCount = reconciliation.CandidateTargets?.Count ?? 0;
+            switch (reconciliation.Status)
+            {
+                case EvidenceReconciliationStatus.Matched when reconciliation.ResolvedTarget is null:
+                    Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Matched evidence observation '{observationId}' requires a resolved target.", observationId);
+                    break;
+                case EvidenceReconciliationStatus.Matched when candidateCount > 1:
+                    Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Matched evidence observation '{observationId}' cannot retain multiple candidate targets.", observationId);
+                    break;
+                case EvidenceReconciliationStatus.Ambiguous when reconciliation.ResolvedTarget is not null || candidateCount < 2:
+                    Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Ambiguous evidence observation '{observationId}' requires at least two candidates and no resolved target.", observationId);
+                    break;
+                case EvidenceReconciliationStatus.Unmatched or EvidenceReconciliationStatus.Invalid when reconciliation.ResolvedTarget is not null:
+                    Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Unmatched or invalid evidence observation '{observationId}' cannot have a resolved target.", observationId);
+                    break;
+            }
+
+            foreach (var reference in reconciliation.SourceReferences ?? Array.Empty<SourceReference>())
+            {
+                ValidateSourceReference(diagnostics, reference, sourceIds, documentsBySource, $"evidence reconciliation '{observationId}'");
+            }
+        }
+    }
+
+    private static void ValidateEvidenceTarget(
+        ICollection<ImportWarning> diagnostics,
+        EvidenceTarget target,
+        string owner,
+        string label)
+    {
+        if (target is null || string.IsNullOrWhiteSpace(target.Kind) || string.IsNullOrWhiteSpace(target.Id))
+        {
+            Add(diagnostics, "EVIDENCE_TARGET_INVALID", $"Management evidence '{owner}' has an invalid {label}.", owner);
+        }
+    }
+
+    private static bool IsSafeManagementPath(string path)
+    {
+        if (Path.IsPathRooted(path)
+            || path.StartsWith("/", StringComparison.Ordinal)
+            || path.StartsWith("\\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var normalized = path.Replace('\\', '/');
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length >= 2
+            && string.Equals(segments[0], "specs", StringComparison.OrdinalIgnoreCase)
+            && segments.All(segment => segment is not "." and not ".."
+                                       && !segment.Contains(':', StringComparison.Ordinal)
+                                       && !segment.Any(char.IsControl));
+    }
+
+    private static bool IsSafeEvidenceLink(string link)
+    {
+        var normalized = link.Trim().Replace('\\', '/');
+        if (Path.IsPathRooted(normalized)
+            || normalized.StartsWith("/", StringComparison.Ordinal)
+            || normalized.StartsWith("//", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return normalized.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .All(segment => segment is not "." and not ".." && !segment.Any(char.IsControl));
     }
 
     private static void ValidateOverlay(

@@ -16,6 +16,7 @@ public sealed record AuthorityResolution
     public string? BaselineId => Baseline.BaselineId;
     public string? BaselineVersion => Baseline.BaselineVersion;
     public IReadOnlyList<PlanningDocument> Documents { get; init; } = Array.Empty<PlanningDocument>();
+    public IReadOnlyList<SourceDocument> CapturedDocuments { get; init; } = Array.Empty<SourceDocument>();
     public IReadOnlyList<PlanningTableRow> Rows { get; init; } = Array.Empty<PlanningTableRow>();
     public IReadOnlyList<PlanningTableRow> PhaseRows { get; init; } = Array.Empty<PlanningTableRow>();
     public IReadOnlyDictionary<string, ExtractedPlanningFact> PolicyFacts { get; init; } = new Dictionary<string, ExtractedPlanningFact>(StringComparer.OrdinalIgnoreCase);
@@ -183,6 +184,7 @@ public sealed record AuthorityResolution
             AuthorityDocument = authority,
             Baseline = baseline,
             Documents = documents,
+            CapturedDocuments = snapshot.Documents,
             Rows = allRows,
             PhaseRows = phaseRows,
             PolicyFacts = facts,

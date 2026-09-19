@@ -184,6 +184,57 @@ internal static class CanonicalValidationTests
         TestAssert.True(duplicateDiagnostics.Any(diagnostic => diagnostic.Code == "DUPLICATE_DEPENDENCY"), "An identical typed dependency must still be diagnosed as a duplicate.");
     }
 
+    public static void CanonicalValidatorRejectsMalformedManagementEvidence()
+    {
+        var project = CaptureCanonicalProject();
+        var observation = new ManagementEvidenceObservation
+        {
+            Id = "readiness:P01",
+            EvidenceKind = ManagementEvidenceKind.ReadinessCheck,
+            SourceRecordId = "P01",
+            ExplicitTarget = new EvidenceTarget { Kind = "WorkPackage", Id = "P01" }
+        };
+
+        AssertHasCode(project with
+        {
+            ManagementEvidence = new ManagementEvidence
+            {
+                DiscoveryState = ManagementEvidenceDiscoveryState.Known,
+                IncrementPath = "specs/004-technical-pilot-readiness",
+                Observations = [observation, observation]
+            }
+        }, "DUPLICATE_MANAGEMENT_EVIDENCE_ID");
+
+        AssertHasCode(project with
+        {
+            ManagementEvidence = new ManagementEvidence
+            {
+                DiscoveryState = ManagementEvidenceDiscoveryState.Known,
+                IncrementPath = "specs/004-technical-pilot-readiness",
+                Observations = [observation],
+                Reconciliations =
+                [
+                    new EvidenceReconciliation
+                    {
+                        ObservationId = "missing",
+                        Status = EvidenceReconciliationStatus.Matched,
+                        ResolvedTarget = new EvidenceTarget { Kind = "WorkPackage", Id = "P01" }
+                    }
+                ]
+            }
+        }, "INVALID_EVIDENCE_RECONCILIATION");
+
+        AssertHasCode(project with
+        {
+            ManagementEvidence = new ManagementEvidence
+            {
+                DiscoveryState = ManagementEvidenceDiscoveryState.Known,
+                IncrementPath = "specs/../private",
+                Observations = [observation]
+            }
+        }, "INVALID_MANAGEMENT_INCREMENT_PATH");
+    }
+
     private static void AssertHasCode(CanonicalProject project, string code)
     {
         var diagnostics = CanonicalProjectValidator.Validate(project);

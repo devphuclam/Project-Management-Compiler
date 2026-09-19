@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using ProjectManagementCompiler.Domain;
 using ProjectManagementCompiler.Extraction;
 using ProjectManagementCompiler.Management;
@@ -61,6 +62,18 @@ internal static class CanonicalJsonTests
         var reopened = new CanonicalJsonSerializer().Deserialize(json);
 
         TestAssert.True(reopened.ExecutionOverlay.Records.Count == 0, "An older schema-1.0 snapshot without executionOverlay must reopen with an empty overlay.");
+    }
+
+    public static void Schema10JsonWithoutManagementEvidenceUsesEmptyEvidence()
+    {
+        var project = CaptureCanonicalProject();
+        var json = JsonNode.Parse(new CanonicalJsonSerializer().Serialize(project))!.AsObject();
+        json.Remove("managementEvidence");
+
+        var reopened = new CanonicalJsonSerializer().Deserialize(json.ToJsonString());
+
+        TestAssert.Equal(ManagementEvidenceDiscoveryState.NotRequested, reopened.ManagementEvidence.DiscoveryState, "An older schema-1.0 snapshot without managementEvidence must reopen with an empty evidence value.");
+        TestAssert.Equal(0, reopened.ManagementEvidence.Observations.Count, "Legacy snapshots must not fabricate management evidence.");
     }
 
     public static void SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay()
@@ -159,7 +172,7 @@ internal static class CanonicalJsonTests
         TestAssert.Equal("Q06-A", invalidDependency.SubjectId, "Reopen must retain the invalid dependency subject.");
     }
 
-    private static CanonicalProject CaptureCanonicalProject()
+    internal static CanonicalProject CaptureCanonicalProject()
     {
         var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering");
         var snapshot = new LocalRepositorySourceAdapter()

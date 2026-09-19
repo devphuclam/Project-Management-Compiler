@@ -11,6 +11,21 @@ internal static class Program
         ("ManagementEvidencePathPolicyStaysBelowSpecs", ManagementEvidenceTests.ManagementEvidencePathPolicyStaysBelowSpecs),
         ("CaptureReadsReadinessAllowListInFixedOrder", ManagementEvidenceTests.CaptureReadsReadinessAllowListInFixedOrder),
         ("SemanticDigestWillIncludeEvidenceMeaningButNotCaptureTime", ManagementEvidenceTests.SemanticDigestWillIncludeEvidenceMeaningButNotCaptureTime),
+        ("ReadinessAdapterCapturesWorkPackagesDecisionsGateActionsAndChecklistContext", ReadinessAdapterTests.ReadinessAdapterCapturesWorkPackagesDecisionsGateActionsAndChecklistContext),
+        ("ReadinessAdapterRetainsStateAndResultWithoutFabricatingPass", ReadinessAdapterTests.ReadinessAdapterRetainsStateAndResultWithoutFabricatingPass),
+        ("ReadinessAdapterRejectsIllegalGateExecutionOutcomePair", ReadinessAdapterTests.ReadinessAdapterRejectsIllegalGateExecutionOutcomePair),
+        ("ReadinessAdapterResultNeverSerializesRawSourceOrAbsolutePath", ReadinessAdapterTests.ReadinessAdapterResultNeverSerializesRawSourceOrAbsolutePath),
+        ("ReadinessAdapterReturnsUnknownWithoutAnAgreedActiveIncrement", ReadinessAdapterTests.ReadinessAdapterReturnsUnknownWithoutAnAgreedActiveIncrement),
+        ("ReadinessAdapterReturnsAmbiguousForMultipleAgreedIncrements", ReadinessAdapterTests.ReadinessAdapterReturnsAmbiguousForMultipleAgreedIncrements),
+        ("ReadinessAdapterReportsMissingDeclaredSource", ReadinessAdapterTests.ReadinessAdapterReportsMissingDeclaredSource),
+        ("ReadinessAdapterPreservesConflictingRowsInsteadOfLastWriteWins", ReadinessAdapterTests.ReadinessAdapterPreservesConflictingRowsInsteadOfLastWriteWins),
+        ("TypedReadinessTargetMatchesWorkPackageAndManagementRecordsRemainUnmatched", ReconciliationTests.TypedReadinessTargetMatchesWorkPackageAndManagementRecordsRemainUnmatched),
+        ("InvalidAndAmbiguousTargetsAreExplicit", ReconciliationTests.InvalidAndAmbiguousTargetsAreExplicit),
+        ("ReconciliationDoesNotChangePlanningFacts", ReconciliationTests.ReconciliationDoesNotChangePlanningFacts),
+        ("PublicReadinessFixtureCapturesThroughRealFileSystem", ReadinessFixtureTests.PublicReadinessFixtureCapturesThroughRealFileSystem),
+        ("PublicReadinessFixtureContainsNoAbsoluteOrPrivateMaterial", ReadinessFixtureTests.PublicReadinessFixtureContainsNoAbsoluteOrPrivateMaterial),
+        ("CompilerComposesReadinessEvidenceAndReopenPreservesIt", ManagementEvidenceApplicationTests.CompilerComposesReadinessEvidenceAndReopenPreservesIt),
+        ("CompilerKeepsMvp1BaselineOnlyEvidenceNotRequested", ManagementEvidenceApplicationTests.CompilerKeepsMvp1BaselineOnlyEvidenceNotRequested),
         ("DataStateIncludesCanonicalDerivedAndResolutionStates", DomainModelTests.DataStateIncludesCanonicalDerivedAndResolutionStates),
         ("PlannedEntityPreservesPlannedEffortState", DomainModelTests.PlannedEntityPreservesPlannedEffortState),
         ("ManagementAnalysisPreservesForecastConstraintAndEffortAccounting", DomainModelTests.ManagementAnalysisPreservesForecastConstraintAndEffortAccounting),
@@ -108,6 +123,7 @@ internal static class Program
         ,("CanonicalJsonEmitsExecutionOverlayAndExplicitUnknownFields", CanonicalJsonTests.CanonicalJsonEmitsExecutionOverlayAndExplicitUnknownFields)
         ,("CanonicalJsonRoundTripsOverlayWithoutChangingBaseline", CanonicalJsonTests.CanonicalJsonRoundTripsOverlayWithoutChangingBaseline)
         ,("Schema10JsonWithoutOverlayUsesEmptyOverlay", CanonicalJsonTests.Schema10JsonWithoutOverlayUsesEmptyOverlay)
+        ,("Schema10JsonWithoutManagementEvidenceUsesEmptyEvidence", CanonicalJsonTests.Schema10JsonWithoutManagementEvidenceUsesEmptyEvidence)
         ,("SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay", CanonicalJsonTests.SemanticDigestIgnoresCaptureAndAnalysisButIncludesOverlay)
         ,("CanonicalJsonRejectsOverlayForUnknownWorkItem", CanonicalJsonTests.CanonicalJsonRejectsOverlayForUnknownWorkItem)
         ,("CanonicalJsonRejectsInconsistentOverlayStateAndEffort", CanonicalJsonTests.CanonicalJsonRejectsInconsistentOverlayStateAndEffort)
@@ -117,6 +133,7 @@ internal static class Program
         ,("CanonicalValidatorRejectsRolesAssignmentsAndDependencyContracts", CanonicalValidationTests.CanonicalValidatorRejectsRolesAssignmentsAndDependencyContracts)
         ,("CanonicalValidatorRejectsDuplicateExecutableAndInvalidOverlayRecords", CanonicalValidationTests.CanonicalValidatorRejectsDuplicateExecutableAndInvalidOverlayRecords)
         ,("CanonicalValidatorUsesTypedIdsForRealShapedP04AndDependencies", CanonicalValidationTests.CanonicalValidatorUsesTypedIdsForRealShapedP04AndDependencies)
+        ,("CanonicalValidatorRejectsMalformedManagementEvidence", CanonicalValidationTests.CanonicalValidatorRejectsMalformedManagementEvidence)
         ,("StatusAnalysisUsesWorkingCalendarForLateStart", AnalysisTests.StatusAnalysisUsesWorkingCalendarForLateStart)
         ,("StatusAnalysisDerivesOverdueWithoutChangingExecutionState", AnalysisTests.StatusAnalysisDerivesOverdueWithoutChangingExecutionState)
         ,("StatusAnalysisDerivesCompletedOnTimeAndLateSeparately", AnalysisTests.StatusAnalysisDerivesCompletedOnTimeAndLateSeparately)

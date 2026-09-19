@@ -78,6 +78,7 @@ public sealed record ManagementEvidence
     public ManagementEvidenceDiscoveryState DiscoveryState { get; init; } = ManagementEvidenceDiscoveryState.NotRequested;
     public string? IncrementPath { get; init; }
     public string? IncrementId { get; init; }
+    public string? IncrementPhaseId { get; init; }
     public string? IncrementName { get; init; }
     public string? IncrementStatus { get; init; }
     public DateTimeOffset? CapturedAtUtc { get; init; }
