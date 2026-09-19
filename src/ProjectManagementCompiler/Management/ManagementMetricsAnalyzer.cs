@@ -61,9 +61,12 @@ public sealed class ManagementMetricsAnalyzer
                 : Array.Empty<string>()
         };
 
-        var executionEffort = AnalyzeExecutionEffort(project.ExecutionOverlay);
-        var hasExecutionEvidence = project.ExecutionOverlay.Records.Any(record =>
-            record.ActualEffortHours is not null || record.RemainingEffortHours is not null || record.ActualStart is not null || record.ActualFinish is not null);
+        var recordedExecution = ExecutionTruthResolver.Recorded(project);
+        var executionEffort = AnalyzeExecutionEffort(recordedExecution);
+        var hasExecutionEvidence = project.ImportMetadata is not null
+            ? recordedExecution.Count > 0
+            : recordedExecution.Any(record =>
+                record.ActualEffortHours is not null || record.RemainingEffortHours is not null || record.ActualStart is not null || record.ActualFinish is not null);
         // MVP1 deliberately does not convert a CPM result into a forecast. A
         // forecast needs an explicit remaining-work/resource rule; actual start
         // evidence alone is not enough. Keep this distinct from CalculatedFinish.
@@ -188,9 +191,8 @@ public sealed class ManagementMetricsAnalyzer
         };
     }
 
-    private static ExecutionEffortSummary AnalyzeExecutionEffort(ExecutionOverlay overlay)
+    private static ExecutionEffortSummary AnalyzeExecutionEffort(IReadOnlyList<EffectiveExecutionRecord> records)
     {
-        var records = overlay.Records.ToArray();
         var actualValues = records.Where(record => record.ActualEffortHours is not null).Select(record => record.ActualEffortHours!.Value).ToArray();
         var remainingValues = records.Where(record => record.RemainingEffortHours is not null).Select(record => record.RemainingEffortHours!.Value).ToArray();
         return new ExecutionEffortSummary

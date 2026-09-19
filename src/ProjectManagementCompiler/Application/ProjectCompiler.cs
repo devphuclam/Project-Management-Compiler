@@ -194,6 +194,26 @@ public sealed class ProjectCompiler : IProjectCompiler
         return carioXlsxExporter.Export(result.Cario);
     }
 
+    public CompilationResult BuildImportedResult(
+        IdeaEngineeringSnapshot snapshot,
+        DateOnly? asOfDate = null,
+        CarioMappingConfiguration? mapping = null)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var effectiveAsOfDate = asOfDate
+            ?? snapshot.Metadata.RegisterStatusDate
+            ?? throw new ProjectCompilationException(
+                "manifest-import",
+                [new ImportWarning
+                {
+                    Id = "MISSING_AS_OF_DATE",
+                    Severity = WarningSeverity.Error,
+                    Code = "MISSING_AS_OF_DATE",
+                    Message = "The manifest snapshot has no register status date; provide an explicit analysis override."
+                }]);
+        return BuildResult(snapshot.Project, effectiveAsOfDate, mapping ?? new CarioMappingConfiguration());
+    }
+
     private CompilationResult BuildResult(CanonicalProject project, DateOnly asOfDate, CarioMappingConfiguration mapping)
     {
         var validation = CanonicalProjectValidator.Validate(project);

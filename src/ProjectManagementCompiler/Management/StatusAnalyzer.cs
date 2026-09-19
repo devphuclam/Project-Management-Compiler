@@ -7,8 +7,7 @@ public sealed class StatusAnalyzer
     public ManagementAnalysis Analyze(CanonicalProject project, DateOnly asOfDate)
     {
         var calendar = new WorkingCalendar(project.Capacity.Calendar);
-        var records = project.ExecutionOverlay.Records
-            .ToDictionary(record => record.WorkItemId, StringComparer.OrdinalIgnoreCase);
+        var sourceExecution = ExecutionTruthResolver.UsesSourceExecution(project);
         var cards = project.DeliveryCards.ToDictionary(card => card.Id, StringComparer.OrdinalIgnoreCase);
         var alerts = new List<Alert>();
         var variances = new List<WorkItemVariance>();
@@ -24,8 +23,8 @@ public sealed class StatusAnalyzer
 
         foreach (var card in project.DeliveryCards.OrderBy(card => card.Id, StringComparer.Ordinal))
         {
-            records.TryGetValue(card.Id, out var record);
-            var state = record?.ExecutionState ?? card.State;
+            var record = ExecutionTruthResolver.ForCard(project, card.Id);
+            var state = record?.ExecutionState ?? (sourceExecution ? null : card.State);
             var actualStart = record?.ActualStart;
             var actualFinish = record?.ActualFinish;
             var baselineStart = ValidDate(card.PlannedStart) ? card.PlannedStart : null;
@@ -83,7 +82,7 @@ public sealed class StatusAnalyzer
                 });
             }
 
-            if (record is not null
+            if (record?.IsRecorded == true
                 && ((actualStart is not null && baselineStart is not null && actualStart > baselineStart)
                     || (state == ExecutionState.InProgress
                         && actualStart is not null
@@ -185,9 +184,8 @@ public sealed class StatusAnalyzer
                 continue;
             }
 
-            var successorState = records.TryGetValue(successor.Id, out var successorRecord)
-                ? successorRecord.ExecutionState
-                : successor.State;
+            var successorRecord = ExecutionTruthResolver.ForCard(project, successor.Id);
+            var successorState = successorRecord?.ExecutionState ?? (sourceExecution ? null : successor.State);
             if (successorState != ExecutionState.NotStarted)
             {
                 continue;

@@ -11,22 +11,29 @@ public sealed record PlanningDiscoveryResult
 
 public sealed class IdeaPlanningDiscovery
 {
-    public PlanningDiscoveryResult Discover(RepositorySnapshot snapshot)
+    public PlanningDiscoveryResult Discover(
+        RepositorySnapshot snapshot,
+        IReadOnlyDictionary<string, PlanningDocumentKind>? manifestDocumentKinds = null)
     {
-        var byPath = snapshot.Documents
-            .Select(document => (document, path: document.RelativeFile.Replace('\\', '/')))
-            .ToDictionary(item => item.path, item => item.document, StringComparer.OrdinalIgnoreCase);
         var documents = new List<PlanningDocument>();
         var diagnostics = new List<ImportWarning>(snapshot.Diagnostics);
 
-        foreach (var path in SourcePathPolicy.RecognizedPaths)
+        foreach (var source in snapshot.Documents)
         {
-            if (!byPath.TryGetValue(path, out var source))
+            var path = source.RelativeFile.Replace('\\', '/');
+            var manifestKind = default(PlanningDocumentKind);
+            var hasManifestKind = manifestDocumentKinds is not null
+                && manifestDocumentKinds.TryGetValue(path, out manifestKind);
+            if (!hasManifestKind && !SourcePathPolicy.RecognizedPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (PlanningDocument.TryCreate(source, out var planningDocument))
+            if (hasManifestKind)
+            {
+                documents.Add(PlanningDocument.CreateForManifest(source, manifestKind));
+            }
+            else if (PlanningDocument.TryCreate(source, out var planningDocument))
             {
                 documents.Add(planningDocument);
             }
@@ -51,7 +58,7 @@ public sealed class IdeaPlanningDiscovery
                         SourceId = snapshot.RepositoryId,
                         Repository = snapshot.RepositoryLabel,
                         ResolvedRef = snapshot.ResolvedRef,
-                        RelativeFile = required.Path,
+                        RelativeFile = manifestDocumentKinds?.FirstOrDefault(pair => pair.Value == required.Kind).Key ?? required.Path,
                         ExtractionRule = "idea-planning-required-document"
                     }]
                 });

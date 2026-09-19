@@ -181,6 +181,112 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         };
     }
 
+    /// <summary>
+    /// Adapts the readiness document explicitly declared by the manifest. The
+    /// manifest boundary may intentionally capture only the register, so this
+    /// path does not invent a README or scan for an alternate package.
+    /// </summary>
+    public ManagementEvidenceAdapterResult AdaptDeclaredReadiness(
+        RepositorySnapshot snapshot,
+        CanonicalProject planningProject,
+        string declaredPath)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(planningProject);
+
+        var normalizedPath = declaredPath.Replace('\\', '/');
+        var register = snapshot.Documents.FirstOrDefault(document =>
+            string.Equals(document.RelativeFile.Replace('\\', '/'), normalizedPath, StringComparison.OrdinalIgnoreCase));
+        if (register is null)
+        {
+            return new ManagementEvidenceAdapterResult
+            {
+                Evidence = new ManagementEvidence
+                {
+                    DiscoveryState = ManagementEvidenceDiscoveryState.Unknown,
+                    CapturedAtUtc = snapshot.CapturedAtUtc,
+                    Diagnostics =
+                    [Diagnostic(
+                        "EVIDENCE_SOURCE_UNAVAILABLE",
+                        $"The manifest-declared readiness source '{normalizedPath}' was not captured.",
+                        [new SourceReference
+                        {
+                            SourceId = snapshot.RepositoryId,
+                            Repository = snapshot.RepositoryLabel,
+                            ResolvedRef = snapshot.ResolvedRef,
+                            RelativeFile = normalizedPath,
+                            ExtractionRule = "ideaengineering-manifest-readiness-authority",
+                            ValidationState = ValidationState.Unknown
+                        }])]
+                }
+            };
+        }
+
+        var identity = ParseIdentity(register.Content);
+        if (identity is null)
+        {
+            return new ManagementEvidenceAdapterResult
+            {
+                Evidence = new ManagementEvidence
+                {
+                    DiscoveryState = ManagementEvidenceDiscoveryState.Unknown,
+                    CapturedAtUtc = snapshot.CapturedAtUtc,
+                    Diagnostics =
+                    [Diagnostic(
+                        "ACTIVE_INCREMENT_UNKNOWN",
+                        $"The manifest-declared readiness source '{normalizedPath}' has no parseable increment identity.",
+                        [register.SourceReference])]
+                }
+            };
+        }
+
+        var root = GetIncrementRoot(normalizedPath);
+        var documents = snapshot.Documents
+            .Where(document => string.Equals(document.RelativeFile.Replace('\\', '/'), root, StringComparison.OrdinalIgnoreCase)
+                || document.RelativeFile.Replace('\\', '/').StartsWith(root + "/", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(document => document.RelativeFile.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
+        var candidate = new IncrementCandidate(
+            root,
+            identity.Value.Id,
+            identity.Value.Name,
+            ParseStatus(register.Content),
+            ParsePhaseId(register.Content),
+            documents);
+        var diagnostics = new List<ImportWarning>();
+        var observations = new List<ManagementEvidenceObservation>();
+        var controlEnvelope = ExtractControlEnvelope(documents, candidate);
+        if (controlEnvelope is not null)
+        {
+            observations.Add(controlEnvelope);
+        }
+
+        var rows = ParseTables(register);
+        observations.AddRange(ExtractReadinessChecks(rows));
+        observations.AddRange(ExtractDecisions(rows));
+        observations.AddRange(ExtractHumanActions(rows));
+        observations.AddRange(ExtractGateObservations(rows, authorityRank: 2, authorityKind: "readiness-register-state-result"));
+        EnsureUniqueObservationIds(observations);
+        ValidateEffectiveConflicts(observations, diagnostics);
+        ValidateStateResultPairs(observations, diagnostics);
+        ValidateGatePair(observations, diagnostics);
+
+        return new ManagementEvidenceAdapterResult
+        {
+            Evidence = new ManagementEvidence
+            {
+                DiscoveryState = ManagementEvidenceDiscoveryState.Known,
+                IncrementPath = root,
+                IncrementId = candidate.IncrementId,
+                IncrementPhaseId = candidate.IncrementPhaseId,
+                IncrementName = candidate.IncrementName,
+                IncrementStatus = candidate.IncrementStatus,
+                CapturedAtUtc = snapshot.CapturedAtUtc,
+                Observations = observations,
+                Diagnostics = diagnostics
+            }
+        };
+    }
+
     private static void EnsureUniqueObservationIds(IList<ManagementEvidenceObservation> observations)
     {
         var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

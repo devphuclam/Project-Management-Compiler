@@ -64,6 +64,9 @@ public sealed record PlanningDocument
         return document;
     }
 
+    internal static PlanningDocument CreateForManifest(SourceDocument source, PlanningDocumentKind kind) =>
+        new(source, kind);
+
     public static bool TryCreate(SourceDocument source, out PlanningDocument document)
     {
         var path = source.RelativeFile.Replace('\\', '/');

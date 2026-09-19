@@ -145,9 +145,7 @@ public sealed class ManagementViewProjector
 
     private static KanbanProjection BuildKanban(CanonicalProject project, ManagementAnalysis analysis)
     {
-        var records = project.ExecutionOverlay.Records
-            .GroupBy(record => record.WorkItemId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+        var sourceExecution = ExecutionTruthResolver.UsesSourceExecution(project);
         var alerts = analysis.Alerts
             .GroupBy(alert => alert.WorkItemId, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Select(alert => alert.AlertCode).ToHashSet(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
@@ -156,12 +154,12 @@ public sealed class ManagementViewProjector
             .OrderBy(card => card.Id, StringComparer.Ordinal)
             .Select(card =>
             {
-                records.TryGetValue(card.Id, out var record);
+                var record = ExecutionTruthResolver.ForCard(project, card.Id);
                 alerts.TryGetValue(card.Id, out var itemAlerts);
                 return new
                 {
                     Card = card,
-                    State = record?.ExecutionState ?? card.State,
+                    State = record?.ExecutionState ?? (sourceExecution ? null : card.State),
                     Alerts = itemAlerts ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 };
             })

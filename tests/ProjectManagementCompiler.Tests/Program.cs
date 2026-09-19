@@ -5,6 +5,16 @@ internal static class Program
     private static readonly (string Name, Action Test)[] Tests =
     [
         ("RunnerStarts", RunnerStarts),
+        ("ManifestImportAcceptsValidatedCapture", ManifestImportTests.ManifestImportAcceptsValidatedCapture),
+        ("ManifestImportNeverFallsBackToLegacyCapture", ManifestImportTests.ManifestImportNeverFallsBackToLegacyCapture),
+        ("ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation", ManifestImportTests.ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation),
+        ("AcceptedManifestImportsExactTotalsAndP01Truth", ManifestImportTests.AcceptedManifestImportsExactTotalsAndP01Truth),
+        ("AcceptedManifestCapturesDeclaredReadinessEvidenceSeparately", ManifestImportTests.AcceptedManifestCapturesDeclaredReadinessEvidenceSeparately),
+        ("AcceptedFixtureCatalogueMatchesDeclaredOracle", ManifestImportTests.AcceptedFixtureCatalogueMatchesDeclaredOracle),
+        ("OfficialAnalysisUsesRecordedSourceExecutionOnly", ManifestExecutionTests.OfficialAnalysisUsesRecordedSourceExecutionOnly),
+        ("ProposalPreviewIsLocalAndStaleAware", ProposalTests.ProposalPreviewIsLocalAndStaleAware),
+        ("Schema20PersistsSourceAuthorityAndIgnoresImportTimestampInDigest", CanonicalMigrationTests.Schema20PersistsSourceAuthorityAndIgnoresImportTimestampInDigest),
+        ("Schema10OverlayReopensAsLocalProposalWithoutSourcePromotion", CanonicalMigrationTests.Schema10OverlayReopensAsLocalProposalWithoutSourcePromotion),
         ("ManagementEvidencePreservesIndependentStatesAndTypedTargets", ManagementEvidenceTests.ManagementEvidencePreservesIndependentStatesAndTypedTargets),
         ("CanonicalProjectDefaultsManagementEvidenceWithoutProfile", ManagementEvidenceTests.CanonicalProjectDefaultsManagementEvidenceWithoutProfile),
         ("CanonicalJsonRoundTripsManagementEvidence", ManagementEvidenceTests.CanonicalJsonRoundTripsManagementEvidence),

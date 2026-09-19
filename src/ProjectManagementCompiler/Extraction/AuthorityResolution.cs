@@ -23,15 +23,27 @@ public sealed record AuthorityResolution
     public IReadOnlyList<ImportWarning> Conflicts { get; init; } = Array.Empty<ImportWarning>();
     public IReadOnlyList<ImportWarning> Diagnostics { get; init; } = Array.Empty<ImportWarning>();
 
-    public static AuthorityResolution Resolve(RepositorySnapshot snapshot)
+    public static AuthorityResolution Resolve(
+        RepositorySnapshot snapshot,
+        IReadOnlyDictionary<string, PlanningDocumentKind>? manifestDocumentKinds = null)
     {
-        var discovery = new IdeaPlanningDiscovery().Discover(snapshot);
+        var discovery = new IdeaPlanningDiscovery().Discover(snapshot, manifestDocumentKinds);
         var documents = discovery.Documents;
         var diagnostics = new List<ImportWarning>(discovery.Diagnostics);
         var parsed = new Dictionary<PlanningDocument, PlanningParseResult>();
 
         foreach (var document in documents)
         {
+            // A manifest-declared navigation document is retained for provenance and
+            // source-contract completeness, but it is not a planning authority. In
+            // particular, stale links or prose markers in README files must not make
+            // the authoritative DOC-07 baseline non-canonical.
+            if (IsNavigationOnlyDocument(document))
+            {
+                parsed[document] = new PlanningParseResult();
+                continue;
+            }
+
             var result = document.Source.Format == SourceDocumentFormat.Html
                 ? HtmlTableParser.Parse(document)
                 : MarkdownTableParser.Parse(document);
@@ -192,6 +204,10 @@ public sealed record AuthorityResolution
             Diagnostics = diagnostics
         };
     }
+
+    private static bool IsNavigationOnlyDocument(PlanningDocument document) =>
+        document.Kind == PlanningDocumentKind.Readme
+        && !string.Equals(document.Source.RelativeFile.Replace('\\', '/'), "README.md", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsValidRequiredDocument(PlanningDocument document, IReadOnlyDictionary<PlanningDocument, PlanningParseResult> parsed) =>
         parsed.TryGetValue(document, out var result)
@@ -532,7 +548,9 @@ public sealed record AuthorityResolution
             return warnings;
         }
 
-        foreach (var document in documents.Where(document => document.AuthorityRank > authority.AuthorityRank))
+        foreach (var document in documents.Where(document =>
+            document.AuthorityRank > authority.AuthorityRank
+            && !IsNavigationOnlyDocument(document)))
         {
             foreach (var reference in ControlEnvelopeReferences(document))
             {

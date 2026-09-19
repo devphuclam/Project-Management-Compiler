@@ -17,6 +17,9 @@ public sealed record CanonicalProject
     public Reserve Reserve { get; init; } = new();
     public PolicySet Policies { get; init; } = new();
     public ExecutionOverlay ExecutionOverlay { get; init; } = new();
+    public ManifestSnapshotMetadata? ImportMetadata { get; init; }
+    public SourceExecutionSnapshot SourceExecution { get; init; } = new();
+    public IReadOnlyList<ExecutionProposal> ExecutionProposals { get; init; } = Array.Empty<ExecutionProposal>();
     public ManagementEvidence ManagementEvidence { get; init; } = new();
     public IReadOnlyList<SourceReference> Provenance { get; init; } = Array.Empty<SourceReference>();
     public IReadOnlyList<ImportWarning> Warnings { get; init; } = Array.Empty<ImportWarning>();

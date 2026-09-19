@@ -64,8 +64,6 @@ public sealed class GanttProjector
 {
     public GanttProjection Build(CanonicalProject project, ManagementAnalysis analysis, DateOnly asOfDate)
     {
-        var records = project.ExecutionOverlay.Records
-            .ToDictionary(record => record.WorkItemId, StringComparer.OrdinalIgnoreCase);
         var criticalCardIds = analysis.CpmNodes
             .Where(node => node.IsCritical && string.Equals(CanonicalWorkItemKey.NormalizeKind(node.NodeKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase))
             .Select(node => node.NodeId)
@@ -101,8 +99,8 @@ public sealed class GanttProjector
         var items = new List<GanttItem>();
         foreach (var card in project.DeliveryCards.OrderBy(card => card.Id, StringComparer.Ordinal))
         {
-            records.TryGetValue(card.Id, out var record);
-            var state = record?.ExecutionState ?? card.State;
+            var record = ExecutionTruthResolver.ForCard(project, card.Id);
+            var state = record?.ExecutionState ?? (ExecutionTruthResolver.UsesSourceExecution(project) ? null : card.State);
             var lanes = new List<GanttLaneEntry>
             {
                 new()
@@ -116,7 +114,7 @@ public sealed class GanttProjector
                 }
             };
 
-            if (record is not null && (record.ActualStart is not null
+            if (record?.IsRecorded == true && (record.ActualStart is not null
                 || record.ActualFinish is not null
                 || record.ActualEffortHours is not null
                 || record.RemainingEffortHours is not null))
@@ -156,7 +154,7 @@ public sealed class GanttProjector
                 PhaseId = card.PhaseId,
                 WorkPackageId = card.WorkPackageId,
                 ExecutionState = state,
-                HasExecutionEvidence = record is not null,
+                HasExecutionEvidence = record?.IsRecorded == true,
                 SourceReferences = card.SourceReferences,
                 LogicalRoles = logicalRolesByWorkItem.TryGetValue(card.Id, out var logicalRoles)
                     ? logicalRoles
