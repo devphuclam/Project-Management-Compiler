@@ -197,6 +197,7 @@ internal static class Program
         ,("RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe", RealSourceCompatibilityTests.RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe)
         ,("GanttOffersOptionalMetadataColumns", GanttUiRegressionTests.GanttOffersOptionalMetadataColumns)
         ,("GanttMetadataColumnLayoutCannotOverflowTaskPane", GanttUiRegressionTests.GanttMetadataColumnLayoutCannotOverflowTaskPane)
+        ,("GanttMetadataColumnOptionsAreAlwaysVisible", GanttUiRegressionTests.GanttMetadataColumnOptionsAreAlwaysVisible)
         ,("SelectingGanttRowKeepsTimelineEvidenceVisible", GanttUiRegressionTests.SelectingGanttRowKeepsTimelineEvidenceVisible)
     ];
 

@@ -24,6 +24,14 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains("gantt-hide-attention", styles, "Gantt must hide the Attention track and cells as one layout unit.");
     }
 
+    public static void GanttMetadataColumnOptionsAreAlwaysVisible()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("toolbar.appendChild(columnOptions)", appJs, "Gantt column options must be rendered in the visible toolbar.");
+        TestAssert.False(appJs.Contains("filters.appendChild(columnOptions)", StringComparison.Ordinal), "Gantt column options must not be hidden inside Advanced filters.");
+    }
+
     public static void SelectingGanttRowKeepsTimelineEvidenceVisible()
     {
         var appJs = ReadAppJs();
