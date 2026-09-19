@@ -39,11 +39,11 @@ Verified commands:
 
 The final verification reports a clean build with zero warnings/errors, all tests passing, `Health: ok`, 53 cards, six XLSX sheets, and `SecurityChecks: PASS`. Browser verification used the public real-shaped fixture at a 1280-pixel desktop viewport; default, selected P04, Columns, downstream disclosure, close, and console-error states were checked. No browser warnings or errors were recorded.
 
-## Git state at handoff
+## Git rollout
 
-- Branch: `codex/gantt-visual-proposal`
 - Visual prototype commit: `90ebaf2`
 - TDD contract commit: `4e72d95`
 - Production implementation commit: `9fb1d3f`
+- Initial handoff commit: `088e565`
+- The verified increment was fast-forwarded into `main` and pushed to `origin/main` without force-pushing or rewriting history.
 - The local `package.json` and `package-lock.json` remain untracked and were intentionally excluded.
-- Nothing from this increment has been pushed or merged at the time this handoff was written.
