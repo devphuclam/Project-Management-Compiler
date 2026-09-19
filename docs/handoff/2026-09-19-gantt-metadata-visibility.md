@@ -5,7 +5,8 @@
 The Gantt UI now supports the three metadata columns as optional controls:
 
 - `State`, `Primary owner`, and `Attention` remain visible by default;
-- each column can be hidden independently from `Advanced filters`;
+- each column can be hidden independently from the always-visible `Columns`
+  control row below the Gantt view presets;
 - the task pane and timeline keep one shared responsive grid definition;
 - long metadata headers truncate inside their cells instead of spilling into
   the timeline;
@@ -34,6 +35,7 @@ The Gantt UI now supports the three metadata columns as optional controls:
 ## Next step
 
 Push this branch, fast-forward `main`, and then restart the local app before
-checking the browser at `http://127.0.0.1:5050/`. Open `Plan`, expand
-`Advanced filters`, and use the `Columns` checkboxes to verify the optional
-metadata layout.
+checking the browser at `http://127.0.0.1:5050/`. Open `Plan` and use the
+always-visible `Columns` checkboxes below the view presets to verify the
+optional metadata layout. `Advanced filters` remains a separate disclosure
+for schedule filters.

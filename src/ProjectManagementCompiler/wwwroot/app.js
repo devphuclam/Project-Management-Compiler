@@ -1469,7 +1469,7 @@
     filters.appendChild(zoom);
 
     const advancedFilters = node("details", null, "gantt-filter-disclosure");
-    advancedFilters.open = state.gantt.phaseFilter !== "ALL" || state.gantt.executionFilter !== "ALL" || state.gantt.criticalOnly || state.gantt.overdueOnly || state.gantt.atRiskOnly || state.gantt.lateStartOnly || !state.gantt.columns.state || !state.gantt.columns.owner || !state.gantt.columns.attention;
+    advancedFilters.open = state.gantt.phaseFilter !== "ALL" || state.gantt.executionFilter !== "ALL" || state.gantt.criticalOnly || state.gantt.overdueOnly || state.gantt.atRiskOnly || state.gantt.lateStartOnly;
     advancedFilters.appendChild(node("summary", "Advanced filters", "gantt-filter-summary"));
     const columnOptions = node("fieldset", null, "gantt-column-options");
     columnOptions.appendChild(node("legend", "Columns", "gantt-column-options-label"));
@@ -1483,7 +1483,7 @@
       wrapper.appendChild(node("span", label));
       columnOptions.appendChild(wrapper);
     });
-    filters.appendChild(columnOptions);
+    toolbar.appendChild(columnOptions);
     advancedFilters.appendChild(filters);
     toolbar.appendChild(advancedFilters);
 

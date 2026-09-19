@@ -301,6 +301,7 @@ try {
     Assert-Condition ($appJs.Contains('gantt-alert-marker', [StringComparison]::Ordinal)) 'Gantt renderer must render ALERT markers.'
     Assert-Condition ($appJs.Contains('gantt-milestone', [StringComparison]::Ordinal)) 'Gantt renderer must render milestone markers.'
     Assert-Condition ($appJs.Contains('data-gantt-column', [StringComparison]::Ordinal) -and $appJs.Contains('gantt-column-options', [StringComparison]::Ordinal)) 'Gantt must expose optional metadata-column controls.'
+    Assert-Condition ($appJs.Contains('toolbar.appendChild(columnOptions)', [StringComparison]::Ordinal) -and -not $appJs.Contains('filters.appendChild(columnOptions)', [StringComparison]::Ordinal)) 'Gantt column controls must remain visible without opening Advanced filters.'
     Assert-Condition ($appJs.Contains('ganttTaskColumnDefinition', [StringComparison]::Ordinal) -and $appJs.Contains('--gantt-task-columns', [StringComparison]::Ordinal)) 'Gantt task and timeline panes must share the active metadata-column layout.'
     Assert-Condition ($appJs.Contains('Show dependencies', [StringComparison]::Ordinal)) 'Gantt toolbar must expose dependency visibility.'
     Assert-Condition ($appJs.Contains('Expand all', [StringComparison]::Ordinal)) 'Gantt toolbar must expose expand-all.'
