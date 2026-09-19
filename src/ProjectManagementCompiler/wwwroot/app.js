@@ -19,6 +19,7 @@
       showDependencies: false,
       criticalPath: false,
       structureMode: false,
+      columns: { state: true, owner: true, attention: true },
       selectedRowKey: null
     };
   }
@@ -743,6 +744,14 @@
     return Boolean(state.gantt.structureMode);
   }
 
+  function ganttTaskColumnDefinition() {
+    const columns = ["minmax(140px, 1fr)"];
+    if (state.gantt.columns.state) columns.push("72px");
+    if (state.gantt.columns.owner) columns.push("80px");
+    if (state.gantt.columns.attention) columns.push("60px");
+    return columns.join(" ");
+  }
+
   function createGanttPresentation(model) {
     const included = row => isStructureMode() || row.kind !== "WorkPackage";
     const includedRows = model.rows.filter(included);
@@ -1278,18 +1287,18 @@
     identity.appendChild(select);
     taskRow.appendChild(identity);
 
-    const status = node("div", null, "gantt-task-cell gantt-task-status");
+    const status = node("div", null, "gantt-task-cell gantt-task-status gantt-column-state");
     status.appendChild(node("span", ganttStateLabel(row), "gantt-state" + (row.state ? "" : " is-neutral")));
     if (state.gantt.criticalPath && row.isCritical) status.appendChild(node("span", "Critical", "gantt-signal critical"));
     taskRow.appendChild(status);
 
-    const owner = node("div", null, "gantt-task-cell gantt-task-owner");
+    const owner = node("div", null, "gantt-task-cell gantt-task-owner gantt-column-owner");
     const ownerValue = node("span", row.ownerSummary || "Unassigned", row.primaryOwner ? "gantt-owner-code" : "muted");
     if (row.primaryOwner) ownerValue.title = row.primaryOwner.label;
     owner.appendChild(ownerValue);
     taskRow.appendChild(owner);
 
-    const signals = node("div", null, "gantt-task-cell gantt-task-signals");
+    const signals = node("div", null, "gantt-task-cell gantt-task-signals gantt-column-attention");
     row.alerts.forEach(alert => signals.appendChild(node("span", alert.alertCode || "ALERT", "gantt-signal alert")));
     if (row.kind === "WorkPackage") {
       const readiness = managementReadinessItems(row)[0];
@@ -1460,8 +1469,21 @@
     filters.appendChild(zoom);
 
     const advancedFilters = node("details", null, "gantt-filter-disclosure");
-    advancedFilters.open = state.gantt.phaseFilter !== "ALL" || state.gantt.executionFilter !== "ALL" || state.gantt.criticalOnly || state.gantt.overdueOnly || state.gantt.atRiskOnly || state.gantt.lateStartOnly;
+    advancedFilters.open = state.gantt.phaseFilter !== "ALL" || state.gantt.executionFilter !== "ALL" || state.gantt.criticalOnly || state.gantt.overdueOnly || state.gantt.atRiskOnly || state.gantt.lateStartOnly || !state.gantt.columns.state || !state.gantt.columns.owner || !state.gantt.columns.attention;
     advancedFilters.appendChild(node("summary", "Advanced filters", "gantt-filter-summary"));
+    const columnOptions = node("fieldset", null, "gantt-column-options");
+    columnOptions.appendChild(node("legend", "Columns", "gantt-column-options-label"));
+    [["state", "State"], ["owner", "Primary owner"], ["attention", "Attention"]].forEach(([column, label]) => {
+      const wrapper = node("label", null, "gantt-filter-check");
+      const input = node("input");
+      input.type = "checkbox";
+      input.dataset.ganttColumn = column;
+      input.checked = state.gantt.columns[column];
+      wrapper.appendChild(input);
+      wrapper.appendChild(node("span", label));
+      columnOptions.appendChild(wrapper);
+    });
+    filters.appendChild(columnOptions);
     advancedFilters.appendChild(filters);
     toolbar.appendChild(advancedFilters);
 
@@ -1720,9 +1742,14 @@
     const scroll = node("div", null, "gantt-scroll");
     const canvas = node("div", null, "gantt-canvas");
     canvas.style.setProperty("--timeline-width", width + "px");
+    canvas.style.setProperty("--gantt-task-columns", ganttTaskColumnDefinition());
+    canvas.classList.toggle("gantt-hide-state", !state.gantt.columns.state);
+    canvas.classList.toggle("gantt-hide-owner", !state.gantt.columns.owner);
+    canvas.classList.toggle("gantt-hide-attention", !state.gantt.columns.attention);
     const headerRow = node("div", null, "gantt-header-row");
     const taskHeader = node("div", null, "gantt-task-header gantt-task-pane");
-    ["Task / ID", "State", "Primary owner", "Attention"].forEach(label => taskHeader.appendChild(node("span", label)));
+    [["Task / ID", "gantt-column-identity"], ["State", "gantt-column-state"], ["Primary owner", "gantt-column-owner"], ["Attention", "gantt-column-attention"]]
+      .forEach(([label, className]) => taskHeader.appendChild(node("span", label, className)));
     headerRow.appendChild(taskHeader);
     headerRow.appendChild(renderTimelineHeader(range, width, analysis || {}));
     canvas.appendChild(headerRow);
@@ -1743,11 +1770,15 @@
       const selected = row.key === state.gantt.selectedRowKey;
       const related = relatedKeys.has(row.key) && !selected;
       const dimmed = state.gantt.selectedRowKey && !selected && !related;
-      [taskRow, timelineRow].forEach(element => {
-        if (selected) element.classList.add("gantt-selected");
-        if (related) element.classList.add("gantt-related");
-        if (dimmed) element.classList.add("gantt-dimmed");
-      });
+      if (selected) {
+        taskRow.classList.add("gantt-selected");
+        timelineRow.classList.add("gantt-selected");
+      }
+      if (related) {
+        taskRow.classList.add("gantt-related");
+        timelineRow.classList.add("gantt-related");
+      }
+      if (dimmed) taskRow.classList.add("gantt-dimmed");
       taskRows.appendChild(taskRow);
       timelineRows.appendChild(timelineRow);
     });
@@ -1819,6 +1850,12 @@
       }
     });
     shell.addEventListener("change", event => {
+      const columnTarget = event.target.closest("[data-gantt-column]");
+      if (columnTarget) {
+        state.gantt.columns[columnTarget.dataset.ganttColumn] = columnTarget.checked;
+        renderActiveView();
+        return;
+      }
       const filter = event.target.closest("[data-gantt-filter]");
       if (!filter) return;
       const key = filter.dataset.ganttFilter;
