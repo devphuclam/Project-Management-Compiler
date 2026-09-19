@@ -5,7 +5,7 @@ namespace ProjectManagementCompiler.Tests;
 
 internal static class ReconciliationTests
 {
-    public static void TypedReadinessTargetMatchesWorkPackageAndManagementRecordsRemainUnmatched()
+    public static void TypedReadinessTargetMatchesWorkPackageAndManagementRecordsRemainStandalone()
     {
         var evidence = new ManagementEvidence
         {
@@ -43,8 +43,8 @@ internal static class ReconciliationTests
         var result = new ManagementEvidenceReconciler().Reconcile(evidence, project);
 
         TestAssert.Equal(EvidenceReconciliationStatus.Matched, result.Reconciliations.Single(item => item.ObservationId == "readiness:P04").Status, "P04 readiness must match the typed WorkPackage target.");
-        TestAssert.Equal(EvidenceReconciliationStatus.Unmatched, result.Reconciliations.Single(item => item.ObservationId == "decision:D0").Status, "Decisions must not be assigned to executable work by default.");
-        TestAssert.Equal(EvidenceReconciliationStatus.Unmatched, result.Reconciliations.Single(item => item.ObservationId == "gate:execution").Status, "PG4 must remain a management record without a default planning target.");
+        TestAssert.Equal(EvidenceReconciliationStatus.Standalone, result.Reconciliations.Single(item => item.ObservationId == "decision:D0").Status, "Decisions must remain valid standalone management evidence.");
+        TestAssert.Equal(EvidenceReconciliationStatus.Standalone, result.Reconciliations.Single(item => item.ObservationId == "gate:execution").Status, "PG4 must remain valid standalone management evidence.");
     }
 
     public static void InvalidAndAmbiguousTargetsAreExplicit()

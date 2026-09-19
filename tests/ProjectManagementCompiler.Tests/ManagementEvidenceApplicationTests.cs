@@ -24,7 +24,7 @@ internal static class ManagementEvidenceApplicationTests
         TestAssert.Equal(ManagementEvidenceDiscoveryState.Known, result.Project.ManagementEvidence.DiscoveryState, "Compiler must attach the known readiness package.");
         TestAssert.Equal(7, result.Project.ManagementEvidence.Observations.Count(observation => observation.EvidenceKind == ManagementEvidenceKind.ReadinessCheck), "Compiler must attach P01-P07 observations.");
         TestAssert.Equal(EvidenceReconciliationStatus.Matched, result.Project.ManagementEvidence.Reconciliations.Single(item => item.ObservationId == "readiness:P04").Status, "P04 must reconcile to the canonical WorkPackage.");
-        TestAssert.Equal(EvidenceReconciliationStatus.Unmatched, result.Project.ManagementEvidence.Reconciliations.Single(item => item.ObservationId == "decision:D0").Status, "D0 must remain a management-only record.");
+        TestAssert.Equal(EvidenceReconciliationStatus.Standalone, result.Project.ManagementEvidence.Reconciliations.Single(item => item.ObservationId == "decision:D0").Status, "D0 must remain valid standalone management evidence.");
         TestAssert.Equal(ManagementEvidenceDiscoveryState.Known, result.Views.ManagementControl.DiscoveryState, "The management control view must expose evidence scope.");
         TestAssert.Equal("PH0", result.Views.ManagementControl.IncrementPhaseId, "The management control view must expose an explicitly sourced readiness phase.");
         TestAssert.Equal("NOT-RUN", result.Views.ManagementControl.CurrentGate.ExecutionState, "Gate execution must remain separate in the management control view.");

@@ -134,7 +134,7 @@ internal static class ManagementEvidenceTests
 
         TestAssert.Equal("specs/004-technical-pilot-readiness/README.md", paths[0], "Readiness README must be selected first.");
         TestAssert.Equal("specs/004-technical-pilot-readiness/readiness-register.md", paths[1], "Readiness register must be selected second.");
-        TestAssert.Equal(6, paths.Count, "The readiness profile must contain only its six declared files.");
+        TestAssert.Equal(7, paths.Count, "The readiness profile must contain the six required files plus the optional actual gate record.");
         TestAssert.Throws<ArgumentException>(
             () => SourcePathPolicy.GetManagementEvidencePaths("docs/other"),
             "A readiness profile outside specs must be rejected.");
@@ -162,7 +162,7 @@ internal static class ManagementEvidenceTests
             .GetAwaiter()
             .GetResult();
 
-        TestAssert.Equal(11, snapshot.Documents.Count, "The optional profile must add six declared readiness files to the five MVP1 files.");
+        TestAssert.Equal(12, snapshot.Documents.Count, "The optional profile must add seven bounded readiness paths to the five MVP1 files.");
         TestAssert.True(
             snapshot.Documents.Skip(5).Select(document => document.RelativeFile).SequenceEqual(SourcePathPolicy.GetManagementEvidencePaths(Increment)),
             "Readiness documents must follow the declared stable order.");
