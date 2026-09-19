@@ -92,6 +92,15 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains("gantt-impact-summary", styles, "Dependency impact summary must have a distinct visual treatment.");
     }
 
+    public static void GanttDependencyConnectorsStayFocusedOnTheSelectedRow()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("const connectorEdges = selectedRowKey", appJs, "Dependency connectors must have a selected-row presentation mode.");
+        TestAssert.Contains("subjectKey === selectedRowKey || predecessorKey === selectedRowKey", appJs, "Selected-row connector mode must keep only direct dependency links visible.");
+        TestAssert.Contains("directEdgeKeys", appJs, "The dependency projection must distinguish direct links from the transitive impact chain.");
+    }
+
     public static void SelectingGanttRowKeepsTimelineEvidenceVisible()
     {
         var appJs = ReadAppJs();
