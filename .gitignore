@@ -8,3 +8,4 @@ generated/
 *.user
 *.suo
 *.tmp
+node_modules
