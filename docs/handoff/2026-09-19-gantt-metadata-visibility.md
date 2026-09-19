@@ -16,10 +16,12 @@ The Gantt UI now supports the three metadata columns as optional controls:
 ## Repository state
 
 - Product repository: `devphuclam/Project-Management-Compiler`
-- Branch: `codex/gantt-metadata-visibility`
+- Branch: `codex/gantt-column-options-visible`
 - Worktree: dedicated isolated worktree for this branch
 - Test commit: `aba3719` — `test: cover Gantt metadata visibility and selection contrast`
 - Implementation commit: `8395eb3` — `fix: make Gantt metadata columns optional and visible`
+- Follow-up test commit: `b5d8bd9` — `test: keep Gantt column controls visible`
+- Follow-up implementation commit: `0fb3e50` — `fix: keep Gantt column controls visible`
 - The original checkout's existing `.gitignore`, `package.json`, and
   `package-lock.json` changes were not touched.
 
