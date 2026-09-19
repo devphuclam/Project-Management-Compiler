@@ -195,6 +195,9 @@ internal static class Program
         ,("RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments", RealSourceCompatibilityTests.RealShapedAppendixAndKanbanPreserveCardsDependenciesAndManyToManyAssignments)
         ,("RealShapedDoc07OwnsMilestonesAndGateDependencies", RealSourceCompatibilityTests.RealShapedDoc07OwnsMilestonesAndGateDependencies)
         ,("RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe", RealSourceCompatibilityTests.RealShapedCaptureProvenanceAndCanonicalSourceBoundaryAreSafe)
+        ,("GanttOffersOptionalMetadataColumns", GanttUiRegressionTests.GanttOffersOptionalMetadataColumns)
+        ,("GanttMetadataColumnLayoutCannotOverflowTaskPane", GanttUiRegressionTests.GanttMetadataColumnLayoutCannotOverflowTaskPane)
+        ,("SelectingGanttRowKeepsTimelineEvidenceVisible", GanttUiRegressionTests.SelectingGanttRowKeepsTimelineEvidenceVisible)
     ];
 
     public static int Main()
