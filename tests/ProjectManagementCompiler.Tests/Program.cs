@@ -5,6 +5,12 @@ internal static class Program
     private static readonly (string Name, Action Test)[] Tests =
     [
         ("RunnerStarts", RunnerStarts),
+        ("ManagementEvidencePreservesIndependentStatesAndTypedTargets", ManagementEvidenceTests.ManagementEvidencePreservesIndependentStatesAndTypedTargets),
+        ("CanonicalProjectDefaultsManagementEvidenceWithoutProfile", ManagementEvidenceTests.CanonicalProjectDefaultsManagementEvidenceWithoutProfile),
+        ("CanonicalJsonRoundTripsManagementEvidence", ManagementEvidenceTests.CanonicalJsonRoundTripsManagementEvidence),
+        ("ManagementEvidencePathPolicyStaysBelowSpecs", ManagementEvidenceTests.ManagementEvidencePathPolicyStaysBelowSpecs),
+        ("CaptureReadsReadinessAllowListInFixedOrder", ManagementEvidenceTests.CaptureReadsReadinessAllowListInFixedOrder),
+        ("SemanticDigestWillIncludeEvidenceMeaningButNotCaptureTime", ManagementEvidenceTests.SemanticDigestWillIncludeEvidenceMeaningButNotCaptureTime),
         ("DataStateIncludesCanonicalDerivedAndResolutionStates", DomainModelTests.DataStateIncludesCanonicalDerivedAndResolutionStates),
         ("PlannedEntityPreservesPlannedEffortState", DomainModelTests.PlannedEntityPreservesPlannedEffortState),
         ("ManagementAnalysisPreservesForecastConstraintAndEffortAccounting", DomainModelTests.ManagementAnalysisPreservesForecastConstraintAndEffortAccounting),
