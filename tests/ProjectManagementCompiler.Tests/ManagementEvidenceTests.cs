@@ -67,6 +67,39 @@ internal static class ManagementEvidenceTests
     {
         var project = new CanonicalProject
         {
+            Project = new Project { Id = "project-1", Name = "Readiness fixture", SourceIds = ["source-1"] },
+            Sources =
+            [
+                new ProjectSource
+                {
+                    Id = "source-1",
+                    Kind = "repository",
+                    Repository = "fixture",
+                    Documents =
+                    [
+                        new SourceDocument
+                        {
+                            Id = "doc-1",
+                            RelativeFile = "README.md",
+                            SourceReference = new SourceReference
+                            {
+                                SourceId = "source-1",
+                                Repository = "fixture",
+                                RelativeFile = "README.md",
+                                ExtractionRule = "test"
+                            }
+                        }
+                    ]
+                }
+            ],
+            Baseline = new ProjectBaseline
+            {
+                Id = "baseline-1",
+                Version = "1.0",
+                Status = "Draft",
+                AuthorityDocumentId = "doc-1",
+                ValidationState = ValidationState.Known
+            },
             ManagementEvidence = new ManagementEvidence
             {
                 DiscoveryState = ManagementEvidenceDiscoveryState.Known,

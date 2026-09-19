@@ -11,6 +11,47 @@ public static class SourcePathPolicy
         "docs/product/instances/idea-engineering/planning/idea-technical-pilot-kanban-cario.md"
     ];
 
+    private static readonly string[] ManagementEvidenceFileNames =
+    [
+        "README.md",
+        "readiness-register.md",
+        "contracts/decision-and-evidence-register.md",
+        "contracts/pg4-gate-record.md",
+        "tasks.md",
+        "trace-matrix.md"
+    ];
+
+    public static IReadOnlyList<string> GetManagementEvidencePaths(string incrementPath)
+    {
+        var normalized = NormalizeManagementEvidenceIncrementPath(incrementPath);
+        return ManagementEvidenceFileNames
+            .Select(fileName => $"{normalized}/{fileName}")
+            .ToArray();
+    }
+
+    public static string NormalizeManagementEvidenceIncrementPath(string incrementPath)
+    {
+        if (string.IsNullOrWhiteSpace(incrementPath) || Path.IsPathRooted(incrementPath))
+        {
+            throw new ArgumentException("Management evidence increment must be a non-rooted relative path.", nameof(incrementPath));
+        }
+
+        var segments = incrementPath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2
+            || !string.Equals(segments[0], "specs", StringComparison.OrdinalIgnoreCase)
+            || segments.Any(segment =>
+                segment is "." or ".."
+                || segment.Contains(':')
+                || segment.Any(char.IsControl)))
+        {
+            throw new ArgumentException("Management evidence increment must be a safe path below specs/.", nameof(incrementPath));
+        }
+
+        return string.Join('/', segments);
+    }
+
     public static string ResolvePath(string root, string relativePath, IRepositoryFileSystem fileSystem)
     {
         var normalizedRoot = NormalizeRoot(root);

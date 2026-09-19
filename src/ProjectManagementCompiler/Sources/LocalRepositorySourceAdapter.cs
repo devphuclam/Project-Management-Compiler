@@ -62,8 +62,28 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
         }
 
         var blocked = false;
+        IReadOnlyList<string> recognizedPaths = SourcePathPolicy.RecognizedPaths;
+        if (request.ManagementEvidenceIncrementPath is not null)
+        {
+            try
+            {
+                recognizedPaths = SourcePathPolicy.RecognizedPaths
+                    .Concat(SourcePathPolicy.GetManagementEvidencePaths(request.ManagementEvidenceIncrementPath))
+                    .ToArray();
+            }
+            catch (ArgumentException)
+            {
+                blocked = true;
+                diagnostics.Add(Diagnostic(
+                    "SOURCE_PATH_ESCAPE",
+                    request.ManagementEvidenceIncrementPath,
+                    "The management evidence increment path is outside the declared specs boundary.",
+                    request.Ref));
+            }
+        }
+
         long totalBytes = 0;
-        foreach (var relativePath in SourcePathPolicy.RecognizedPaths)
+        foreach (var relativePath in recognizedPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string fullPath;

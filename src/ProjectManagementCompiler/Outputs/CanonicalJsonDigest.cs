@@ -13,6 +13,10 @@ public static class CanonicalJsonDigest
             Sources = project.Sources
                 .Select(source => source with { CapturedAtUtc = null })
                 .ToArray(),
+            ManagementEvidence = project.ManagementEvidence with
+            {
+                CapturedAtUtc = null
+            },
             Analysis = null
         };
         var json = new CanonicalJsonSerializer().Serialize(semanticProject);
