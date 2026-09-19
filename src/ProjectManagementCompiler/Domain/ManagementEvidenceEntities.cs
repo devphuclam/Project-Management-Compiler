@@ -3,6 +3,7 @@ namespace ProjectManagementCompiler.Domain;
 public enum ManagementEvidenceDiscoveryState
 {
     NotRequested,
+    NotConfigured,
     Known,
     Unknown,
     Ambiguous,
@@ -23,9 +24,24 @@ public enum ManagementEvidenceKind
 public enum EvidenceReconciliationStatus
 {
     Matched,
+    Standalone,
     Unmatched,
     Ambiguous,
     Invalid
+}
+
+public enum EffectiveEvidenceSelectionStatus
+{
+    Missing,
+    Resolved,
+    Conflict
+}
+
+public sealed record EvidenceRoleReference
+{
+    public string Code { get; init; } = string.Empty;
+    public string DisplayLabel { get; init; } = string.Empty;
+    public string? SourceMeaning { get; init; }
 }
 
 public sealed record EvidenceTarget
@@ -51,10 +67,33 @@ public sealed record ManagementEvidenceObservation
     public DateOnly? EvidenceDate { get; init; }
     public DateTimeOffset? ObservedAtUtc { get; init; }
     public string? OwnerRole { get; init; }
+    public string? OwnerRoleLabel { get; init; }
+    public string? OwnerRoleSourceMeaning { get; init; }
+    public EvidenceRoleReference? OwnerRoleReference { get; init; }
     public string? WaitingForRole { get; init; }
+    public string? WaitingForRoleLabel { get; init; }
+    public string? WaitingForRoleSourceMeaning { get; init; }
+    public EvidenceRoleReference? WaitingForRoleReference { get; init; }
+    public string? RequiredAuthorityRole { get; init; }
+    public string? RequiredAuthorityRoleLabel { get; init; }
+    public string? RequiredAuthorityRoleSourceMeaning { get; init; }
+    public EvidenceRoleReference? RequiredAuthorityRoleReference { get; init; }
     public string? DueCondition { get; init; }
+    public string? DueConditionCode { get; init; }
+    public string? DueConditionSummary { get; init; }
     public string? GateEffect { get; init; }
+    public string? GateEffectCode { get; init; }
+    public string? GateEffectSummary { get; init; }
     public string? BlockerOrDeviation { get; init; }
+    public string? BlockerSummary { get; init; }
+    public string? PendingActionSummary { get; init; }
+    public string? Summary { get; init; }
+    public string? ActionSummary { get; init; }
+    public string? AffectedTargetSummary { get; init; }
+    public string? CompletionCondition { get; init; }
+    public string? GateId { get; init; }
+    public string? ProposedSuccessorIncrementId { get; init; }
+    public string? ProposedSuccessorSummary { get; init; }
     public IReadOnlyList<string> EvidenceLinks { get; init; } = Array.Empty<string>();
     public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
     public int? AuthorityRank { get; init; }

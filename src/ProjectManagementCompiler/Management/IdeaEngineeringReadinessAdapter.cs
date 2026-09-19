@@ -49,6 +49,14 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         @"\]\((?<link>[^)]+)\)",
         RegexOptions.Compiled);
 
+    private static readonly Regex GateIdPattern = new(
+        @"\b(?<id>PG\d+)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex SuccessorIncrementPattern = new(
+        @"\b(?<id>IE-[A-Za-z0-9][A-Za-z0-9_-]*)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public ManagementEvidenceAdapterResult Adapt(RepositorySnapshot snapshot, CanonicalProject planningProject)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -96,6 +104,11 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         {
             if (!documents.ContainsKey(relativePath))
             {
+                if (SourcePathPolicy.IsOptionalManagementEvidencePath(candidate.Root, relativePath))
+                {
+                    continue;
+                }
+
                 diagnostics.Add(Diagnostic(
                     "EVIDENCE_SOURCE_UNAVAILABLE",
                     $"The declared readiness source '{relativePath}' was not captured.",
@@ -125,12 +138,19 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
             observations.AddRange(ExtractReadinessChecks(rows));
             observations.AddRange(ExtractDecisions(rows));
             observations.AddRange(ExtractHumanActions(rows));
+            observations.AddRange(ExtractGateObservations(rows, authorityRank: 2, authorityKind: "readiness-register-state-result"));
         }
 
         var readme = GetDocument(documents, candidate.Root, "README.md");
         if (readme is not null)
         {
-            observations.AddRange(ExtractGateObservations(ParseTables(readme)));
+            observations.AddRange(ExtractGateObservations(ParseTables(readme), authorityRank: 3, authorityKind: "readme-summary"));
+        }
+
+        var actualGateRecord = GetDocument(documents, candidate.Root, "pg4-gate-record.md");
+        if (actualGateRecord is not null)
+        {
+            observations.AddRange(ExtractGateObservations(ParseTables(actualGateRecord), authorityRank: 1, authorityKind: "actual-gate-record"));
         }
 
         var tasks = GetDocument(documents, candidate.Root, "tasks.md");
@@ -140,7 +160,7 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         }
 
         EnsureUniqueObservationIds(observations);
-        ValidateConflictingObservations(observations, diagnostics);
+        ValidateEffectiveConflicts(observations, diagnostics);
         ValidateStateResultPairs(observations, diagnostics);
         ValidateGatePair(observations, diagnostics);
 
@@ -185,27 +205,18 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         }
     }
 
-    private static void ValidateConflictingObservations(
+    private static void ValidateEffectiveConflicts(
         IEnumerable<ManagementEvidenceObservation> observations,
         ICollection<ImportWarning> diagnostics)
     {
-        foreach (var group in observations
-                     .Where(observation => !string.IsNullOrWhiteSpace(observation.SourceRecordId))
-                     .GroupBy(observation => (observation.EvidenceKind, SourceRecordId: observation.SourceRecordId)))
+        var evidence = new ManagementEvidence { Observations = observations.ToArray() };
+        foreach (var selection in new EffectiveEvidenceResolver().Resolve(evidence)
+                     .Where(selection => selection.Status == EffectiveEvidenceSelectionStatus.Conflict))
         {
-            var meanings = group
-                .Select(observation => $"{observation.StateCode ?? "-"}/{observation.ResultCode ?? "-"}")
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            if (meanings.Length < 2)
-            {
-                continue;
-            }
-
             diagnostics.Add(Diagnostic(
                 "EVIDENCE_CONFLICT",
-                $"Evidence record '{group.Key.SourceRecordId}' has conflicting attributable state/result values; all source observations were preserved.",
-                group.SelectMany(observation => observation.SourceReferences)));
+                $"Evidence object '{selection.ObjectKind}:{selection.ObjectId}' has conflicting equal-authority values for '{selection.FieldName}'; all source observations were preserved.",
+                selection.SourceReferences));
         }
     }
 
@@ -261,15 +272,22 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
             return null;
         }
 
-        var row = ParseTables(register)
-            .FirstOrDefault(item => Normalize(Cell(item, "Field", "Control field", "Trường")) == "STABLERECORDID");
+        var rows = ParseTables(register);
+        var row = rows.FirstOrDefault(item => Normalize(Cell(item, "Field", "Control field", "Trường")) == "STABLERECORDID");
         var recordId = row is null ? $"{candidate.IncrementId}-CONTROL" : Cell(row, "Value", "Recorded value", "Giá trị") ?? $"{candidate.IncrementId}-CONTROL";
+        var successorRow = rows.FirstOrDefault(item =>
+            Normalize(Cell(item, "Field", "Control field", "Trường")).Contains("PROPOSEDPG4SUCCESSOR", StringComparison.Ordinal));
+        var successor = ParseSuccessor(successorRow is null ? null : Cell(successorRow, "Value", "Recorded value", "Giá trị"));
+        var sourceReference = successorRow?.SourceReference ?? row?.SourceReference ?? register.SourceReference;
         return new ManagementEvidenceObservation
         {
             Id = $"control:{NormalizeRecordId(recordId)}",
             EvidenceKind = ManagementEvidenceKind.ControlEnvelope,
             SourceRecordId = NormalizeRecordId(recordId),
-            SourceReferences = row is null ? [register.SourceReference] : [row.SourceReference],
+            Summary = successorRow is null ? null : SafeSummary(Cell(successorRow, "Value", "Recorded value", "Giá trị")),
+            ProposedSuccessorIncrementId = successor.Id,
+            ProposedSuccessorSummary = successor.Summary,
+            SourceReferences = [WithAuthority(sourceReference, 1, "ideaengineering-readiness-control-envelope")],
             AuthorityRank = 1,
             AuthorityKind = "control-envelope",
             ValidationState = ValidationState.Known
@@ -290,6 +308,11 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
                 continue;
             }
 
+            var ownerText = Cell(row, "Owner", "Required role", "Accountable owner / authority");
+            var blockerText = Cell(row, "Blocker / deviation", "Blocker", "Deviation");
+            var roles = ParseRoles(ownerText, blockerText);
+            var dueText = Cell(row, "Due condition", "Due condition / closure evidence");
+            var gateText = Cell(row, "Gate effect", "Affected work / gate effect");
             observations.Add(new ManagementEvidenceObservation
             {
                 Id = $"readiness:{id}",
@@ -300,12 +323,25 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
                 ExplicitTarget = new EvidenceTarget { Kind = "WorkPackage", Id = id },
                 StateCode = NormalizeCode(Cell(row, "Task state", "State", "Task status")),
                 ResultCode = NormalizeCode(Cell(row, "Result", "Readiness result")),
-                OwnerRole = NormalizeRole(Cell(row, "Owner", "Required role", "Accountable owner / authority")),
-                DueCondition = NormalizeDueCondition(Cell(row, "Due condition", "Due condition / closure evidence")),
-                GateEffect = NormalizeGateEffect(Cell(row, "Gate effect", "Affected work / gate effect")),
-                BlockerOrDeviation = NormalizeBlocker(Cell(row, "Blocker / deviation", "Blocker", "Deviation")),
+                OwnerRole = roles.Owner?.Code,
+                OwnerRoleLabel = roles.Owner?.DisplayLabel,
+                OwnerRoleSourceMeaning = roles.Owner?.SourceMeaning,
+                OwnerRoleReference = roles.Owner,
+                WaitingForRole = roles.WaitingFor?.Code,
+                WaitingForRoleLabel = roles.WaitingFor?.DisplayLabel,
+                WaitingForRoleSourceMeaning = roles.WaitingFor?.SourceMeaning,
+                WaitingForRoleReference = roles.WaitingFor,
+                DueCondition = NormalizeDueCondition(dueText),
+                DueConditionCode = NormalizeDueCondition(dueText),
+                DueConditionSummary = SafeSummary(dueText),
+                GateEffect = NormalizeGateEffect(gateText),
+                GateEffectCode = NormalizeGateEffect(gateText),
+                GateEffectSummary = SafeSummary(gateText),
+                BlockerOrDeviation = NormalizeBlocker(blockerText),
+                BlockerSummary = SafeSummary(blockerText),
+                PendingActionSummary = BuildPendingActionSummary(id, blockerText, roles.WaitingFor),
                 EvidenceLinks = SafeEvidenceLinks(Cell(row, "Evidence link", "Evidence", "Evidence links")),
-                SourceReferences = [row.SourceReference],
+                SourceReferences = [WithAuthority(row.SourceReference, 3, "ideaengineering-readiness-work-package")],
                 AuthorityRank = 3,
                 AuthorityKind = "readiness-register-state-result",
                 ValidationState = ValidationState.Known
@@ -328,16 +364,34 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
             }
 
             var question = Cell(row, "Question / current state", "Exact question") ?? string.Empty;
+            var authorityText = Cell(row, "Accountable owner / authority", "Required authority");
+            var roles = ParseRoles(authorityText);
+            var dueText = Cell(row, "Due condition / closure evidence");
+            var gateText = Cell(row, "Affected work / gate effect", "Effect on PH1");
             observations.Add(new ManagementEvidenceObservation
             {
                 Id = $"decision:{id}",
                 EvidenceKind = ManagementEvidenceKind.DecisionRecord,
                 SourceRecordId = id,
                 StateCode = NormalizeCode(question),
-                OwnerRole = NormalizeRole(Cell(row, "Accountable owner / authority", "Required authority")),
-                DueCondition = NormalizeDueCondition(Cell(row, "Due condition / closure evidence")),
-                GateEffect = NormalizeGateEffect(Cell(row, "Affected work / gate effect", "Effect on PH1")),
-                SourceReferences = [row.SourceReference],
+                StateMeaning = SafeSummary(question),
+                Summary = SafeSummary(question),
+                OwnerRole = roles.Owner?.Code,
+                OwnerRoleLabel = roles.Owner?.DisplayLabel,
+                OwnerRoleSourceMeaning = roles.Owner?.SourceMeaning,
+                OwnerRoleReference = roles.Owner,
+                RequiredAuthorityRole = roles.Owner?.Code,
+                RequiredAuthorityRoleLabel = roles.Owner?.DisplayLabel,
+                RequiredAuthorityRoleSourceMeaning = roles.Owner?.SourceMeaning,
+                RequiredAuthorityRoleReference = roles.Owner,
+                DueCondition = NormalizeDueCondition(dueText),
+                DueConditionCode = NormalizeDueCondition(dueText),
+                DueConditionSummary = SafeSummary(dueText),
+                GateEffect = NormalizeGateEffect(gateText),
+                GateEffectCode = NormalizeGateEffect(gateText),
+                GateEffectSummary = SafeSummary(gateText),
+                AffectedTargetSummary = SafeSummary(gateText),
+                SourceReferences = [WithAuthority(row.SourceReference, 2, "ideaengineering-readiness-decision")],
                 AuthorityRank = 2,
                 AuthorityKind = "decision-record",
                 ValidationState = ValidationState.Known
@@ -359,15 +413,32 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
                 continue;
             }
 
+            var actionSummary = Cell(row, "Task / package", "Action", "Action summary");
+            var requiredRoleText = Cell(row, "Required role", "Vai trò hoặc authority bắt buộc");
+            var roles = ParseRoles(requiredRoleText);
+            var effectText = Cell(row, "Effect", "Ảnh hưởng / kết quả sau khi hoàn tất");
             observations.Add(new ManagementEvidenceObservation
             {
                 Id = $"human-action:{id}",
                 EvidenceKind = ManagementEvidenceKind.HumanAction,
                 SourceRecordId = id,
                 StateCode = NormalizeCode(Cell(row, "Status", "Current status", "Trạng thái hiện tại")),
-                OwnerRole = NormalizeRole(Cell(row, "Required role", "Vai trò hoặc authority bắt buộc")),
-                GateEffect = NormalizeGateEffect(Cell(row, "Effect", "Ảnh hưởng / kết quả sau khi hoàn tất")),
-                SourceReferences = [row.SourceReference],
+                Summary = SafeSummary(actionSummary),
+                ActionSummary = SafeSummary(actionSummary),
+                AffectedTargetSummary = SafeSummary(actionSummary),
+                CompletionCondition = SafeSummary(effectText),
+                WaitingForRole = roles.Owner?.Code,
+                WaitingForRoleLabel = roles.Owner?.DisplayLabel,
+                WaitingForRoleSourceMeaning = roles.Owner?.SourceMeaning,
+                WaitingForRoleReference = roles.Owner,
+                RequiredAuthorityRole = roles.Owner?.Code,
+                RequiredAuthorityRoleLabel = roles.Owner?.DisplayLabel,
+                RequiredAuthorityRoleSourceMeaning = roles.Owner?.SourceMeaning,
+                RequiredAuthorityRoleReference = roles.Owner,
+                GateEffect = NormalizeGateEffect(effectText),
+                GateEffectCode = NormalizeGateEffect(effectText),
+                GateEffectSummary = SafeSummary(effectText),
+                SourceReferences = [WithAuthority(row.SourceReference, 3, "ideaengineering-readiness-human-action")],
                 AuthorityRank = 3,
                 AuthorityKind = "human-action-board",
                 ValidationState = ValidationState.Known
@@ -377,14 +448,33 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         return observations;
     }
 
-    private static IReadOnlyList<ManagementEvidenceObservation> ExtractGateObservations(IReadOnlyList<ReadinessTableRow> rows)
+    private static IReadOnlyList<ManagementEvidenceObservation> ExtractGateObservations(
+        IReadOnlyList<ReadinessTableRow> rows,
+        int authorityRank,
+        string authorityKind)
     {
         var observations = new List<ManagementEvidenceObservation>();
+        var contextGateId = rows
+            .Select(row =>
+            {
+                var label = Compact(Cell(row, "Field", "Control field", "Trường", "Nội dung", "Content", "Item"));
+                var value = Cell(row, "Value", "Recorded value", "Giá trị", "Trạng thái", "Status", "State");
+                return label is "GATEID" or "GATE" ? ParseGateId(value) : null;
+            })
+            .FirstOrDefault(value => value is not null);
+
         foreach (var row in rows)
         {
-            var label = Normalize(Cell(row, "Field", "Control field", "Trường", "Nội dung", "Content", "Item"));
+            var labelText = Cell(row, "Field", "Control field", "Trường", "Nội dung", "Content", "Item");
+            var label = Compact(labelText);
             var value = Cell(row, "Value", "Recorded value", "Giá trị", "Trạng thái", "Status", "State");
             if (value is null)
+            {
+                continue;
+            }
+
+            var gateId = ParseGateId(labelText) ?? contextGateId;
+            if (gateId is null)
             {
                 continue;
             }
@@ -394,16 +484,18 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
             {
                 observations.Add(new ManagementEvidenceObservation
                 {
-                    Id = "gate:execution",
+                    Id = $"gate:{gateId}:execution:{authorityKind}",
                     EvidenceKind = ManagementEvidenceKind.GateExecution,
-                    SourceRecordId = "PG4",
+                    SourceRecordId = gateId,
                     RawTargetKind = "Gate",
-                    RawTargetId = "PG4",
-                    ExplicitTarget = new EvidenceTarget { Kind = "Gate", Id = "PG4" },
+                    RawTargetId = gateId,
+                    ExplicitTarget = new EvidenceTarget { Kind = "Gate", Id = gateId },
+                    GateId = gateId,
                     StateCode = NormalizeCode(value),
-                    SourceReferences = [row.SourceReference],
-                    AuthorityRank = 2,
-                    AuthorityKind = "pg4-gate-record",
+                    StateMeaning = SafeSummary(value),
+                    SourceReferences = [WithAuthority(row.SourceReference, authorityRank, $"ideaengineering-{authorityKind}")],
+                    AuthorityRank = authorityRank,
+                    AuthorityKind = authorityKind,
                     ValidationState = ValidationState.Known
                 });
             }
@@ -412,16 +504,18 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
             {
                 observations.Add(new ManagementEvidenceObservation
                 {
-                    Id = "gate:outcome",
+                    Id = $"gate:{gateId}:outcome:{authorityKind}",
                     EvidenceKind = ManagementEvidenceKind.GateOutcome,
-                    SourceRecordId = "PG4",
+                    SourceRecordId = gateId,
                     RawTargetKind = "Gate",
-                    RawTargetId = "PG4",
-                    ExplicitTarget = new EvidenceTarget { Kind = "Gate", Id = "PG4" },
+                    RawTargetId = gateId,
+                    ExplicitTarget = new EvidenceTarget { Kind = "Gate", Id = gateId },
+                    GateId = gateId,
                     ResultCode = NormalizeCode(value),
-                    SourceReferences = [row.SourceReference],
-                    AuthorityRank = 2,
-                    AuthorityKind = "pg4-gate-record",
+                    ResultMeaning = SafeSummary(value),
+                    SourceReferences = [WithAuthority(row.SourceReference, authorityRank, $"ideaengineering-{authorityKind}")],
+                    AuthorityRank = authorityRank,
+                    AuthorityKind = authorityKind,
                     ValidationState = ValidationState.Known
                 });
             }
@@ -490,23 +584,42 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         IEnumerable<ManagementEvidenceObservation> observations,
         ICollection<ImportWarning> diagnostics)
     {
-        var execution = observations.FirstOrDefault(observation => observation.EvidenceKind == ManagementEvidenceKind.GateExecution);
-        var outcome = observations.FirstOrDefault(observation => observation.EvidenceKind == ManagementEvidenceKind.GateOutcome);
-        if (execution is null || outcome is null)
-        {
-            return;
-        }
+        var materialized = observations.ToArray();
+        var evidence = new ManagementEvidence { Observations = materialized };
+        var resolver = new EffectiveEvidenceResolver();
+        var gateIds = materialized
+            .Where(observation => observation.EvidenceKind is ManagementEvidenceKind.GateExecution or ManagementEvidenceKind.GateOutcome)
+            .Select(observation => observation.GateId ?? observation.SourceRecordId)
+            .Select(ParseGateId)
+            .Where(gateId => gateId is not null)
+            .Select(gateId => gateId!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(gateId => gateId, StringComparer.Ordinal)
+            .ToArray();
 
-        var executionNotComplete = execution.StateCode is "NOT-RUN" or "IN-PROGRESS";
-        var legalBeforeComplete = outcome.ResultCode == "NOT-APPLICABLE";
-        var legalAfterComplete = execution.StateCode == "COMPLETE"
-            && outcome.ResultCode is "PASS" or "PASS-WITH-ACTIONS" or "FAIL" or "BLOCKED";
-        if ((executionNotComplete && !legalBeforeComplete) || (!executionNotComplete && !legalAfterComplete))
+        foreach (var gateId in gateIds)
         {
-            diagnostics.Add(Diagnostic(
-                "GATE_EXECUTION_OUTCOME_INVALID",
-                $"PG4 execution '{execution.StateCode}' and outcome '{outcome.ResultCode}' are not a legal pair.",
-                execution.SourceReferences.Concat(outcome.SourceReferences)));
+            var execution = resolver.Select(evidence, "Gate", gateId, ManagementEvidenceKind.GateExecution, "StateCode");
+            var outcome = resolver.Select(evidence, "Gate", gateId, ManagementEvidenceKind.GateOutcome, "ResultCode");
+            if (execution.Status != EffectiveEvidenceSelectionStatus.Resolved
+                || outcome.Status != EffectiveEvidenceSelectionStatus.Resolved
+                || execution.Value is null
+                || outcome.Value is null)
+            {
+                continue;
+            }
+
+            var executionNotComplete = execution.Value is "NOT-RUN" or "IN-PROGRESS";
+            var legalBeforeComplete = outcome.Value == "NOT-APPLICABLE";
+            var legalAfterComplete = execution.Value == "COMPLETE"
+                && outcome.Value is "PASS" or "PASS-WITH-ACTIONS" or "FAIL" or "BLOCKED";
+            if ((executionNotComplete && !legalBeforeComplete) || (!executionNotComplete && !legalAfterComplete))
+            {
+                diagnostics.Add(Diagnostic(
+                    "GATE_EXECUTION_OUTCOME_INVALID",
+                    $"{gateId} execution '{execution.Value}' and outcome '{outcome.Value}' are not a legal pair.",
+                    execution.SourceReferences.Concat(outcome.SourceReferences)));
+            }
         }
     }
 
@@ -591,7 +704,8 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
             "/tasks.md",
             "/trace-matrix.md",
             "/contracts/decision-and-evidence-register.md",
-            "/contracts/pg4-gate-record.md"
+            "/contracts/pg4-gate-record.md",
+            "/pg4-gate-record.md"
         })
 
         {
@@ -667,7 +781,7 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
 
         var match = Regex.Match(
             value.ToUpperInvariant(),
-            @"\b(PASS-WITH-ACTIONS|NOT-APPLICABLE|IN-PROGRESS|NOT-RUN|DEFERRED_SCOPE|BLOCKED|COMPLETE|PASS|FAIL|OPEN|RESOLVED|CHECKED|UNCHECKED)\b");
+            @"\b(PASS-WITH-ACTIONS|NOT-APPLICABLE|IN-PROGRESS|NOT-RUN|DEFERRED_SCOPE|BLOCKED|COMPLETE|PASS|FAIL|OPEN|RESOLVED|CHECKED|UNCHECKED|DEFERRED)\b");
         return match.Success ? match.Value : null;
     }
 
@@ -679,6 +793,153 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
 
     private static string NormalizeDisplay(string value) =>
         Regex.Replace(value.Trim(), @"[*]", string.Empty).Trim();
+
+    private static string Compact(string? value) =>
+        Normalize(value).Replace("_", string.Empty, StringComparison.Ordinal).Replace("-", string.Empty, StringComparison.Ordinal);
+
+    private static string? ParseGateId(string? value)
+    {
+        var match = GateIdPattern.Match(value ?? string.Empty);
+        return match.Success ? match.Groups["id"].Value.ToUpperInvariant() : null;
+    }
+
+    private static (string? Id, string? Summary) ParseSuccessor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (null, null);
+        }
+
+        var normalized = SafeSummary(value);
+        var match = SuccessorIncrementPattern.Match(value);
+        if (!match.Success)
+        {
+            return (null, normalized);
+        }
+
+        var summary = value[(match.Index + match.Length)..]
+            .Trim()
+            .TrimStart(' ', ':', '-', '—', ';', '·');
+        return (match.Groups["id"].Value.ToUpperInvariant(), SafeSummary(summary));
+    }
+
+    private static string? SafeSummary(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var summary = Regex.Replace(value.Replace('`', ' '), @"\s+", " ").Trim();
+        if (Path.IsPathRooted(summary)
+            || Regex.IsMatch(summary, @"\b[A-Za-z]:[\\/]"))
+        {
+            return "Source detail omitted";
+        }
+
+        summary = summary.Replace("|", " / ", StringComparison.Ordinal);
+        return summary.Length <= 240 ? summary : summary[..237] + "...";
+    }
+
+    private static string? BuildPendingActionSummary(
+        string recordId,
+        string? blockerText,
+        EvidenceRoleReference? waitingFor)
+    {
+        var summary = SafeSummary(blockerText);
+        if (summary is not null)
+        {
+            return summary;
+        }
+
+        return waitingFor is null
+            ? null
+            : $"{recordId} requires {waitingFor.DisplayLabel.ToLowerInvariant()} disposition";
+    }
+
+    private static RoleParseResult ParseRoles(string? value, string? context = null)
+    {
+        var roles = FindRoles(value);
+        var owner = roles.FirstOrDefault();
+        var reviewer = roles.FirstOrDefault(role => role.Code.EndsWith("_REVIEWER", StringComparison.Ordinal));
+        EvidenceRoleReference? waitingFor = null;
+        var contextText = $"{value} {context}".ToUpperInvariant();
+        if (reviewer is not null
+            && !ReferenceEquals(owner, reviewer)
+            && (roles.Count > 1
+                || contextText.Contains("PENDING", StringComparison.Ordinal)
+                || contextText.Contains("REVIEW", StringComparison.Ordinal)
+                || contextText.Contains("DISPOSITION", StringComparison.Ordinal)))
+        {
+            waitingFor = reviewer;
+        }
+
+        return new RoleParseResult(owner, waitingFor);
+    }
+
+    private static IReadOnlyList<EvidenceRoleReference> FindRoles(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<EvidenceRoleReference>();
+        }
+
+        var sourceMeaning = SafeSummary(value);
+        var normalized = value.ToUpperInvariant();
+        var matches = new List<(int Position, EvidenceRoleReference Role)>();
+
+        void Add(string code, string displayLabel, params string[] markers)
+        {
+            var position = markers
+                .Select(marker => normalized.IndexOf(marker, StringComparison.Ordinal))
+                .Where(index => index >= 0)
+                .DefaultIfEmpty(int.MaxValue)
+                .Min();
+            if (position < int.MaxValue)
+            {
+                matches.Add((position, new EvidenceRoleReference
+                {
+                    Code = code,
+                    DisplayLabel = displayLabel,
+                    SourceMeaning = sourceMeaning
+                }));
+            }
+        }
+
+        Add("PRODUCT_DECISION_AUTHORITY", "Product Decision Authority", "PRODUCT DECISION AUTHORITY");
+        Add("GATE_AUTHORITY", "Gate Authority", "GATE AUTHORITY");
+        Add("ENGINEERING_AUTHORITY", "Engineering Authority", "ENGINEERING AUTHORITY");
+        Add("PROJECT_AUTHORITY", "Project Authority", "PROJECT AUTHORITY");
+        Add("PRODUCT_AUTHOR", "Principal Product Author", "PRINCIPAL PRODUCT AUTHOR");
+        if (!normalized.Contains("PRINCIPAL PRODUCT AUTHOR", StringComparison.Ordinal))
+        {
+            Add("PRODUCT_AUTHOR", "Product Author", "PRODUCT AUTHOR");
+        }
+
+        Add("PROJECT_REVIEWER", "Project Reviewer", "PROJECT REVIEWER");
+        Add("VERIFICATION_REVIEWER", "Verification Reviewer", "VERIFICATION REVIEWER");
+        Add("SECURITY_REVIEWER", "Security Reviewer", "SECURITY REVIEWER");
+        Add("DATA_CUSTODIAN", "Data Custodian", "DATA CUSTODIAN");
+        Add("OPERATIONS", normalized.Contains("QLHT", StringComparison.Ordinal) ? "QLHT / Operations" : "Operations", "OPERATIONS", "QLHT");
+        Add("AUTHORITY", "Authority", "AUTHORITY");
+
+        return matches
+            .OrderBy(item => item.Position)
+            .ThenBy(item => item.Role.Code, StringComparer.Ordinal)
+            .Select(item => item.Role)
+            .GroupBy(role => role.Code, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+    }
+
+    private static SourceReference WithAuthority(SourceReference reference, int authorityRank, string extractionRule) =>
+        reference with
+        {
+            RelativeFile = reference.RelativeFile.Replace('\\', '/'),
+            AuthorityRank = authorityRank,
+            ExtractionRule = extractionRule,
+            ValidationState = ValidationState.Known
+        };
 
     private static string? NullIfBlank(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : NormalizeDisplay(value);
@@ -743,10 +1004,22 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         }
 
         var normalized = value.ToUpperInvariant();
-        var codes = new[] { "BLOCKS_PG4", "DEFERRED_SCOPE", "AUTHORIZATION", "PG4" }
-            .Where(code => normalized.Contains(code, StringComparison.Ordinal))
-            .ToArray();
-        return codes.Length == 0 ? "GATE_EFFECT_RECORDED" : string.Join("|", codes);
+        var codes = new List<string>();
+        codes.AddRange(Regex.Matches(normalized, @"\bBLOCKS_PG\d+\b")
+            .Select(match => match.Value)
+            .Distinct(StringComparer.Ordinal));
+        codes.AddRange(new[] { "DEFERRED_SCOPE", "AUTHORIZATION", "NONE" }
+            .Where(code => normalized.Contains(code, StringComparison.Ordinal)));
+        if (codes.Count == 0)
+        {
+            var gateId = ParseGateId(value);
+            if (gateId is not null)
+            {
+                codes.Add(gateId);
+            }
+        }
+
+        return codes.Count == 0 ? "GATE_EFFECT_RECORDED" : string.Join("|", codes.Distinct(StringComparer.Ordinal));
     }
 
     private static string? NormalizeBlocker(string? value)
@@ -764,6 +1037,8 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
 
         if (normalized.Contains("PENDING", StringComparison.Ordinal)
             || normalized.Contains("NOT-RUN", StringComparison.Ordinal)
+            || normalized.Contains("REVIEW", StringComparison.Ordinal)
+            || normalized.Contains("REQUIRES", StringComparison.Ordinal)
             || normalized.Contains("CHỜ", StringComparison.Ordinal))
         {
             return "EVIDENCE_PENDING";
@@ -827,6 +1102,10 @@ public sealed class IdeaEngineeringReadinessAdapter : IManagementEvidenceSourceA
         string? IncrementStatus,
         string? IncrementPhaseId,
         IReadOnlyDictionary<string, SourceDocument> Documents);
+
+    private sealed record RoleParseResult(
+        EvidenceRoleReference? Owner,
+        EvidenceRoleReference? WaitingFor);
 
     private sealed record ReadinessTableRow
     {

@@ -63,6 +63,19 @@ public sealed class ProjectCompiler : IProjectCompiler
                 }]);
         }
 
+        if (request.IncludeManagementEvidence && string.IsNullOrWhiteSpace(request.ManagementEvidenceIncrementPath))
+        {
+            throw new ProjectCompilationException(
+                "capture",
+                [new ImportWarning
+                {
+                    Id = "MANAGEMENT_EVIDENCE_PATH_REQUIRED",
+                    Severity = WarningSeverity.Error,
+                    Code = "MANAGEMENT_EVIDENCE_PATH_REQUIRED",
+                    Message = "Select the readiness increment path before including repository readiness evidence."
+                }]);
+        }
+
         var asOfDate = RequireAsOfDate(request.AsOfDate, "compile-request");
 
         var snapshot = await sourceAdapter.CaptureAsync(new SourceRequest

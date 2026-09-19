@@ -24,6 +24,7 @@ internal static class Program
         ("StandaloneManagementEvidenceIsValidWithoutCanonicalTarget", Mvp21HardeningTests.StandaloneManagementEvidenceIsValidWithoutCanonicalTarget),
         ("ReadinessP04ResolvesOnlyToWorkPackage", Mvp21HardeningTests.ReadinessP04ResolvesOnlyToWorkPackage),
         ("EffectiveGateSelectionUsesAuthorityAndConflictsHonestly", Mvp21HardeningTests.EffectiveGateSelectionUsesAuthorityAndConflictsHonestly),
+        ("ActualGateRecordOutranksSummaryAndProjectsRecordStatus", Mvp21HardeningTests.ActualGateRecordOutranksSummaryAndProjectsRecordStatus),
         ("StateAndResultAreSeparateEffectiveFields", Mvp21HardeningTests.StateAndResultAreSeparateEffectiveFields),
         ("GateViewHasNoFakeGateWhenEvidenceIsAbsent", Mvp21HardeningTests.GateViewHasNoFakeGateWhenEvidenceIsAbsent),
         ("ProposedSuccessorIsExtractedFromControlEnvelope", Mvp21HardeningTests.ProposedSuccessorIsExtractedFromControlEnvelope),

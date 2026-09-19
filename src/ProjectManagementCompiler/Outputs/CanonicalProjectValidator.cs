@@ -643,6 +643,9 @@ public static class CanonicalProjectValidator
                 case EvidenceReconciliationStatus.Ambiguous when reconciliation.ResolvedTarget is not null || candidateCount < 2:
                     Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Ambiguous evidence observation '{observationId}' requires at least two candidates and no resolved target.", observationId);
                     break;
+                case EvidenceReconciliationStatus.Standalone when reconciliation.ResolvedTarget is not null || candidateCount > 0:
+                    Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Standalone evidence observation '{observationId}' cannot resolve to a canonical target or retain candidate targets.", observationId);
+                    break;
                 case EvidenceReconciliationStatus.Unmatched or EvidenceReconciliationStatus.Invalid when reconciliation.ResolvedTarget is not null:
                     Add(diagnostics, "INVALID_EVIDENCE_RECONCILIATION", $"Unmatched or invalid evidence observation '{observationId}' cannot have a resolved target.", observationId);
                     break;

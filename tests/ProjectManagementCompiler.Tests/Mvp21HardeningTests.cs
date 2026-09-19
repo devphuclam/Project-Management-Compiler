@@ -153,6 +153,44 @@ internal static class Mvp21HardeningTests
         TestAssert.Equal(2, conflicted.Candidates.Count, "A conflict must retain both source observations.");
     }
 
+    public static void ActualGateRecordOutranksSummaryAndProjectsRecordStatus()
+    {
+        var snapshot = CaptureFixture();
+        var sourceReference = snapshot.Documents
+            .Single(document => document.RelativeFile.EndsWith("/readiness-register.md", StringComparison.OrdinalIgnoreCase))
+            .SourceReference with
+        {
+            RelativeFile = $"{Increment}/pg4-gate-record.md"
+        };
+        var actualRecord = new SourceDocument
+        {
+            Id = "actual-gate-record",
+            RelativeFile = $"{Increment}/pg4-gate-record.md",
+            Format = SourceDocumentFormat.Markdown,
+            Content = """
+                # PG4 gate record
+
+                | Field | Value |
+                |---|---|
+                | PG4 Gate Execution State | COMPLETE |
+                | PG4 Gate Outcome | PASS |
+                """,
+            SourceReference = sourceReference
+        };
+        var evidence = new IdeaEngineeringReadinessAdapter()
+            .Adapt(snapshot with { Documents = snapshot.Documents.Append(actualRecord).ToArray() }, PlanningProject())
+            .Evidence;
+        var project = new CanonicalProject { ManagementEvidence = evidence };
+        var view = new ManagementControlViewProjector().Build(project);
+
+        TestAssert.Equal("COMPLETE", view.CurrentGate.ExecutionState, "The actual gate record must outrank the README summary.");
+        TestAssert.Equal("PASS", view.CurrentGate.Outcome, "The actual gate record outcome must be effective.");
+        TestAssert.Equal("PG4", view.CurrentGate.GateId, "The gate ID must come from the source label.");
+        TestAssert.Equal("Recorded", view.CurrentGate.GateRecordStatus, "An actual gate record must be visible as recorded.");
+        TestAssert.Contains("pg4-gate-record.md", view.CurrentGate.AuthoritySourceSummary ?? string.Empty, "The effective gate provenance must be visible.");
+        TestAssert.False(evidence.Diagnostics.Any(item => item.Code == "EVIDENCE_CONFLICT"), "Different authority ranks must not create a false conflict.");
+    }
+
     public static void StateAndResultAreSeparateEffectiveFields()
     {
         var evidence = new ManagementEvidence

@@ -12,10 +12,17 @@ public sealed class ManagementEvidenceReconciler
             "WorkPackage",
             "DeliveryCard",
             "Milestone",
-            "Role",
+            "Role"
+        };
+
+    private static readonly HashSet<string> StandaloneEvidenceKinds =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
             "Gate",
             "Decision",
-            "HumanAction"
+            "HumanAction",
+            "ChecklistContext",
+            "ControlEnvelope"
         };
 
     public ManagementEvidence Reconcile(ManagementEvidence evidence, CanonicalProject planningProject)
@@ -56,6 +63,11 @@ public sealed class ManagementEvidenceReconciler
         var target = observation.ExplicitTarget;
         if (target is null)
         {
+            if (IsStandaloneManagementEvidence(observation))
+            {
+                return Standalone(observation, "STANDALONE_MANAGEMENT_OBJECT", "This management evidence is valid without a canonical work-item target.");
+            }
+
             var rule = observation.EvidenceKind switch
             {
                 ManagementEvidenceKind.DecisionRecord => "DECISION_NO_DEFAULT_TARGET",
@@ -66,6 +78,11 @@ public sealed class ManagementEvidenceReconciler
                 _ => "EVIDENCE_NO_EXPLICIT_TARGET"
             };
             return Unmatched(observation, rule, "No explicit typed target was supplied.", diagnostics);
+        }
+
+        if (StandaloneEvidenceKinds.Contains(target.Kind))
+        {
+            return Standalone(observation, "STANDALONE_MANAGEMENT_OBJECT", $"{target.Kind}:{target.Id} is a management evidence object, not a canonical work item.");
         }
 
         var normalizedKind = CanonicalWorkItemKey.NormalizeKind(target.Kind);
@@ -170,6 +187,27 @@ public sealed class ManagementEvidenceReconciler
 
         return result;
     }
+
+    private static EvidenceReconciliation Standalone(
+        ManagementEvidenceObservation observation,
+        string ruleId,
+        string reason) =>
+        new()
+        {
+            ObservationId = observation.Id,
+            Status = EvidenceReconciliationStatus.Standalone,
+            RuleId = ruleId,
+            Reason = reason,
+            SourceReferences = observation.SourceReferences
+        };
+
+    private static bool IsStandaloneManagementEvidence(ManagementEvidenceObservation observation) =>
+        observation.EvidenceKind is ManagementEvidenceKind.GateExecution
+            or ManagementEvidenceKind.GateOutcome
+            or ManagementEvidenceKind.DecisionRecord
+            or ManagementEvidenceKind.HumanAction
+            or ManagementEvidenceKind.ChecklistContext
+            or ManagementEvidenceKind.ControlEnvelope;
 
     private static EvidenceReconciliation Invalid(
         ManagementEvidenceObservation observation,

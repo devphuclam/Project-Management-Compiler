@@ -7,7 +7,7 @@
 
 | Work package | Owner | Due condition | Gate effect | Task state | Result | Evidence link | Blocker / deviation |
 |---|---|---|---|---|---|---|---|
-| P01 | Product Author | Before P02 | BLOCKS_PG4 | IN-PROGRESS | NOT-RUN | baseline-manifest.md | Reviewer evidence pending |
+| P01 | Principal Product Author / project reviewer | Before P02 | BLOCKS_PG4 | IN-PROGRESS | NOT-RUN | baseline-manifest.md | T004-T005 complete at author level; T006 requires project reviewer disposition |
 | P02 | Project Reviewer | After P01 | BLOCKS_PG4 | NOT-RUN | NOT-RUN | trace-matrix.md | Walkthrough pending |
 | P03 | Product Author | After P01–P02 | BLOCKS_PG4 | NOT-RUN | NOT-RUN | decision-register.md | Authority review pending |
 | P04 | Operations | Before P07 | BLOCKS_PG4 | NOT-RUN | NOT-RUN | environment-profile.md | Allocation evidence pending |
@@ -25,6 +25,13 @@
 | D3 | Review competence: OPEN | Project Authority | Before P06; reviewer record | BLOCKS_PG4 |
 | D4 | Fixture provenance: OPEN | Data Custodian | Before P05; digest record | BLOCKS_PG4 |
 | D5 | Dependency intake: OPEN | Product Authority | Before inclusion; intake record | BLOCKS_PG4 |
+
+## Control envelope
+
+| Field | Value |
+|---|---|
+| Stable record ID | IE-INC-READY-001-CONTROL |
+| Proposed PG4 successor | IE-INC-PH1-FOUNDATION-CUSTODY-001 — PH1 F01-F05 · 72h; proposal only, no feature directory exists |
 
 ## Human Action Board
 

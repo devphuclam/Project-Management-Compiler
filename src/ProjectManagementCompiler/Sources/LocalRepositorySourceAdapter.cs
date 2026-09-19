@@ -107,7 +107,12 @@ public sealed class LocalRepositorySourceAdapter : IProjectSourceAdapter
 
             if (!fileSystem.FileExists(fullPath))
             {
-                diagnostics.Add(Diagnostic("SOURCE_FILE_MISSING", relativePath, "A recognized source file is missing.", request.Ref));
+                if (request.ManagementEvidenceIncrementPath is null
+                    || !SourcePathPolicy.IsOptionalManagementEvidencePath(request.ManagementEvidenceIncrementPath, relativePath))
+                {
+                    diagnostics.Add(Diagnostic("SOURCE_FILE_MISSING", relativePath, "A recognized source file is missing.", request.Ref));
+                }
+
                 continue;
             }
 

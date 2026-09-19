@@ -11,7 +11,7 @@ public static class SourcePathPolicy
         "docs/product/instances/idea-engineering/planning/idea-technical-pilot-kanban-cario.md"
     ];
 
-    private static readonly string[] ManagementEvidenceFileNames =
+    private static readonly string[] RequiredManagementEvidenceFileNames =
     [
         "README.md",
         "readiness-register.md",
@@ -21,13 +21,39 @@ public static class SourcePathPolicy
         "trace-matrix.md"
     ];
 
+    private static readonly string[] OptionalManagementEvidenceFileNames =
+    [
+        "pg4-gate-record.md"
+    ];
+
     public static IReadOnlyList<string> GetManagementEvidencePaths(string incrementPath)
     {
         var normalized = NormalizeManagementEvidenceIncrementPath(incrementPath);
-        return ManagementEvidenceFileNames
+        return RequiredManagementEvidenceFileNames
+            .Concat(OptionalManagementEvidenceFileNames)
             .Select(fileName => $"{normalized}/{fileName}")
             .ToArray();
     }
+
+    public static IReadOnlyList<string> GetRequiredManagementEvidencePaths(string incrementPath)
+    {
+        var normalized = NormalizeManagementEvidenceIncrementPath(incrementPath);
+        return RequiredManagementEvidenceFileNames
+            .Select(fileName => $"{normalized}/{fileName}")
+            .ToArray();
+    }
+
+    public static IReadOnlyList<string> GetOptionalManagementEvidencePaths(string incrementPath)
+    {
+        var normalized = NormalizeManagementEvidenceIncrementPath(incrementPath);
+        return OptionalManagementEvidenceFileNames
+            .Select(fileName => $"{normalized}/{fileName}")
+            .ToArray();
+    }
+
+    public static bool IsOptionalManagementEvidencePath(string incrementPath, string relativePath) =>
+        GetOptionalManagementEvidencePaths(incrementPath)
+            .Contains(relativePath.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase);
 
     public static string NormalizeManagementEvidenceIncrementPath(string incrementPath)
     {
