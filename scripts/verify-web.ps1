@@ -4,6 +4,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '..'))
 $appDll = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\bin\Debug\net10.0\ProjectManagementCompiler.dll'))
+$appWorkingDirectory = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler'))
 $fixture = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'tests\fixtures\ideaengineering-real-shaped'))
 $programPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\Program.cs'))
 $appJsPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\app.js'))
@@ -50,7 +51,7 @@ function Invoke-JsonApi {
     Invoke-RestMethod @parameters
 }
 
-$process = Start-Process -FilePath 'dotnet' -ArgumentList @('exec', ('"{0}"' -f $appDll)) -WorkingDirectory $repositoryRoot -WindowStyle Hidden -PassThru
+$process = Start-Process -FilePath 'dotnet' -ArgumentList @('exec', ('"{0}"' -f $appDll)) -WorkingDirectory $appWorkingDirectory -WindowStyle Hidden -PassThru
 $temporaryXlsx = $null
 try {
     $health = $null
@@ -78,6 +79,26 @@ try {
     Assert-Condition (-not $summaryJson.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Application source metadata must not expose an absolute source path.'
     Assert-Condition (-not ($summaryJson -match '"content"\s*:')) 'Application source metadata must not expose captured document content.'
     Assert-Condition (@($summary.sources.documents.relativeFile | Where-Object { [IO.Path]::IsPathRooted($_) }).Count -eq 0) 'Application source metadata must expose relative document paths only.'
+
+    $readinessSummary = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/compile' -Method Post -Body @{
+        sourcePath = $fixture
+        asOfDate = '2026-09-28'
+        includeManagementEvidence = $true
+        managementEvidenceIncrementPath = 'specs/004-technical-pilot-readiness'
+    }
+    Assert-Condition ($readinessSummary.managementControl.discoveryState -eq 'KNOWN') 'API readiness compile did not resolve the active increment.'
+    Assert-Condition ($readinessSummary.managementEvidence.incrementId -eq 'IE-INC-READY-001') 'API readiness compile did not preserve increment identity.'
+    Assert-Condition ($readinessSummary.managementEvidence.incrementPhaseId -eq 'PH0') 'API readiness compile did not preserve the explicit readiness phase.'
+    Assert-Condition (@($readinessSummary.managementEvidence.observations | Where-Object { $_.evidenceKind -eq 'READINESS_CHECK' }).Count -eq 7) 'API readiness compile did not expose P01-P07 evidence.'
+    Assert-Condition (@($readinessSummary.managementEvidence.observations | Where-Object { $_.evidenceKind -eq 'DECISION_RECORD' }).Count -eq 6) 'API readiness compile did not expose D0-D5 decisions.'
+    Assert-Condition (@($readinessSummary.managementEvidence.observations | Where-Object { $_.evidenceKind -eq 'GATE_EXECUTION' -and $_.stateCode -eq 'NOT-RUN' }).Count -eq 1) 'API readiness compile must expose PG4 execution state separately.'
+    Assert-Condition (@($readinessSummary.managementEvidence.observations | Where-Object { $_.evidenceKind -eq 'GATE_OUTCOME' -and $_.resultCode -eq 'NOT-APPLICABLE' }).Count -eq 1) 'API readiness compile must expose PG4 outcome separately.'
+    Assert-Condition ($readinessSummary.views.managementControl.readiness.Count -eq 7) 'ManagementControlView must expose the seven readiness rows.'
+    Assert-Condition ($readinessSummary.views.managementControl.currentGate.executionState -eq 'NOT-RUN' -and $readinessSummary.views.managementControl.currentGate.outcome -eq 'NOT-APPLICABLE') 'ManagementControlView must keep PG4 execution and outcome separate.'
+    Assert-Condition (@($readinessSummary.views.managementControl.attentionGroups | Where-Object { $_.code -eq 'OPEN_DECISIONS' }).Count -eq 1) 'ManagementControlView must group open decisions.'
+    $readinessJson = $readinessSummary | ConvertTo-Json -Depth 50 -Compress
+    Assert-Condition (-not $readinessJson.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Readiness API output must not expose an absolute source path.'
+    Assert-Condition (-not $readinessJson.Contains('Reviewer evidence pending', [StringComparison]::Ordinal)) 'Readiness API output must not expose raw source content.'
 
     $project = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/project' -Method Get
     Assert-Condition ($project.phases.Count -eq 6) 'Canonical project did not preserve six phases.'
@@ -149,12 +170,16 @@ try {
     Assert-Condition (-not ($jsonText -match '"content"\s*:')) 'Persisted JSON must not leak captured source content.'
     Assert-Condition (-not $jsonText.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Persisted JSON must not leak an absolute source path.'
     Assert-Condition ($jsonText.Contains('"executionOverlay"', [StringComparison]::Ordinal)) 'Persisted JSON must include the execution overlay.'
+    Assert-Condition ($jsonText.Contains('"managementEvidence"', [StringComparison]::Ordinal)) 'Persisted JSON must include the management evidence layer.'
 
     $reopened = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/reopen' -Method Post -Body @{
         json = $jsonText
         asOfDate = '2026-09-28'
     }
     Assert-Condition ($reopened.baseline.id -eq $summary.baseline.id) 'API reopen changed the baseline identity.'
+    Assert-Condition ($reopened.baseline.version -eq $summary.baseline.version -and $reopened.baseline.plannedEffortHours -eq $summary.baseline.plannedEffortHours) 'API reopen changed immutable baseline values.'
+    Assert-Condition ($reopened.managementEvidence.incrementId -eq 'IE-INC-READY-001' -and @($reopened.managementEvidence.observations | Where-Object { $_.evidenceKind -eq 'READINESS_CHECK' }).Count -eq 7) 'API reopen did not preserve management evidence.'
+    Assert-Condition ($reopened.views.managementControl.currentGate.executionState -eq 'NOT-RUN' -and $reopened.views.managementControl.currentGate.outcome -eq 'NOT-APPLICABLE') 'API reopen did not preserve separate gate evidence.'
     Assert-Condition ($reopened.analysis.executionStatus.overdue -eq 1) 'API reopen did not recalculate the overdue alert.'
     Assert-Condition ($reopened.analysis.executionStatus.atRisk -eq 1) 'API reopen did not recalculate the dependent at-risk alert.'
 
@@ -244,6 +269,12 @@ try {
     $indexHtml = Get-Content -LiteralPath $indexHtmlPath -Raw
     $stylesCss = Get-Content -LiteralPath $stylesCssPath -Raw
     Assert-Condition (-not $appJs.Contains('innerHTML', [StringComparison]::OrdinalIgnoreCase)) 'Browser UI must not use unsafe innerHTML rendering.'
+    Assert-Condition ($appJs.Contains('renderManagementControl', [StringComparison]::Ordinal) -and $appJs.Contains('management-control', [StringComparison]::Ordinal)) 'Browser UI must expose the bounded management control view.'
+    Assert-Condition ($appJs.Contains('READINESS CONTEXT', [StringComparison]::Ordinal) -and $appJs.Contains('CURRENT GATE EVIDENCE', [StringComparison]::Ordinal)) 'Overview must distinguish evidence-derived readiness context and current gate evidence.'
+    Assert-Condition ($appJs.Contains('renderReadinessAttentionQueue', [StringComparison]::Ordinal) -and $appJs.Contains('PARENT CONTEXT · READINESS', [StringComparison]::Ordinal)) 'Browser UI must expose grouped readiness attention and typed parent context.'
+    Assert-Condition ($appJs.Contains('P01–P07 readiness', [StringComparison]::Ordinal) -and $appJs.Contains('Evidence inspector', [StringComparison]::Ordinal)) 'Browser UI must expose readiness and inspector sections.'
+    Assert-Condition ($indexHtml.Contains('management-evidence-path', [StringComparison]::Ordinal) -and $indexHtml.Contains('Include management evidence', [StringComparison]::Ordinal)) 'Source intake must expose the opt-in management evidence profile.'
+    Assert-Condition ($indexHtml.Contains('Readiness control', [StringComparison]::Ordinal)) 'Browser UI must expose the readiness control tab.'
     Assert-Condition ($appJs.Contains('gantt-timeline', [StringComparison]::Ordinal)) 'Gantt renderer must expose a split timeline surface.'
     Assert-Condition ($appJs.Contains('gantt-as-of-marker', [StringComparison]::Ordinal)) 'Gantt renderer must expose an explicit as-of marker.'
     Assert-Condition ($appJs.Contains('gantt-plan-bar', [StringComparison]::Ordinal)) 'Gantt renderer must render immutable PLAN bars.'

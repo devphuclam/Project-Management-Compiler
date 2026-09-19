@@ -18,6 +18,8 @@ public sealed class ProjectCompiler : IProjectCompiler
     private readonly CarioXlsxExporter carioXlsxExporter;
     private readonly CanonicalJsonSerializer jsonSerializer;
     private readonly ExecutionOverlayUpdater executionUpdater;
+    private readonly IManagementEvidenceSourceAdapter managementEvidenceAdapter;
+    private readonly ManagementEvidenceReconciler managementEvidenceReconciler;
 
     public ProjectCompiler(
         IProjectSourceAdapter? sourceAdapter = null,
@@ -28,7 +30,9 @@ public sealed class ProjectCompiler : IProjectCompiler
         CarioMappingProjector? carioMappingProjector = null,
         CarioXlsxExporter? carioXlsxExporter = null,
         CanonicalJsonSerializer? jsonSerializer = null,
-        ExecutionOverlayUpdater? executionUpdater = null)
+        ExecutionOverlayUpdater? executionUpdater = null,
+        IManagementEvidenceSourceAdapter? managementEvidenceAdapter = null,
+        ManagementEvidenceReconciler? managementEvidenceReconciler = null)
     {
         this.sourceAdapter = sourceAdapter ?? new LocalRepositorySourceAdapter();
         this.extractor = extractor ?? new IdeaEngineeringExtractor();
@@ -39,6 +43,8 @@ public sealed class ProjectCompiler : IProjectCompiler
         this.carioXlsxExporter = carioXlsxExporter ?? new CarioXlsxExporter();
         this.jsonSerializer = jsonSerializer ?? new CanonicalJsonSerializer();
         this.executionUpdater = executionUpdater ?? new ExecutionOverlayUpdater();
+        this.managementEvidenceAdapter = managementEvidenceAdapter ?? new IdeaEngineeringReadinessAdapter();
+        this.managementEvidenceReconciler = managementEvidenceReconciler ?? new ManagementEvidenceReconciler();
     }
 
     public async Task<CompilationResult> CompileAsync(CompilationRequest request, CancellationToken cancellationToken = default)
@@ -63,12 +69,22 @@ public sealed class ProjectCompiler : IProjectCompiler
         {
             Location = request.SourcePath,
             Ref = request.Ref,
+            ManagementEvidenceIncrementPath = request.ManagementEvidenceIncrementPath,
             MaxDocumentBytes = request.MaxDocumentBytes,
             MaxTotalDocumentBytes = request.MaxTotalDocumentBytes
         }, cancellationToken);
         var resolution = AuthorityResolution.Resolve(snapshot);
         var extracted = extractor.Extract(resolution);
         var project = normalizer.Normalize(extracted);
+        if (request.IncludeManagementEvidence || request.ManagementEvidenceIncrementPath is not null)
+        {
+            var evidence = managementEvidenceAdapter.Adapt(snapshot, project).Evidence;
+            project = project with
+            {
+                ManagementEvidence = managementEvidenceReconciler.Reconcile(evidence, project)
+            };
+        }
+
         return BuildResult(project, asOfDate, request.Mapping);
     }
 
@@ -167,6 +183,7 @@ public sealed class ProjectCompiler : IProjectCompiler
         var validation = CanonicalProjectValidator.Validate(project);
         var validationErrors = validation.Where(diagnostic => diagnostic.Severity == WarningSeverity.Error).ToArray();
         var warnings = project.Warnings
+            .Concat(project.ManagementEvidence.Diagnostics)
             .Concat(validation)
             .GroupBy(warning => warning.Id, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())

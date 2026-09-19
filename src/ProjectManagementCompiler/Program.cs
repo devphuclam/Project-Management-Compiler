@@ -83,6 +83,8 @@ app.MapPost("/api/compile", async (
             SourcePath = Path.GetFullPath(request.SourcePath),
             Ref = request.Ref,
             AsOfDate = request.AsOfDate,
+            IncludeManagementEvidence = request.IncludeManagementEvidence,
+            ManagementEvidenceIncrementPath = request.ManagementEvidenceIncrementPath,
             MaxDocumentBytes = request.MaxDocumentBytes,
             MaxTotalDocumentBytes = request.MaxTotalDocumentBytes,
             Mapping = request.Mapping ?? new()
@@ -186,6 +188,7 @@ app.MapGet("/api/views/{viewName}", (string viewName, CompilerApplicationState s
         "kanban" => Results.Ok(current.Views.Kanban),
         "dependencies" => Results.Ok(current.Views.DependencyNetwork),
         "cpm" => Results.Ok(current.Views.Cpm),
+        "management-control" or "management" => Results.Ok(current.Views.ManagementControl),
         _ => Results.NotFound(new ApiErrorResponse { Code = "UNKNOWN_VIEW", Message = $"Unknown view '{viewName}'.", Phase = "views" })
     };
 });
@@ -259,6 +262,8 @@ static object ToApplicationSummary(CompilationResult result) => new
     }).ToArray(),
     analysis = result.Analysis,
     views = result.Views,
+    managementEvidence = result.Project.ManagementEvidence,
+    managementControl = result.Views.ManagementControl,
     warnings = result.Warnings,
     semanticDigest = result.SemanticDigest
 };
@@ -317,6 +322,8 @@ public sealed record CompileApiRequest
     public string SourcePath { get; init; } = string.Empty;
     public string? Ref { get; init; }
     public DateOnly? AsOfDate { get; init; }
+    public bool IncludeManagementEvidence { get; init; }
+    public string? ManagementEvidenceIncrementPath { get; init; }
     public int MaxDocumentBytes { get; init; } = 2 * 1024 * 1024;
     public int MaxTotalDocumentBytes { get; init; } = 8 * 1024 * 1024;
     public CarioMappingConfiguration? Mapping { get; init; }

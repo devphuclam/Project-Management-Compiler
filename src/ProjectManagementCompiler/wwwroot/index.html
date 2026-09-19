@@ -57,6 +57,16 @@
             <input id="reopen-json" type="file" accept="application/json,.json">
             <small>Loads a previously saved project.json and recalculates derived views locally.</small>
           </label>
+          <label class="wide">
+            Optional readiness increment path
+            <input id="management-evidence-path" type="text" autocomplete="off" placeholder="specs/004-technical-pilot-readiness">
+            <small>Opt-in bounded IDEAEngineering evidence; only the declared readiness files are captured.</small>
+          </label>
+          <label class="checkbox-control">
+            <input id="include-management-evidence" type="checkbox">
+            Include management evidence
+            <small>State/result, decisions, human actions and PG4 execution/outcome remain separate.</small>
+          </label>
           <div class="control-submit">
             <button id="reopen-button" class="secondary" type="button">Reopen JSON</button>
           </div>
@@ -91,6 +101,7 @@
         </div>
         <div class="tab-group">
           <span class="tab-group-label">Evidence</span>
+          <button class="tab" data-view="management-control" data-nav-group="evidence">Readiness control</button>
           <button class="tab" data-view="source" data-nav-group="evidence">Source / Warnings</button>
         </div>
       </nav>

@@ -23,7 +23,7 @@
     };
   }
 
-  const state = { project: null, sources: [], views: null, warnings: [], activeView: "dashboard", gantt: createGanttState() };
+  const state = { project: null, sources: [], views: null, managementControl: null, warnings: [], activeView: "dashboard", gantt: createGanttState() };
   const byId = (id) => document.getElementById(id);
 
   // Presentation-only labels. The canonical model and source role codes stay untouched.
@@ -157,6 +157,7 @@
       baseline: state.project.baseline,
       analysis: state.project.analysis,
       views: state.views,
+      managementControl: state.managementControl || state.views.managementControl,
       sources: state.sources,
       warnings: state.warnings
     };
@@ -228,7 +229,17 @@
       deliveryCards: model.rows.filter(row => row.kind === "DeliveryCard").length,
       controlPoints: model.rows.filter(row => row.kind === "Milestone").length
     };
-    return { scheduledPhase, nextBaselineControlPoint, inventory };
+    const managementControl = summary && (summary.managementControl || summary.views && summary.views.managementControl) || {};
+    const readinessLoaded = String(managementControl.discoveryState || "").toUpperCase() === "KNOWN";
+    const readinessRows = managementControl.readiness || [];
+    return {
+      scheduledPhase,
+      nextBaselineControlPoint,
+      inventory,
+      managementControl,
+      readinessLoaded,
+      readinessRows
+    };
   }
 
   function controlPointState() {
@@ -236,14 +247,24 @@
   }
 
   function evidenceScopeMessage(summary) {
+    const management = summary && (summary.managementControl || summary.views && summary.views.managementControl) || {};
+    const discoveryState = String(management.discoveryState || "NOT_REQUESTED").toUpperCase();
     const execution = hasExecutionEvidence(summary)
-      ? "Planning baseline and recorded execution overlay loaded."
-      : "Planning baseline loaded. No execution evidence recorded in Compiler.";
-    return execution + " Readiness/gate execution records are not part of the current MVP1 intake.";
+      ? "Manual execution: Loaded"
+      : "Manual execution: Not recorded";
+    if (discoveryState === "KNOWN") {
+      return "Planning baseline: Loaded · " + execution + " · Repository readiness: Loaded · Gate/decision evidence: Loaded · As of " + formatDate(summary.analysis && summary.analysis.asOfDate) + ".";
+    }
+    if (discoveryState === "UNKNOWN" || discoveryState === "AMBIGUOUS" || discoveryState === "UNAVAILABLE") {
+      const discoveryLabel = discoveryState.replaceAll("_", " ").toLowerCase().replace(/(^|\s)\S/g, letter => letter.toUpperCase());
+      return "Planning baseline: Loaded · " + execution + " · Repository readiness: " + discoveryLabel + ". Readiness/gate execution records are not part of the current MVP1 intake.";
+    }
+    return "Planning baseline: Loaded · " + execution + ". Readiness/gate execution records are not part of the current MVP1 intake.";
   }
 
   function renderControlStrip(summary, context) {
     const strip = node("section", null, "summary-control-strip");
+    if (context.readinessLoaded) strip.classList.add("has-readiness-context");
     const phaseCard = node("div", null, "summary-control-card");
     const phaseCopy = node("div", null, "summary-control-copy");
     phaseCopy.appendChild(node("span", "SCHEDULED PHASE", "summary-control-kicker"));
@@ -277,6 +298,27 @@
       gateCard.appendChild(gateAction);
     }
     strip.appendChild(gateCard);
+
+    if (context.readinessLoaded) {
+      const readinessCard = node("div", null, "summary-control-card summary-control-card-readiness");
+      const readinessCopy = node("div", null, "summary-control-copy");
+      readinessCopy.appendChild(node("span", "READINESS CONTEXT", "summary-control-kicker"));
+      const phase = context.managementControl.incrementPhaseId || "Phase not resolved";
+      const incrementName = context.managementControl.incrementName || context.managementControl.incrementId || "Increment not resolved";
+      readinessCopy.appendChild(node("strong", phase + " · " + incrementName));
+      const firstReadiness = context.readinessRows[0];
+      readinessCopy.appendChild(node("span", firstReadiness ? firstReadiness.workPackageId + " · " + (firstReadiness.stateCode || "UNKNOWN") : "No work-package readiness rows", "muted"));
+      readinessCopy.appendChild(node("span", "Evidence-derived control context; it does not replace the scheduled baseline phase.", "muted summary-semantic-note"));
+      const gate = context.managementControl.currentGate || {};
+      readinessCopy.appendChild(node("span", "CURRENT GATE EVIDENCE", "summary-control-kicker"));
+      readinessCopy.appendChild(node("strong", "PG4 · " + (gate.executionState || "Not recorded") + " / " + (gate.outcome || "Not recorded")));
+      readinessCard.appendChild(readinessCopy);
+      const readinessAction = node("button", "Open evidence", "text-action");
+      readinessAction.type = "button";
+      readinessAction.dataset.summaryView = "management-control";
+      readinessCard.appendChild(readinessAction);
+      strip.appendChild(readinessCard);
+    }
 
     const planCard = node("div", null, "summary-control-card summary-control-card-plan");
     const planCopy = node("div", null, "summary-control-copy");
@@ -331,6 +373,44 @@
       more.type = "button";
       more.dataset.summaryView = "gantt";
       more.dataset.summaryAttention = "true";
+      queue.appendChild(more);
+    }
+    return queue;
+  }
+
+  function renderReadinessAttentionQueue(summary, compact) {
+    const queue = node("section", null, "attention-queue readiness-attention-queue" + (compact ? " attention-queue-compact" : ""));
+    const heading = node("div", null, "section-heading");
+    const headingCopy = node("div");
+    headingCopy.appendChild(node("p", "READINESS / GOVERNANCE", "eyebrow"));
+    headingCopy.appendChild(node("h3", "Needs attention"));
+    headingCopy.appendChild(node("p", "Control actions derived from attributable repository evidence.", "muted attention-scope"));
+    heading.appendChild(headingCopy);
+    const control = summary && (summary.managementControl || summary.views && summary.views.managementControl) || {};
+    const groups = control.attentionGroups || [];
+    const items = groups.flatMap(group => (group.items || []).map(item => ({ group, item })));
+    heading.appendChild(node("span", items.length ? items.length + " signals" : "Clear", "attention-count" + (items.length ? " is-active" : "")));
+    queue.appendChild(heading);
+    if (!items.length) {
+      queue.appendChild(node("div", "No readiness action is currently derived from the loaded evidence.", "attention-empty"));
+      return queue;
+    }
+    items.slice(0, compact ? 4 : 8).forEach(({ group, item }) => {
+      const action = node("button", null, "attention-item readiness-attention-item");
+      action.type = "button";
+      action.dataset.summaryView = "management-control";
+      action.appendChild(node("span", group.code || "READINESS", "attention-code"));
+      const copy = node("span", null, "attention-copy");
+      copy.appendChild(node("strong", item.recordId || item.observationId || "Evidence"));
+      copy.appendChild(node("span", item.reason || group.label || "Control action", "muted"));
+      action.appendChild(copy);
+      action.appendChild(node("span", "→", "attention-arrow"));
+      queue.appendChild(action);
+    });
+    if (items.length > (compact ? 4 : 8)) {
+      const more = node("button", "Open readiness control", "text-action");
+      more.type = "button";
+      more.dataset.summaryView = "management-control";
       queue.appendChild(more);
     }
     return queue;
@@ -408,6 +488,7 @@
 
     const mainGrid = node("div", null, "summary-main-grid");
     mainGrid.appendChild(renderAttentionQueue(summary, false));
+    if (context.readinessLoaded) mainGrid.appendChild(renderReadinessAttentionQueue(summary, false));
 
     const progressCard = node("section", null, "summary-progress-card");
     const progressHeading = node("div", null, "summary-card-heading");
@@ -515,6 +596,16 @@
     capacity.appendChild(node("div", "Capacity · " + (summary.baseline.capacityHours ?? "Not recorded") + (summary.baseline.capacityHours === null || summary.baseline.capacityHours === undefined ? "" : "h"), "readout-row"));
     capacity.appendChild(node("p", "Resource constraints remain distinct from dependency critical path analysis.", "muted"));
     contextGrid.appendChild(capacity);
+    if (context.readinessLoaded) {
+      const readiness = context.managementControl;
+      const readinessCard = node("section", null, "dashboard-card");
+      readinessCard.appendChild(node("p", "READINESS / GOVERNANCE CONTROL", "eyebrow"));
+      readinessCard.appendChild(node("h3", (readiness.incrementPhaseId || "Phase unresolved") + " · " + (readiness.incrementName || readiness.incrementId || "Increment unresolved")));
+      const firstRow = context.readinessRows[0];
+      readinessCard.appendChild(node("p", firstRow ? firstRow.workPackageId + " · " + (firstRow.stateCode || "UNKNOWN") + " / " + (firstRow.resultCode || "UNKNOWN") : "No readiness rows", "muted"));
+      readinessCard.appendChild(node("p", "Gate PG4 · " + ((readiness.currentGate && readiness.currentGate.executionState) || "Not recorded") + " / " + ((readiness.currentGate && readiness.currentGate.outcome) || "Not recorded"), "readout-row"));
+      contextGrid.appendChild(readinessCard);
+    }
     fragment.appendChild(contextGrid);
     const inventory = node("p", "Scope structure · " + context.inventory.phases + " phases · " + context.inventory.workPackages + " work packages · " + context.inventory.deliveryCards + " execution cards · " + context.inventory.controlPoints + " control points", "dashboard-inventory muted");
     fragment.appendChild(inventory);
@@ -1178,6 +1269,10 @@
 
     const signals = node("div", null, "gantt-task-cell gantt-task-signals");
     row.alerts.forEach(alert => signals.appendChild(node("span", alert.alertCode || "ALERT", "gantt-signal alert")));
+    if (row.kind === "WorkPackage") {
+      const readiness = managementReadinessItems(row)[0];
+      if (readiness) signals.appendChild(node("span", "READINESS: " + (readiness.stateCode || "UNKNOWN"), "gantt-signal readiness"));
+    }
     if (!row.alerts.length && row.isCritical && state.gantt.criticalPath) signals.appendChild(node("span", "CPM", "gantt-signal critical"));
     taskRow.appendChild(signals);
     return taskRow;
@@ -1409,6 +1504,36 @@
     });
   }
 
+  function managementReadinessItems(row) {
+    const control = state.managementControl || state.views && state.views.managementControl || {};
+    const inspector = control.inspector || [];
+    const workPackageId = row && row.kind === "WorkPackage" ? row.id : row && row.kind === "DeliveryCard" ? row.workPackageId : null;
+    if (!workPackageId) return [];
+    return inspector.filter(item => String(item.evidenceKind || "").toUpperCase() === "READINESS_CHECK"
+      && String(item.sourceRecordId || "").toUpperCase() === String(workPackageId).toUpperCase());
+  }
+
+  function renderManagementReadinessEvidence(parent, row) {
+    const items = managementReadinessItems(row);
+    if (!items.length) return;
+    const isParentContext = row.kind === "DeliveryCard";
+    const section = appendDetailSection(parent, isParentContext ? "PARENT CONTEXT · READINESS" : "READINESS EVIDENCE", "gantt-detail-readiness");
+    if (isParentContext) {
+      section.appendChild(node("p", "This is WorkPackage readiness context; it is not the DeliveryCard execution state.", "muted"));
+    }
+    items.forEach(item => {
+      const fields = node("div", null, "gantt-detail-fields");
+      appendDetailField(fields, "Target", "WorkPackage:" + item.sourceRecordId);
+      appendDetailField(fields, "Task state", item.stateCode || "Not recorded");
+      appendDetailField(fields, "Readiness result", item.resultCode || "Not evaluated");
+      appendDetailField(fields, "Owner / waiting role", item.ownerRole || "Not recorded");
+      appendDetailField(fields, "Due condition", item.dueCondition || "Not recorded");
+      appendDetailField(fields, "Gate effect", item.gateEffect || "Not recorded");
+      section.appendChild(fields);
+      renderSourceEvidence(section, { sourceReferences: item.sourceReferences || [] });
+    });
+  }
+
   function renderGanttDetail(row, analysis, dependencyView, cpmView) {
     const panel = node("aside", null, "gantt-detail-panel");
     panel.id = "gantt-detail-panel";
@@ -1451,6 +1576,8 @@
     appendDetailField(actualFields, "Remaining effort", row.actual ? displayOptionalNumber(row.actual.remainingEffortHours, "h") : "No actual evidence");
     appendDetailField(actualFields, "Last update", row.actual && row.actual.lastUpdatedAt ? formatDate(row.actual.lastUpdatedAt) : "Not recorded");
     actualSection.appendChild(actualFields);
+
+    renderManagementReadinessEvidence(panel, row);
 
     const analysisSection = appendDetailSection(panel, "MANAGEMENT STATE");
     const analysisFields = node("div", null, "gantt-detail-fields");
@@ -1775,6 +1902,84 @@
     return section;
   }
 
+  function renderManagementControl(view) {
+    const section = node("section", null, "management-control-view");
+    const heading = node("div", null, "dashboard-heading");
+    heading.appendChild(node("p", "READINESS EVIDENCE", "eyebrow"));
+    heading.appendChild(node("h2", "Management control view"));
+    heading.appendChild(node("p", "Readiness evidence is additive: planning baseline and execution overlay remain independent.", "muted"));
+    section.appendChild(heading);
+
+    const scope = view || {};
+    const scopeGrid = node("div", null, "dashboard-context-grid");
+    [
+      ["Discovery", scope.discoveryState || "NOT_REQUESTED"],
+      ["Increment", scope.incrementId || "Not resolved"],
+      ["Readiness phase", scope.incrementPhaseId || "Not resolved"],
+      ["Status", scope.incrementStatus || "Not available"],
+      ["Observations", String(scope.evidenceScope && scope.evidenceScope.observationCount || 0)],
+      ["PG4 execution", scope.currentGate && scope.currentGate.executionState || "Not recorded"],
+      ["PG4 outcome", scope.currentGate && scope.currentGate.outcome || "Not recorded"]
+    ].forEach(([label, value]) => {
+      const card = node("section", null, "dashboard-card");
+      card.appendChild(node("span", label, "summary-control-kicker"));
+      card.appendChild(node("strong", value, "management-control-value"));
+      scopeGrid.appendChild(card);
+    });
+    section.appendChild(scopeGrid);
+
+    const readiness = node("section", null, "dashboard-card");
+    readiness.appendChild(node("h3", "P01–P07 readiness", null));
+    const readinessRows = (scope.readiness || []).map(item => [
+      item.workPackageId,
+      item.stateCode || "UNKNOWN",
+      item.resultCode || "UNKNOWN",
+      item.reconciliationStatus || "UNMATCHED",
+      item.gateEffect || "Not recorded"
+    ]);
+    readiness.appendChild(renderTable(
+      ["Work package", "Task state", "Result", "Reconciliation", "Gate effect"],
+      readinessRows.length ? readinessRows : [["No readiness evidence", "UNKNOWN", "UNKNOWN", "UNMATCHED", "Not requested"]]
+    ));
+    section.appendChild(readiness);
+
+    const attention = node("section", null, "dashboard-card");
+    attention.appendChild(node("h3", "Attention groups", null));
+    const groups = scope.attentionGroups || [];
+    if (!groups.length) {
+      attention.appendChild(node("p", "No readiness attention groups are currently derived.", "muted"));
+    } else {
+      groups.forEach(group => {
+        const groupSection = node("section", null, "management-attention-group");
+        groupSection.appendChild(node("h4", group.label + " · " + (group.items || []).length, null));
+        (group.items || []).forEach(item => {
+          const row = node("p", null, "management-attention-item");
+          row.appendChild(node("strong", item.recordId || item.observationId));
+          row.appendChild(node("span", " · " + (item.reason || "Needs review"), "muted"));
+          groupSection.appendChild(row);
+        });
+        attention.appendChild(groupSection);
+      });
+    }
+    section.appendChild(attention);
+
+    const inspector = node("section", null, "dashboard-card");
+    inspector.appendChild(node("h3", "Evidence inspector", null));
+    const inspectorRows = (scope.inspector || []).map(item => [
+      item.sourceRecordId,
+      String(item.evidenceKind || "").replaceAll("_", " "),
+      item.stateCode || "—",
+      item.resultCode || "—",
+      (item.sourceReferences || []).map(reference => reference.relativeFile).join(", ") || "No source reference"
+    ]);
+    inspector.appendChild(renderTable(
+      ["Record", "Kind", "State", "Result", "Safe provenance"],
+      inspectorRows.length ? inspectorRows : [["No evidence", "NOT_REQUESTED", "—", "—", "No source reference"]]
+    ));
+    section.appendChild(inspector);
+    return section;
+  }
+
   function renderActiveView() {
     const content = byId("view-content");
     clear(content);
@@ -1782,7 +1987,8 @@
       content.appendChild(node("div", "Views will appear here after analysis.", "empty-state"));
       return;
     }
-    const view = state.activeView === "source" ? renderSource() :
+    const view = state.activeView === "management-control" ? renderManagementControl(state.managementControl || state.views.managementControl) :
+      state.activeView === "source" ? renderSource() :
       state.activeView === "dashboard" ? renderDashboard(state.views.dashboard) :
       state.activeView === "wbs" ? renderWbs(state.views.wbs) :
       state.activeView === "gantt" ? renderGantt(
@@ -1802,6 +2008,7 @@
     state.project = { project: summary.project, baseline: summary.baseline, analysis: summary.analysis };
     state.sources = summary.sources || [];
     state.views = summary.views;
+    state.managementControl = summary.managementControl || summary.views && summary.views.managementControl;
     state.warnings = summary.warnings || [];
     setSourceIntakeCollapsed(true);
     setExecutionPanelOpen(false, false);
@@ -1820,7 +2027,14 @@
     }
     try {
       setStatus("Capturing and analyzing…");
-      const summary = await request("/api/compile", jsonOptions({ sourcePath, asOfDate }));
+      const includeManagementEvidence = byId("include-management-evidence").checked;
+      const managementEvidenceIncrementPath = byId("management-evidence-path").value.trim() || null;
+      const summary = await request("/api/compile", jsonOptions({
+        sourcePath,
+        asOfDate,
+        includeManagementEvidence: includeManagementEvidence || Boolean(managementEvidenceIncrementPath),
+        managementEvidenceIncrementPath
+      }));
       applySummary(summary);
       setStatus("Loaded " + (summary.project.name || summary.project.id) + ".");
     } catch (error) {
@@ -1837,6 +2051,7 @@
       const warnings = await request("/api/warnings");
       state.views = views;
       state.project = project;
+      state.managementControl = views.managementControl;
       state.sources = project.sources || [];
       state.warnings = warnings;
       renderActiveView();

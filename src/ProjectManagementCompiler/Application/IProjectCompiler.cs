@@ -18,6 +18,8 @@ public sealed record CompilationRequest
     public string SourcePath { get; init; } = string.Empty;
     public string? Ref { get; init; }
     public DateOnly? AsOfDate { get; init; }
+    public bool IncludeManagementEvidence { get; init; }
+    public string? ManagementEvidenceIncrementPath { get; init; }
     public int MaxDocumentBytes { get; init; } = 2 * 1024 * 1024;
     public int MaxTotalDocumentBytes { get; init; } = 8 * 1024 * 1024;
     public CarioMappingConfiguration Mapping { get; init; } = new();

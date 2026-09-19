@@ -10,6 +10,7 @@ public sealed record ManagementViewSet
     public DependencyNetworkProjection DependencyNetwork { get; init; } = new();
     public CpmProjection Cpm { get; init; } = new();
     public DashboardProjection Dashboard { get; init; } = new();
+    public ManagementControlView ManagementControl { get; init; } = new();
 }
 
 public sealed record KanbanProjection
@@ -137,7 +138,8 @@ public sealed class ManagementViewProjector
             Kanban = BuildKanban(project, analysis),
             DependencyNetwork = BuildDependencyNetwork(project),
             Cpm = BuildCpm(project, analysis),
-            Dashboard = BuildDashboard(project, analysis)
+            Dashboard = BuildDashboard(project, analysis),
+            ManagementControl = new ManagementControlViewProjector().Build(project)
         };
     }
 

@@ -57,6 +57,12 @@ h3 { margin-bottom: 8px; font-size: 16px; letter-spacing: -.015em; }
 .muted, small { color: var(--muted); }
 .local-only { border: 1px solid rgba(112, 224, 209, .28); border-radius: 999px; color: var(--accent); padding: 5px 10px; white-space: nowrap; background: rgba(112, 224, 209, .06); font-size: 12px; }
 .controls-grid, .execution-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.checkbox-control { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; }
+.checkbox-control input { width: auto; }
+.checkbox-control small { grid-column: 2; }
+.management-control-value { display: block; margin-top: 8px; color: var(--text); }
+.management-attention-group { padding: 10px 0; border-top: 1px solid var(--line); }
+.management-attention-item { margin: 6px 0 0; }
 label { display: grid; gap: 6px; color: var(--muted); font-weight: 600; }
 label.wide { grid-column: span 2; }
 label input, label select, label textarea {
@@ -559,6 +565,7 @@ th, td { border-bottom-color: var(--line); }
 .gantt-source-evidence-grid .gantt-detail-field strong { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
 .gantt-detail-dependency { padding: 5px 7px; border-left: 2px solid #b8c8bd; background: #f7f9f6; color: #45534a; }
 .gantt-dependency-arrow { fill: #a8b7ad; }
+.gantt-signal.readiness { color: var(--accent-strong); border-color: #b8d5c2; background: #f0f8f2; }
 .gantt-dependency-arrow-related { fill: var(--accent); }
 .gantt-open-bar { border-inline-end: 3px dashed #6fb48c; box-shadow: inset -5px 0 0 rgba(255, 255, 255, .55); }
 .gantt-row-kind { text-transform: none; }
@@ -578,6 +585,7 @@ th, td { border-bottom-color: var(--line); }
   border-radius: 10px;
   background: var(--line);
 }
+.summary-control-strip.has-readiness-context { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1.35fr) minmax(0, .86fr); }
 .summary-control-card {
   display: flex;
   min-width: 0;
@@ -589,6 +597,7 @@ th, td { border-bottom-color: var(--line); }
 }
 .summary-control-card:first-of-type { border-left: 3px solid var(--accent); }
 .summary-control-card:nth-of-type(2) { border-left: 3px solid var(--warning); }
+.summary-control-card-readiness { border-left: 3px solid var(--accent-strong); }
 .summary-control-card-plan { background: var(--panel-2); }
 .summary-control-copy { display: grid; min-width: 0; gap: 4px; }
 .summary-control-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
@@ -609,6 +618,10 @@ th, td { border-bottom-color: var(--line); }
 .summary-inventory strong { font-size: 12px; }
 .summary-inventory > span:last-child { flex-basis: 100%; font-size: 11px; }
 .attention-scope { margin: 3px 0 0; font-size: 11px; line-height: 1.35; }
+.readiness-attention-queue { border-color: #d8c99e; }
+.readiness-attention-item .attention-code { color: var(--accent-strong); }
+.management-control-value { display: block; margin-top: 6px; font-size: 14px; }
+.gantt-detail-readiness { border-left: 3px solid var(--accent-strong); padding-left: 10px; }
 .dashboard-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0 16px; }
 .dashboard-context-grid .dashboard-card { min-height: 0; }
 .dashboard-inventory { margin: 12px 0 18px; }
@@ -624,7 +637,7 @@ th, td { border-bottom-color: var(--line); }
 .gantt-row-select { grid-template-columns: auto minmax(0, 1fr) auto; }
 
 @media (max-width: 860px) {
-  .summary-control-strip { grid-template-columns: 1fr; }
+  .summary-control-strip, .summary-control-strip.has-readiness-context { grid-template-columns: 1fr; }
   .summary-control-card { min-height: 76px; }
   .dashboard-context-grid { grid-template-columns: 1fr; }
 }
