@@ -35,6 +35,12 @@ Proposal routes:
 The existing `/api/execution` endpoint returns the compatibility proposal marker and
 never changes official source execution.
 
+Proposal creation/update responses and the UI MUST use local-proposal language;
+they MUST NOT describe source execution as manual execution or imply write-back.
+The manifest workflow labels `SourceExecution.ForecastFinish` as `Source forecast`;
+any derived/calculated forecast remains a separate field and must not be used to
+rename the source value.
+
 ## UI obligations
 
 The import surface exposes repository root, manifest path, requested commit, and mode.

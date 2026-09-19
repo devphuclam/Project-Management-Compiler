@@ -34,6 +34,12 @@ Rules:
   always produces preview classification.
 - Invalid request/path/commit returns a failed result with a stable diagnostic; it
   does not throw for expected source validation failures.
+- `MaxFileBytes` and `MaxTotalBytes` are additionally bounded by hard application
+  ceilings; callers cannot request arbitrarily large source capture limits.
+- Working-tree capture reads the manifest and declared boundary independently for
+  pre/post stability and rejects mutation or unavailable Git state.
+- Exact Git capture verifies commit/tree entry type and mode, checks blob size
+  before body read, and rejects symlink mode `120000`.
 
 ## Result
 

@@ -1,29 +1,34 @@
 # Implementation Plan: IDEAEngineering Manifest Import
 
-**Branch**: `codex/ideaengineering-manifest-import-implementation` | **Date**: 2026-09-19 | **Spec**: [spec.md](./spec.md)
+**Branch**: `codex/feature003-hardening` | **Date**: 2026-09-19 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/003-ideaengineering-manifest-import/spec.md`
 
 ## Summary
 
-Add a deep, dependency-free `IIdeaEngineeringManifestImporter` seam that reads the
-IDEAEngineering manifest from either one exact Git commit or a stability-checked
-working tree, validates the source contract in-process, resolves the seven declared
-authority roles, and produces an immutable Project Management Compiler snapshot.
-Official source execution remains separate from local execution proposals. The
-legacy fixed-path compiler remains available for compatibility, but the manifest
-workflow never falls back to it.
+Harden the existing dependency-free `IIdeaEngineeringManifestImporter` seam after
+the Feature 003 audit. The importer continues to read the IDEAEngineering manifest
+from one exact Git commit or a stability-checked working tree, but canonical reopen
+now validates authority-sensitive state, schema `1.0` migration neutralizes legacy
+overlays, working-tree/Git capture fails closed, and retained proposals have one
+runtime owner. Official source execution remains separate from local execution
+proposals. The legacy fixed-path compiler remains available for compatibility, but
+the manifest workflow never falls back to it.
 
 ## Technical Context
 
-**Language/Version**: C# / .NET 8, nullable enabled, implicit usings enabled.
+**Language/Version**: C# / .NET 10, nullable enabled, implicit usings enabled.
 
 **Primary Dependencies**: Existing ASP.NET Core minimal hosting, `System.Text.Json`,
-ClosedXML already used by the repository, and BCL process/file APIs. No new package,
-PowerShell runtime call, or source-repository validator dependency is added.
+the BCL process/file APIs, and the repository's dependency-free executable test
+runner. The project file has no ClosedXML or other third-party runtime dependency;
+no new package, PowerShell runtime call, or source-repository validator dependency
+is added.
 
 **Storage**: In-memory application state plus the existing canonical JSON and CARIO
-exports. Imported source bodies are transient and are not persisted.
+exports. Imported source bodies are transient and are not persisted. Local
+proposals are owned by `CompilerApplicationState`; canonical proposals are its
+persistence projection. No database is introduced.
 
 **Testing**: The repository's executable custom test runner via `scripts/test.ps1`,
 focused importer tests through the public seam, API/loopback verifier scripts, and
@@ -34,6 +39,11 @@ the implementation uses portable .NET APIs where possible.
 
 **Project Type**: Dependency-free modular monolith with an ASP.NET Core UI/API and
 canonical project compiler library.
+
+**Hardening boundary**: Canonical schema validation is semantic and fail-closed,
+not deserialize-only. Git and working-tree readers use bounded metadata/body
+capture and independent pre/post source reads. Legacy schema `1.0` overlays are
+compatibility input only and are neutralized after migration.
 
 **Performance Goals**: Bounded source reads, deterministic results, and a normal
 accepted source import completing within the existing local smoke-test budget; no
@@ -128,6 +138,22 @@ Domain, Sources, Extraction, and Outputs boundaries instead of making the HTTP l
 the importer. The fixture set is deliberately minimal and public-safe. The existing
 Gantt projection and legacy compiler remain in place and consume canonical results.
 
+### MVP2.2 hardening touch-points
+
+- `CanonicalJsonSerializer` migrates schema `1.0` overlays into proposals and
+  returns a neutralized overlay.
+- `CanonicalProjectValidator` validates schema `2.0` import metadata, source
+  execution, proposals, identities, target existence, safe evidence, and state
+  semantics before a reopened project can be used.
+- `ManifestWorkingTreeReader` performs independent manifest/declaration/file and
+  Git-state reads for pre/post stability; unavailable Git state fails closed.
+- `ManifestGitObjectReader` checks commit/tree mode/blob size before body reads and
+  enforces application ceilings.
+- `CompilerApplicationState`, `ExecutionProposalService`, and reopen/import paths
+  share one retained proposal collection and hydrate it from canonical JSON.
+- Proposal evidence validation is explicit and source-contract-compatible; UI text
+  changes are semantic wording corrections only.
+
 ## Architecture and State Transitions
 
 `ManifestImportRequest` enters `IIdeaEngineeringManifestImporter.ImportAsync`.
@@ -157,8 +183,16 @@ proposals `STALE_BASE` without rebase.
 Each slice follows red/green/refactor through the public importer or application/API
 operation. The test runner is kept dependency-free.
 
+For MVP2.2, the artifact gate is deliberately before code: update the hardening
+spec/design artifacts, run Spec Kit analyze, run Spec Kit converge, then implement
+each hardening task through TDD. After implementation, run analyze and converge
+again before code review and full verification.
+
 ## Complexity Tracking
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |---|---|---|
 | Exact Git/working-tree reader boundary | One public importer must support deterministic commit reads and stable previews without coupling domain logic to Git or the file system. | Direct reads in the HTTP/compiler layer would make atomicity, path safety, and fake-source tests inseparable from UI behavior. |
+| Single proposal ownership in application state | Reopen/save/API operations must not drift between an in-memory service dictionary and canonical persistence. | Keeping the service dictionary would require synchronization repair paths and would preserve the audited loss-on-reopen risk. |
+| Explicit authority validation on reopen | Schema 2.0 deserialization can accept syntactically valid but semantically unsafe data. | Trusting serializer defaults would allow tampered source/proposal records to influence analysis. |
+| Independent capture probes | Working-tree atomicity must be deterministic and testable without timing sleeps. | Reading through a cached manifest or relying on wall-clock races cannot prove the declared boundary stayed stable. |

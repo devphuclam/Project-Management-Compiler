@@ -259,8 +259,10 @@ then compare their authority state, diagnostics, and exported metadata.
   date. A user-selected analysis date MUST be labelled as analysis context, not
   source evidence.
 - **FR-036**: Canonical persistence MUST use schema `2.0`; schema `1.0` snapshots
-  MUST remain readable by migrating manual execution records into proposals
-  with an explicit diagnostic.
+  MUST remain readable by migrating manual execution records into proposals,
+  neutralizing the legacy `ExecutionOverlay`, and retaining an explicit
+  migration diagnostic. Migrated overlay records MUST NOT remain effective
+  execution evidence.
 - **FR-037**: Official, preview, and proposal exports MUST include authority and
   snapshot metadata; preview filenames MUST visibly identify preview status.
 - **FR-038**: A committed candidate without a passed Source Readiness Gate MUST
@@ -277,6 +279,45 @@ then compare their authority state, diagnostics, and exported metadata.
 - **FR-042**: The legacy fixed-path flow MAY remain for compatibility but MUST
   never be an automatic fallback from a failed manifest import.
 
+### MVP2.2 Correctness and Hardening Addendum
+
+This corrective pass does not add a new product surface. It makes the accepted
+authority, persistence, capture, validation, and presentation semantics
+executable after an independent audit.
+
+- **FR-043**: Schema `1.0` migration MUST preserve every legacy execution value
+  in a local `ExecutionProposal`, then clear or neutralize the legacy
+  `ExecutionOverlay`. The migrated overlay MUST NOT be consumed by
+  `ExecutionTruthResolver`, official analysis, dashboard counts, alerts, actual
+  Gantt lanes, or actual-effort calculations.
+- **FR-044**: Reopening schema `2.0` MUST semantically validate `ImportMetadata`,
+  `SourceExecution`, and `ExecutionProposals` after deserialization. Invalid
+  typed identities, targets, state combinations, paths, lifecycle values,
+  metadata, evidence, or proposal changes MUST fail closed and MUST NOT become
+  authoritative through reopen.
+- **FR-045**: A working-tree preview MUST read the manifest and its declared
+  boundary independently for pre- and post-capture fingerprints. Mutation of
+  the manifest, declarations, declared files, or repository state MUST reject
+  the preview and retain the previous official snapshot.
+- **FR-046**: Failure to verify Git `HEAD` or status MUST fail closed. A failed
+  Git-state read MUST NOT be represented by a comparable sentinel value that
+  can make two failed reads appear stable.
+- **FR-047**: Exact Git capture MUST inspect the requested tree entry and mode,
+  determine blob size before reading blob contents, reject symlink mode `120000`,
+  and enforce hard application ceilings in addition to caller-provided limits.
+- **FR-048**: Proposal completion readiness MUST require at least one valid
+  controlled-evidence record with required identity, type, description, recording
+  time, and recorder fields. Non-empty but malformed evidence MUST remain
+  diagnosed and MUST NOT qualify `READY_FOR_REVIEW`.
+- **FR-049**: `CompilerApplicationState` MUST be the single runtime owner of
+  retained local proposals. `CanonicalProject.ExecutionProposals` is its
+  persistence projection; create, update, schema `1.0` migration, save, reopen,
+  list, and stale-base evaluation MUST use the same retained proposal set.
+- **FR-050**: Manifest workflow UI wording MUST identify source execution as
+  source-authoritative, local edits as proposals, and source-provided forecast
+  values as source forecasts. It MUST NOT call source execution manual, call a
+  proposal action official recording, or call source forecast calculated.
+
 ### Key Entities
 
 - **Manifest Import Request**: Repository root, manifest path, import mode,
@@ -292,12 +333,16 @@ then compare their authority state, diagnostics, and exported metadata.
 - **Source Execution Snapshot**: Attributable execution records imported from
   the execution authority, including recording, execution, result, effort,
   blocker, forecast override, evidence, and revision facts.
-- **Execution Proposal Overlay**: Local proposed changes bound to a base
-  Snapshot ID, with lifecycle state and diagnostics but no source authority.
+- **Execution Proposal**: Local proposed changes formerly represented by the
+  legacy overlay, bound to a base Snapshot ID with lifecycle state and
+  diagnostics but no source authority.
 - **Project Calendar Set**: Separate approved Baseline and selected forecast
   calendars plus their difference treatment.
 - **Source Diagnostic**: Stable coded validation finding with source and field
   context.
+- **Controlled Proposal Evidence**: A proposal evidence record that satisfies the
+  source-compatible controlled-evidence fields and safe-path/URI rules required
+  before a completion proposal can become review-ready.
 
 ## Success Criteria *(mandatory)*
 
@@ -327,6 +372,25 @@ then compare their authority state, diagnostics, and exported metadata.
   source paths, raw imported document bodies, or prohibited private data.
 - **SC-010**: Existing Compiler behavior outside manifest import continues to
   pass its established verification suite.
+- **SC-011**: Reopening schema `1.0` `IN_PROGRESS` and `COMPLETED` overlays
+  creates deterministic local proposals while official execution counts,
+  actual effort, alerts, project health, and Gantt actual lanes remain unchanged.
+- **SC-012**: Tampered schema `2.0` metadata, source execution, target identity,
+  source evidence, or proposal data fails closed with diagnostics and cannot
+  replace or promote official source state.
+- **SC-013**: Deterministic working-tree tests reject manifest/declaration/file
+  mutation and two unavailable Git-state reads; no unstable preview is accepted.
+- **SC-014**: Exact Git capture rejects oversized blobs before body reads and
+  rejects symlink tree entries while accepting a bounded regular blob.
+- **SC-015**: Empty/default/malformed proposal evidence keeps a completion
+  proposal `DRAFT`; valid controlled evidence permits `READY_FOR_REVIEW` without
+  changing official source execution.
+- **SC-016**: A created proposal survives canonical save, reopen, and list with
+  the same semantic identity, while a newer official snapshot makes its base
+  stale without mutating source execution.
+- **SC-017**: The manifest UI uses `Source execution`, proposal wording, and
+  `Source forecast`; no manifest source value is presented as manual or
+  compiler-calculated execution.
 
 ## Assumptions
 

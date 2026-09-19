@@ -32,6 +32,26 @@ recomputes staleness from current official snapshot ID and register revision. It
 does not rebase. Completion proposals remain `DRAFT` with diagnostics until finish,
 actual effort, zero remaining, and controlled evidence are all present.
 
+## Ownership and persistence
+
+`CompilerApplicationState` is the single runtime owner of retained proposals.
+`CanonicalProject.ExecutionProposals` is the persistence projection of that set.
+The proposal service MUST NOT keep an independent mutable dictionary.
+
+- import and canonical reopen hydrate the state owner from retained proposals;
+- create/update write the state owner and current canonical projection together;
+- save → reopen → list returns the same semantic proposal;
+- schema `1.0` migrated proposals are listed through the same API;
+- a newer official snapshot marks retained proposals `STALE_BASE`; and
+- no proposal operation mutates `SourceExecution` or official analysis.
+
+## Controlled evidence
+
+`Evidence.Count > 0` is not sufficient. A record qualifies only when it has a
+non-empty ID, supported type, description, recording timestamp, recorder, and
+safe optional repository path/commit/URI. Invalid records remain diagnosed and a
+completion proposal remains `DRAFT`.
+
 `/api/execution` remains a compatibility alias only. It creates or updates a
 proposal and returns a proposal-only marker; it cannot mutate source execution or
 official analysis.

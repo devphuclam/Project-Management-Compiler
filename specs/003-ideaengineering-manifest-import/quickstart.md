@@ -65,5 +65,33 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify
 node --check .\src\ProjectManagementCompiler\wwwroot\app.js
 ```
 
+## MVP2.2 hardening verification
+
+The hardening pass is still local and dependency-free. Before implementation,
+the artifact gate must run with the feature directory selected explicitly:
+
+```powershell
+$env:SPECIFY_FEATURE_DIRECTORY = 'specs/003-ideaengineering-manifest-import'
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\.specify\scripts\powershell\check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks
+```
+
+The TDD regression set must prove, through public seams, that:
+
+- schema `1.0` overlays migrate to proposals and cannot affect official
+  execution analysis, alerts, dashboards, effort, or Gantt `ACTUAL` lanes;
+- a proposal survives canonical save, reopen, hydration, and list;
+- tampered schema `2.0` authority data fails closed;
+- working-tree pre/post manifest reads are independent and mutation rejects the
+  preview;
+- unavailable Git state, symlink entries, and oversized blobs fail closed before
+  body reads; and
+- malformed evidence cannot qualify `READY_FOR_REVIEW`.
+
+The final fresh verification must include the focused regression commands,
+`scripts/test.ps1`, `scripts/verify.ps1`, `scripts/verify-web.ps1`,
+`node --check src/ProjectManagementCompiler/wwwroot/app.js`, `git diff --check`,
+and the repository's changed-file safety scans. Do not inspect or modify the
+IDEAEngineering checkout as part of these checks.
+
 Do not run the source validator by checking out or modifying the IDEAEngineering
 working tree. Compatibility checks use the accepted Git object/fixture boundary.

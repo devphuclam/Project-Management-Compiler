@@ -152,6 +152,69 @@ subagents, and collect fresh evidence before integration.
 - [X] T049 [US5] Run `git diff --check`, changed-file secret/absolute-path/raw-source scans, fresh `git status --short --branch`, `git diff --stat main...HEAD`, and `git log --oneline main..HEAD`; acceptance: only intended public source/docs/tests are changed and no sensitive artifact is present.
 - [X] T050 [US5] Fetch `origin/main`, fast-forward local `main` only after all checks, merge the implementation branch with `--ff-only`, push `main`, and verify remote SHA; acceptance: remote `main` points at the verified final commit with no force push.
 
+## Phase 9: MVP2.2 Correctness & Hardening
+
+**Purpose**: Close the audited authority, validation, capture, persistence,
+evidence, and presentation gaps without adding product scope. Every numbered
+hardening group follows red → confirmed failure → smallest fix → focused tests →
+related regressions → refactor after green. Tests must use public application or
+importer seams; small Git/filesystem fakes are allowed only at the capture
+boundary.
+
+### Artifact gate and migration authority
+
+- [ ] T051 [US5] Re-read `spec.md`, `plan.md`, `research.md`, `data-model.md`, all contracts, `quickstart.md`, and the handoff; run the feature prerequisite check with `SPECIFY_FEATURE_DIRECTORY` set explicitly; acceptance: all artifacts describe .NET 10, dependency-free execution, state-owned proposals, semantic v2 validation, and neutralized schema 1.0 overlays.
+- [ ] T052 [US5] Add failing regression tests in `tests/ProjectManagementCompiler.Tests/CanonicalMigrationTests.cs`, analysis/projection coverage, and Gantt coverage for schema 1.0 `IN_PROGRESS` and `COMPLETED` overlays; acceptance: before the fix, migrated overlay data can be observed as an effective fallback, an alert/analysis input, or an `ACTUAL` lane, and the test names record each forbidden path (FR-043, SC-011).
+- [ ] T053 [US5] Fix schema 1.0 migration and execution authority in `src/ProjectManagementCompiler/Outputs/CanonicalJsonSerializer.cs`, `src/ProjectManagementCompiler/Domain/CanonicalProject.cs`, and the resolver/analysis projections; acceptance: every legacy value is preserved only in a proposal, `ExecutionOverlay` is empty/neutralized with a diagnostic, and resolver, dashboard, alerts, effort, and Gantt actuals ignore it (FR-036, FR-043).
+
+### Canonical v2 semantic validation
+
+- [ ] T054 [US5] Add failing tamper tests in `tests/ProjectManagementCompiler.Tests/CanonicalMigrationTests.cs` for invalid `ImportMetadata`, `SourceExecution`, proposal identity/target/lifecycle, unsafe evidence, and invalid state combinations; acceptance: JSON deserialization succeeds but canonical reopen is rejected and the prior official snapshot remains unchanged (FR-044, SC-012).
+- [ ] T055 [US5] Implement fail-closed semantic validation in `src/ProjectManagementCompiler/Outputs/CanonicalProjectValidator.cs` and related domain validators; acceptance: schema 2.0 validation covers import metadata, source execution, proposals, identities, targets, paths, lifecycle, evidence, and authority invariants without trusting serializer defaults (FR-044).
+
+### Working-tree and bounded Git capture
+
+- [ ] T056 [US1] Add failing deterministic capture tests in `tests/ProjectManagementCompiler.Tests/ManifestImportTests.cs` or `SourceCaptureTests.cs` for manifest/declaration/declared-file mutation between independent pre/post reads and for two unavailable Git-state reads; acceptance: mutation and unavailable state reject the preview and never replace official state, with no equal magic fallback sentinel (FR-045, FR-046, SC-013).
+- [ ] T057 [US1] Implement independent pre/post reads and fail-closed Git-state handling in `src/ProjectManagementCompiler/Sources/ManifestWorkingTreeReader.cs` and its capture seam; acceptance: no manifest or state fingerprint is reused across probes and a failed `HEAD`/status read cannot compare equal as stable (FR-045, FR-046).
+- [ ] T058 [US1] Add failing Git object tests for symlink tree mode `120000`, oversized blob rejection before body read, caller-limit bypass, and one bounded regular blob in `tests/ProjectManagementCompiler.Tests/ManifestImportTests.cs` or `SourceCaptureTests.cs`; acceptance: the oversized test proves body-read was not invoked and symlink is rejected (FR-047, SC-014).
+- [ ] T059 [US1] Implement tree/mode/blob-size checks and hard application ceilings in `src/ProjectManagementCompiler/Sources/ManifestGitObjectReader.cs`, `src/ProjectManagementCompiler/Domain/ManifestImportEntities.cs`, and importer configuration; acceptance: mode and size are checked before body reads, symlink mode is rejected, hard ceilings cannot be raised by caller input, and bounded regular blobs remain readable (FR-047).
+
+### Evidence and proposal ownership
+
+- [ ] T060 [US4] Add failing controlled-evidence tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs` for empty/default/malformed evidence and one valid evidence record; acceptance: malformed evidence remains diagnosed and `DRAFT`, while valid controlled evidence alone permits `READY_FOR_REVIEW` without changing official execution (FR-048, SC-015).
+- [ ] T061 [US4] Implement controlled evidence validation in `src/ProjectManagementCompiler/Domain/ProposalEntities.cs` and `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: required identity, type, description, recording time, recorder, and safe path/URI rules are enforced before readiness (FR-048).
+- [ ] T062 [US4] Add failing save/reopen/list tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs`, `CanonicalMigrationTests.cs`, and application/API coverage; acceptance: a created proposal survives canonical save, reopen, hydration, list, and stale-base evaluation with the same semantic identity and source execution remains immutable (FR-049, SC-016).
+- [ ] T063 [US4] Replace the service-owned mutable proposal dictionary with `CompilerApplicationState` ownership and canonical projection/hydration in `src/ProjectManagementCompiler/Application/CompilerApplicationState.cs`, `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`, `src/ProjectManagementCompiler/Application/ProjectCompiler.cs`, and `src/ProjectManagementCompiler/Program.cs`; acceptance: create/update/list/migration/save/reopen/stale-base all use one retained set and schema 1.0 migrated proposals hydrate through the same path (FR-049).
+
+### UI semantics and documentation truth
+
+- [ ] T064 [US2] Add a deterministic UI regression check for manifest-workflow labels in `scripts/verify-web.ps1` or the existing public web verification; acceptance: source execution is not called manual, proposal action is not called record execution, and source forecast is not called calculated forecast (FR-050, SC-017).
+- [ ] T065 [US2] Correct only the affected wording in `src/ProjectManagementCompiler/wwwroot/app.js` and related text resources; acceptance: no layout or product redesign is introduced and all authority labels remain visually distinct (FR-050).
+- [ ] T066 [US5] Reconcile implementation-facing documentation in `plan.md`, `research.md`, `data-model.md`, all contracts, `tasks.md`, `quickstart.md`, and `docs/handoff/2026-09-19-ideaengineering-manifest-import-design.md`; acceptance: no `.NET 8` target, ClosedXML dependency claim, independent proposal-store claim, deserialize-only validation claim, or legacy-overlay-authority claim remains (FR-044, FR-049, FR-050).
+
+### Hardening verification
+
+- [ ] T067 [US1] Run the focused regression groups after each green fix and then the related canonical, importer, proposal, API, and Gantt regressions; acceptance: all T052/T054/T056/T058/T060/T062/T064 tests pass in the current worktree.
+- [ ] T068 [US5] Run Spec Kit analyze again after implementation and resolve every critical/high inconsistency; acceptance: analyze reports artifact/code/task coherence and does not modify artifacts silently.
+- [ ] T069 [US5] Run Spec Kit converge again after implementation and reconcile any remaining implementation gaps in `tasks.md`; acceptance: no unimplemented hardening requirement remains before review.
+- [ ] T070 [US5] Perform code review against repository standards and Feature 003 authority, including fail-closed behavior, bounded reads, source immutability, proposal ownership, and UI truth; acceptance: no blocking finding remains.
+- [ ] T071 [US5] Run fresh full verification: `scripts/test.ps1`, `scripts/verify.ps1`, `scripts/verify-web.ps1`, `node --check src/ProjectManagementCompiler/wwwroot/app.js`, `git diff --check`, and changed-file safety scans; acceptance: every command exits successfully with exact output recorded in the final report.
+- [ ] T072 [US5] Only after T068-T071 are green, fetch `origin/main`, fast-forward local `main`, merge `codex/feature003-hardening` with `--ff-only`, push `main`, and verify the remote SHA; acceptance: no force push, no merge commit, and remote `main` equals the verified commit.
+
+## Phase 10: Convergence
+
+**Purpose**: Record the remaining implementation gaps observed by the explicit
+pre-implementation converge pass. These tasks are executed through the Phase 9
+TDD groups; they do not authorize implementation before the artifact gate.
+
+- [ ] T073 [US5] Neutralize the legacy overlay after schema 1.0 migration and remove every effective resolver/analysis/dashboard/alert/Gantt fallback from `CanonicalJsonSerializer`, `ExecutionTruthResolver`, and related projections per FR-043 (contradicts).
+- [ ] T074 [US5] Add semantic v2 validation for import metadata, source execution, proposal targets/lifecycle, evidence, and authority combinations in `CanonicalProjectValidator` per FR-044 (partial).
+- [ ] T075 [US1] Replace cached working-tree manifest/bytes and comparable `git-state-unavailable` values with independent pre/post reads that fail closed per FR-045 and FR-046 (partial).
+- [ ] T076 [US1] Add pre-body Git tree mode/blob-size checks, symlink rejection, and hard application ceilings that cannot be bypassed by caller limits per FR-047 (missing).
+- [ ] T077 [US4] Validate controlled proposal evidence fields before lifecycle readiness so malformed non-empty evidence cannot produce `READY_FOR_REVIEW` per FR-048 (partial).
+- [ ] T078 [US4] Make `CompilerApplicationState` the only mutable proposal owner and hydrate it on canonical reopen/save/list, including migrated proposals, per FR-049 and SC-016 (partial).
+- [ ] T079 [US2] Replace manifest-workflow UI wording that says manual/record/calculated with source/proposal/source-forecast wording per FR-050 and SC-017 (partial).
+
 ## Dependencies and execution order
 
 - Phase 1 blocks all user stories.
@@ -162,6 +225,10 @@ subagents, and collect fresh evidence before integration.
   operations exist.
 - Convergence and review occur only after implementation and verification commands
   have fresh output.
+- MVP2.2 hardening follows the explicit artifact order: update/reconcile design
+  artifacts, run analyze, run converge, re-run analyze if converge changes
+  tasks, then begin implementation. TDD is required inside each hardening group;
+  it does not replace Spec Kit.
 
 ## TDD checkpoints
 

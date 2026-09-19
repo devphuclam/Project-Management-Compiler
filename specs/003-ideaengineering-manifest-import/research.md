@@ -91,3 +91,49 @@ resolution, schema/semantic failures, source execution truth, state retention,
 proposal immutability, canonical migration, and HTTP/launcher behavior. Full
 verification will include the repository test script, `verify.ps1`, JavaScript syntax
 checking if the UI changes, fixture catalogue comparison, and `git diff --check`.
+
+## MVP2.2 audit findings and decisions
+
+The independent audit found correctness defects in migration, canonical reopen,
+working-tree stability, Git capture bounds, proposal validation, proposal
+persistence, and authority wording. These are corrections to the accepted Feature
+003 semantics, not a new feature surface.
+
+### Migration authority
+
+Schema `1.0` `ExecutionOverlay` records are retained as deterministic local
+proposals, then the overlay is neutralized in the reopened project. This keeps the
+historical values and migration diagnostic without leaving a second effective
+execution source for `ExecutionTruthResolver`, management analysis, alerts, or
+Gantt actual lanes.
+
+### Canonical v2 semantic validation
+
+Reopen validates `ImportMetadata`, `SourceExecution`, and `ExecutionProposals`
+against the canonical planning graph and safe-path policy after JSON
+deserialization. Target identity, duplicate identity, state/evidence semantics,
+safe provenance, lifecycle, and proposal field values are fail-closed. A JSON
+document that parses but violates authority semantics is invalid.
+
+### Capture atomicity and bounds
+
+Working-tree stability compares independently read pre/post manifests, declared
+boundaries, captured files, and verified Git state. Git-state failure is an error,
+not a comparable sentinel. Exact Git capture obtains tree mode and blob size before
+reading body content, rejects mode `120000`, and clamps caller limits to explicit
+application ceilings.
+
+### Proposal ownership and evidence
+
+`CompilerApplicationState` owns the retained proposal set. The canonical project's
+`ExecutionProposals` is the persistence projection; import/reopen hydrates state,
+and create/update updates the current canonical projection without mutating
+`SourceExecution`. Proposal completion requires valid controlled evidence, not a
+non-empty list.
+
+### Presentation and environment truth
+
+The UI uses source/proposal/forecast terminology that matches authority. Feature
+003 documentation targets .NET 10 and the dependency-free project file; no
+ClosedXML dependency is part of the implementation. The accepted IDEAEngineering
+commit and its seven fixture outcomes remain the compatibility oracle.

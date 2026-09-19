@@ -2,10 +2,12 @@
 
 ## Implementation status
 
-The authority model, feature specification, implementation plan, and runtime
-continuation are complete. The importer is implemented behind the public
+The original Feature 003 importer is implemented behind the public
 `IIdeaEngineeringManifestImporter.ImportAsync` seam and verified against the
-accepted source commit. The executable quickstart is in
+accepted source commit. This handoff is now being continued by the dedicated
+MVP2.2 correctness/hardening branch `codex/feature003-hardening`; implementation
+must not start until the updated Spec Kit artifact gate has passed. The
+executable quickstart is in
 `specs/003-ideaengineering-manifest-import/quickstart.md`.
 
 The design increment is:
@@ -23,6 +25,13 @@ under `specs/003-ideaengineering-manifest-import/`.
 The runtime keeps official source execution separate from local proposal
 previews, retains failed candidates without replacing official state, and
 captures the manifest-declared readiness register as independent evidence.
+
+MVP2.2 hardening is explicitly scoped to correctness and trust boundaries:
+schema `1.0` overlay neutralization, semantic schema `2.0` validation,
+independent working-tree capture, fail-closed Git capture, bounded tree/blob
+reads, controlled proposal evidence, single proposal ownership in
+`CompilerApplicationState`, and authority-aware UI wording. It adds no package,
+database, connector, Docker setup, or source-repository change.
 
 ## Source compatibility evidence
 
@@ -49,11 +58,28 @@ replays the seven source-owned fixture outcomes and preserves that warning.
 - The manifest is the only discovery entry point. A failed manifest import may
   not fall back to the legacy fixed-path importer.
 - `SourceExecutionSnapshot` is source-authoritative.
-  `ExecutionProposalOverlay` is local and non-authoritative.
+  `ExecutionProposal` is local and non-authoritative; the legacy
+  `ExecutionOverlay` is migration input only.
 - Official views and exports ignore proposals. Proposal impact is available
   only in an explicit preview mode.
 - Canonical persistence advances to schema `2.0`; legacy schema `1.0` execution
-  overlays migrate to proposals with an explicit warning.
+  overlays migrate to proposals with an explicit warning and are then cleared or
+  neutralized so they cannot be consumed by any execution resolver or view.
+- `CompilerApplicationState` is the single mutable runtime owner of local
+  proposals. `CanonicalProject.ExecutionProposals` is the persistence
+  projection; save/reopen hydrates the same state. `SourceExecutionSnapshot` is
+  immutable for proposal operations.
+- Schema `2.0` reopen validates `ImportMetadata`, `SourceExecution`, proposal
+  identities/targets/lifecycle, and controlled evidence semantically; valid JSON
+  syntax alone is not acceptance.
+- Working-tree pre/post capture reads the manifest and declared boundary
+  independently. Git `HEAD`/status failure, symlink mode `120000`, oversized
+  entries, and body reads beyond hard application ceilings fail closed.
+- Proposal completion requires a valid controlled-evidence record; non-empty
+  malformed evidence cannot produce `READY_FOR_REVIEW`.
+- Manifest UI labels source-authoritative execution as `Source execution`, local
+  edits as proposals, and `ExecutionProposal` forecast values as `Source
+  forecast` where they originate from the source.
 - A failed or unready candidate cannot replace the last valid official
   snapshot. Runtime state keeps current official, latest attempt, and active
   preview separately.
@@ -96,10 +122,9 @@ No subagent was required for this implementation.
 
 ## Git and local workspace notes
 
-At this pause, the feature branch was
-`codex/ideaengineering-manifest-import`. The only unrelated workspace files are
-local untracked `package.json` and `package-lock.json`; they are user-owned and
-must remain uncommitted unless the user separately decides otherwise.
+The hardening work is isolated in the managed worktree for
+`codex/feature003-hardening`. The main checkout and the separately checked-out
+IDEAEngineering source repository must remain untouched by implementation.
 
 The repository is public. Do not copy the IDEAEngineering repository wholesale
 or commit raw private material. Vendor only the minimum public-safe catalogue,

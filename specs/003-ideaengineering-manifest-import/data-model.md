@@ -75,8 +75,24 @@ execution fields.
 - proposal diagnostics, created/updated metadata, and optional scenario assumptions.
 
 The proposal is local, non-authoritative, and absent from official analysis. It is
-automatically stale when the current official snapshot no longer matches either base
-snapshot ID or register revision. It is not rebased automatically.
+  automatically stale when the current official snapshot no longer matches either base
+  snapshot ID or register revision. It is not rebased automatically.
+
+### Controlled proposal evidence
+
+Each proposal evidence record used for completion readiness must contain:
+
+- non-empty `EvidenceId`;
+- a supported source-contract `Type`;
+- non-empty `Description`;
+- a valid `RecordedAt` timestamp;
+- non-empty `RecordedBy`;
+- an optional safe repository-relative `RepositoryPath` that is not `.git`;
+- an optional hexadecimal commit token; and
+- an optional safe external URI without embedded user information.
+
+Invalid evidence remains attached and diagnosed. It is not silently discarded and
+does not qualify a completion proposal.
 
 ## Application state
 
@@ -86,8 +102,41 @@ snapshot ID or register revision. It is not rebased automatically.
 2. `LatestImportAttempt`: latest success, candidate, preview, or failed attempt;
 3. `ActivePreview`: latest valid candidate/working-tree preview, if any.
 
-The state also retains local proposals. Reopen and exports select explicit official,
-preview, or proposal-preview context; no implicit replacement is allowed.
+The state also retains local proposals as the single runtime owner. The
+`CanonicalProject.ExecutionProposals` collection is the persistence projection of
+that owner, not an independent mutable store. Reopen hydrates proposals from the
+canonical project, while create/update operations update the retained state and
+the current canonical projection together. Schema `1.0` migrated proposals enter
+the same collection. Reopen/import/proposal operations never mutate
+`SourceExecution`.
+
+Legacy `ExecutionOverlay` is read only for schema `1.0` migration and is
+neutralized after migration. It is not an effective execution source for a
+manifest snapshot.
+
+## Canonical schema 2.0 validation
+
+After deserialization, validation must confirm:
+
+- metadata fields are internally consistent, populated where required, safe, and
+  free of local absolute paths/credentials;
+- source execution records use typed identities, target existing Delivery Cards,
+  unique `kind + id`, valid recording/state/result semantics, non-negative effort,
+  safe source paths, and valid controlled evidence;
+- proposals target existing Delivery Cards, use supported fields and lifecycle
+  values, carry required base snapshot/revision metadata, and contain only valid
+  typed/date/numeric changes and safe evidence.
+
+Any error makes reopen fail closed; successful JSON deserialization alone is not a
+valid canonical reopen.
+
+## Capture invariants
+
+Working-tree pre/post fingerprints use independent manifest reads and independent
+declared-boundary reads. Git `HEAD`/status verification is required for a stable
+preview. Exact Git reads inspect tree mode and blob size before reading a blob body;
+mode `120000` is rejected and application ceilings cap caller-requested file and
+total limits.
 
 ## State transition rules
 
