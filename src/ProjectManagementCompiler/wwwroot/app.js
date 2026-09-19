@@ -17,6 +17,7 @@
       atRiskOnly: false,
       lateStartOnly: false,
       showDependencies: false,
+      dependencyFocus: "both",
       criticalPath: false,
       structureMode: false,
       columns: { state: true, owner: true, attention: true },
@@ -1234,13 +1235,14 @@
     svg.appendChild(defs);
     const visibleIndex = new Map(visibleRows.map((row, index) => [row.key, index]));
     if (!state.gantt.showDependencies) return svg;
+    const impact = dependencyImpact(selectedRowKey, dependencyView);
     const dependencyEdges = (state.views && state.views.dependencyNetwork && state.views.dependencyNetwork.edges) || dependencyView && dependencyView.edges || [];
     const eligibleEdges = dependencyEdges.filter(edge => edge.includedInAnalysis !== false);
     eligibleEdges.forEach(edge => {
       const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
       if (!visibleIndex.has(predecessorKey) || !visibleIndex.has(subjectKey)) return;
-      const isRelated = selectedRowKey && (selectedRowKey === predecessorKey || selectedRowKey === subjectKey);
+      const isRelated = selectedRowKey && impact.focusEdgeKeys.has(dependencyEdgeKey(edge));
       const predecessor = visibleRows[visibleIndex.get(predecessorKey)];
       const subject = visibleRows[visibleIndex.get(subjectKey)];
       const predecessorTimestamp = parseDate(predecessor.plan.finish || predecessor.plan.start);
@@ -1256,7 +1258,7 @@
       path.setAttribute("class", "gantt-dependency-path" + (isRelated ? " is-related" : ""));
       path.setAttribute("marker-end", "url(#" + (isRelated ? "gantt-dependency-arrow-related" : "gantt-dependency-arrow") + ")");
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = predecessorKey + " → " + subjectKey + " · " + (edge.dependencyType || "Dependency");
+      title.textContent = dependencyNodeLabel(predecessorKey, dependencyView) + " → " + dependencyNodeLabel(subjectKey, dependencyView) + " · " + dependencyTypeLabel(edge.dependencyType);
       path.appendChild(title);
       svg.appendChild(path);
     });
@@ -1349,18 +1351,93 @@
     });
   }
 
-  function relatedGanttKeys(selectedRowKey, dependencyView) {
-    const related = new Set();
-    if (!selectedRowKey) return related;
-    related.add(selectedRowKey);
-    const dependencyEdges = dependencyView && dependencyView.edges || [];
-    dependencyEdges.filter(edge => edge.includedInAnalysis !== false).forEach(edge => {
+  function dependencyEdgeKey(edge) {
+    const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
+    const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
+    return predecessorKey + " → " + subjectKey;
+  }
+
+  function dependencyTypeLabel(value) {
+    const normalized = String(value || "Dependency")
+      .replace(/_/g, "-")
+      .replace(/([a-z])([A-Z])/g, "$1-$2")
+      .toLowerCase();
+    return normalized === "finish-to-start"
+      ? "Finish-to-Start"
+      : normalized.replace(/(^|-)([a-z])/g, (_, separator, letter) => separator + letter.toUpperCase());
+  }
+
+  function dependencyNodeLabel(key, dependencyView) {
+    const nodeDefinition = (dependencyView && dependencyView.nodes || []).find(item =>
+      item.key === key || typedKey(item.kind, item.id) === key);
+    if (!nodeDefinition) return key;
+    return (nodeDefinition.id || key) + " · " + normalizeDisplayTitle(nodeDefinition.name, nodeDefinition.id || key);
+  }
+
+  function dependencyImpact(selectedRowKey, dependencyView) {
+    const impact = {
+      selectedKey: selectedRowKey || null,
+      upstreamKeys: new Set(),
+      downstreamKeys: new Set(),
+      directUpstreamKeys: new Set(),
+      directDownstreamKeys: new Set(),
+      upstreamEdgeKeys: new Set(),
+      downstreamEdgeKeys: new Set(),
+      focusKeys: new Set(),
+      focusEdgeKeys: new Set()
+    };
+    if (!selectedRowKey) return impact;
+
+    const dependencyEdges = (dependencyView && dependencyView.edges || []).filter(edge => edge.includedInAnalysis !== false);
+    dependencyEdges.forEach(edge => {
       const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
-      if (predecessorKey === selectedRowKey) related.add(subjectKey);
-      if (subjectKey === selectedRowKey) related.add(predecessorKey);
+      if (subjectKey === selectedRowKey) impact.directUpstreamKeys.add(predecessorKey);
+      if (predecessorKey === selectedRowKey) impact.directDownstreamKeys.add(subjectKey);
     });
-    return related;
+
+    const traverse = (direction, keys, edgeKeys) => {
+      const frontier = [selectedRowKey];
+      const visited = new Set([selectedRowKey]);
+      while (frontier.length) {
+        const current = frontier.shift();
+        dependencyEdges.forEach(edge => {
+          const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
+          const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
+          const matches = direction === "upstream" ? subjectKey === current : predecessorKey === current;
+          if (!matches) return;
+          const next = direction === "upstream" ? predecessorKey : subjectKey;
+          edgeKeys.add(dependencyEdgeKey(edge));
+          if (next !== selectedRowKey) keys.add(next);
+          if (!visited.has(next)) {
+            visited.add(next);
+            frontier.push(next);
+          }
+        });
+      }
+    };
+
+    traverse("upstream", impact.upstreamKeys, impact.upstreamEdgeKeys);
+    traverse("downstream", impact.downstreamKeys, impact.downstreamEdgeKeys);
+    impact.focusKeys.add(selectedRowKey);
+    const focus = state.gantt.dependencyFocus || "both";
+    if (focus !== "downstream") impact.upstreamKeys.forEach(key => impact.focusKeys.add(key));
+    if (focus !== "upstream") impact.downstreamKeys.forEach(key => impact.focusKeys.add(key));
+    if (focus !== "downstream") impact.upstreamEdgeKeys.forEach(key => impact.focusEdgeKeys.add(key));
+    if (focus !== "upstream") impact.downstreamEdgeKeys.forEach(key => impact.focusEdgeKeys.add(key));
+    return impact;
+  }
+
+  function dependencyFocusLabel(value) {
+    return {
+      upstream: "Depends on",
+      downstream: "Affects",
+      both: "Both directions"
+    }[value] || "Both directions";
+  }
+
+  function relatedGanttKeys(selectedRowKey, dependencyView) {
+    return dependencyImpact(selectedRowKey, dependencyView).focusKeys;
   }
 
   function applyGanttPreset(preset) {
@@ -1373,6 +1450,7 @@
     state.gantt.atRiskOnly = false;
     state.gantt.lateStartOnly = false;
     state.gantt.showDependencies = false;
+    state.gantt.dependencyFocus = "both";
     state.gantt.criticalPath = false;
     state.gantt.structureMode = false;
     state.gantt.zoom = "day";
@@ -1429,6 +1507,27 @@
       ? "predecessor → successor. Select a row to inspect its impact."
       : "hidden. Use Show dependencies to display predecessor → successor."));
     toolbar.appendChild(dependencyHint);
+
+    if (state.gantt.selectedRowKey) {
+      const impactControls = node("fieldset", null, "gantt-impact-controls");
+      impactControls.appendChild(node("legend", "Impact focus", "gantt-impact-label"));
+      impactControls.appendChild(node("span", "Selected: " + dependencyNodeLabel(state.gantt.selectedRowKey, state.views && state.views.dependencyNetwork), "gantt-impact-selection muted"));
+      [["upstream", "Depends on"], ["downstream", "Affects"], ["both", "Both"]].forEach(([value, label]) => {
+        const button = node("button", label, "secondary gantt-impact-option" + (state.gantt.dependencyFocus === value ? " is-active" : ""));
+        button.type = "button";
+        button.dataset.ganttAction = "dependency-focus";
+        button.dataset.ganttFocus = value;
+        button.setAttribute("data-gantt-focus", value);
+        button.setAttribute("aria-pressed", state.gantt.dependencyFocus === value ? "true" : "false");
+        button.title = value === "upstream"
+          ? "Highlight the predecessor chain"
+          : value === "downstream"
+            ? "Highlight the affected successor chain"
+            : "Highlight both predecessor and successor chains";
+        impactControls.appendChild(button);
+      });
+      toolbar.appendChild(impactControls);
+    }
 
     const filters = node("div", null, "gantt-filters");
     const phase = node("select");
@@ -1504,6 +1603,7 @@
     else if (state.gantt.executionFilter !== "ALL") modeLabels.push(stateLabel(state.gantt.executionFilter));
     if (state.gantt.criticalPath) modeLabels.push("CPM overlay on");
     if (state.gantt.showDependencies) modeLabels.push("connectors on");
+    if (state.gantt.selectedRowKey) modeLabels.push("impact: " + dependencyFocusLabel(state.gantt.dependencyFocus));
     if (state.gantt.attentionOnly) modeLabels.push("attention only");
     if (state.gantt.structureMode) modeLabels.push("full hierarchy");
     const modeSuffix = modeLabels.length ? " · " + modeLabels.join(" · ") : "";
@@ -1658,18 +1758,49 @@
     cpmSection.appendChild(cpmFields);
 
     const dependencies = appendDetailSection(panel, "DEPENDENCY IMPACT");
-    dependencies.appendChild(node("p", "Arrows read from predecessor → successor.", "muted"));
+    dependencies.appendChild(node("p", "Arrows read from predecessor → successor. Focus can show the whole chain, not only the adjacent line.", "muted"));
+    const impact = dependencyImpact(row.key, dependencyView);
     const edges = (dependencyView && dependencyView.edges || []).filter(edge => edge.includedInAnalysis !== false && ((edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)) === row.key || (edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)) === row.key));
-    const blockedBy = edges.filter(edge => (edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)) === row.key);
-    const blocking = edges.filter(edge => (edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)) === row.key);
     const dependencyFields = node("div", null, "gantt-detail-fields");
-    appendDetailField(dependencyFields, "Depends on", blockedBy.length ? blockedBy.map(edge => edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)).join(", ") : "None recorded");
-    appendDetailField(dependencyFields, "Affects", blocking.length ? blocking.map(edge => edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)).join(", ") : "None recorded");
+    const namedKeys = keys => keys.size ? Array.from(keys).map(key => dependencyNodeLabel(key, dependencyView)).join(", ") : "None recorded";
+    appendDetailField(dependencyFields, "Depends on", namedKeys(impact.directUpstreamKeys));
+    appendDetailField(dependencyFields, "Affects", namedKeys(impact.directDownstreamKeys));
+    appendDetailField(dependencyFields, "Impact focus", dependencyFocusLabel(state.gantt.dependencyFocus));
     dependencies.appendChild(dependencyFields);
+
+    const impactSummary = node("div", null, "gantt-impact-summary");
+    impactSummary.appendChild(node("span", "Driving impact", "gantt-impact-kicker"));
+    const downstreamChain = Array.from(impact.downstreamKeys).map(key => dependencyNodeLabel(key, dependencyView));
+    const previewChain = downstreamChain.length > 4
+      ? [row.id].concat(downstreamChain.slice(0, 4)).concat("…")
+      : [row.id].concat(downstreamChain);
+    impactSummary.appendChild(node("strong", downstreamChain.length ? previewChain.join(" → ") : "No downstream dependency"));
+    if (downstreamChain.length) {
+      impactSummary.appendChild(node("p", downstreamChain.length + " downstream item(s) · terminal: " + downstreamChain[downstreamChain.length - 1], "muted"));
+    }
+    if (downstreamChain.length > 4) {
+      const chainDetails = node("details", null, "gantt-impact-chain");
+      chainDetails.appendChild(node("summary", "Show full successor chain · " + downstreamChain.length + " items"));
+      chainDetails.appendChild(node("p", [row.id].concat(downstreamChain).join(" → "), "muted"));
+      impactSummary.appendChild(chainDetails);
+    }
+    const criticalSuccessors = Array.from(impact.downstreamKeys).filter(key => {
+      const cpm = (cpmView && cpmView.rows || []).find(item => typedKey(item.nodeKind, item.nodeId) === key);
+      return cpm && cpm.isCritical;
+    });
+    impactSummary.appendChild(node("p", criticalSuccessors.length
+      ? "Critical-path successor(s): " + criticalSuccessors.slice(0, 3).map(key => dependencyNodeLabel(key, dependencyView)).join(", ") + (criticalSuccessors.length > 3 ? " · +" + (criticalSuccessors.length - 3) + " more" : "")
+      : "No critical-path successor identified in the calculated dependency network.", "muted"));
+    dependencies.appendChild(impactSummary);
     edges.forEach(edge => {
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
       const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
-      dependencies.appendChild(node("p", predecessorKey + " → " + subjectKey + " · " + (edge.dependencyType || ""), "gantt-detail-dependency"));
+      const direction = predecessorKey + " → " + subjectKey;
+      const detail = node("p", null, "gantt-detail-dependency");
+      detail.title = direction + " · " + dependencyTypeLabel(edge.dependencyType);
+      detail.appendChild(node("strong", dependencyNodeLabel(predecessorKey, dependencyView)));
+      detail.appendChild(document.createTextNode(" → " + dependencyNodeLabel(subjectKey, dependencyView) + " · " + dependencyTypeLabel(edge.dependencyType)));
+      dependencies.appendChild(detail);
     });
 
     const alerts = appendDetailSection(panel, "ALERTS");
@@ -1733,6 +1864,7 @@
     const selectedCanonical = model.byKey.get(state.gantt.selectedRowKey) || null;
     const selectedRow = presentation.byKey.get(state.gantt.selectedRowKey)
       || (selectedCanonical ? ManagementPresentationRow(selectedCanonical, selectedCanonical.parentKey, selectedCanonical.childKeys, selectedCanonical.depth) : null);
+    const impact = dependencyImpact(state.gantt.selectedRowKey, dependencyView);
     const relatedKeys = relatedGanttKeys(state.gantt.selectedRowKey, dependencyView);
     const width = timelineWidth(range);
     const shell = node("section", null, "gantt-shell");
@@ -1780,6 +1912,8 @@
       const selected = row.key === state.gantt.selectedRowKey;
       const related = relatedKeys.has(row.key) && !selected;
       const dimmed = state.gantt.selectedRowKey && !selected && !related;
+      const upstream = impact.upstreamKeys.has(row.key) && impact.focusKeys.has(row.key);
+      const downstream = impact.downstreamKeys.has(row.key) && impact.focusKeys.has(row.key);
       if (selected) {
         taskRow.classList.add("gantt-selected");
         timelineRow.classList.add("gantt-selected");
@@ -1787,6 +1921,14 @@
       if (related) {
         taskRow.classList.add("gantt-related");
         timelineRow.classList.add("gantt-related");
+      }
+      if (upstream) {
+        taskRow.classList.add("gantt-upstream");
+        timelineRow.classList.add("gantt-upstream");
+      }
+      if (downstream) {
+        taskRow.classList.add("gantt-downstream");
+        timelineRow.classList.add("gantt-downstream");
       }
       if (dimmed) taskRow.classList.add("gantt-dimmed");
       taskRows.appendChild(taskRow);
@@ -1839,6 +1981,8 @@
           state.gantt.criticalPath = !state.gantt.criticalPath;
         } else if (action === "dependencies") {
           state.gantt.showDependencies = !state.gantt.showDependencies;
+        } else if (action === "dependency-focus") {
+          state.gantt.dependencyFocus = actionTarget.dataset.ganttFocus || "both";
         } else if (action === "record-execution") {
           const input = byId("execution-work-item");
           if (input) {
