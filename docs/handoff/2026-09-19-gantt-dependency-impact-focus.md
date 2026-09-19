@@ -6,6 +6,7 @@ The Gantt view now follows the dependency-reading pattern used by established pr
 
 - selecting a row exposes an `Impact focus` control with `Depends on`, `Affects`, and `Both`;
 - the selected direction highlights the corresponding upstream or downstream chain in the task pane and timeline;
+- the optional connector layer draws only the selected row's direct links, so the timeline does not become a full-graph spiderweb;
 - the row inspector names direct predecessors and successors instead of showing only typed keys;
 - dependency connectors use readable tooltips with the direction and dependency type;
 - the inspector explains the downstream scheduling consequence with a short chain preview and an expandable full successor chain;
@@ -19,7 +20,7 @@ The baseline model and execution overlay are unchanged. This is a presentation a
 2. Open `Gantt`.
 3. Select a delivery card such as `P04`.
 4. Use `Depends on` to isolate predecessor work, `Affects` to isolate successor work, or `Both` to see the complete neighborhood.
-5. Use `Show dependencies` when the connector paths are needed. Hovering a connector exposes the named predecessor, successor, and dependency type.
+5. Use `Show dependencies` when the connector paths are needed. Only the selected card's direct links are drawn; hovering a connector exposes the named predecessor, successor, and dependency type.
 6. Read `DEPENDENCY IMPACT` in the row inspector. Expand `Show full successor chain` only when the short preview is not enough.
 
 ## Verification
@@ -30,6 +31,10 @@ The baseline model and execution overlay are unchanged. This is a presentation a
 - `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1`
 
 The full test suite and verification gate pass. The verification output reports `Health: ok`, 53 cards, 6 workbook sheets, and `SecurityChecks: PASS`.
+
+## Design evidence
+
+This interaction follows the documented behavior of established tools: Jira filters a selected work item's dependency chain, ClickUp uses arrows between directly connected tasks, and Microsoft Project keeps dependency links separate from the date grid. The implementation keeps the same distinction: direct links are optional visual aids; the inspector and impact highlight remain the readable source for the full relationship.
 
 ## Next handoff action
 
