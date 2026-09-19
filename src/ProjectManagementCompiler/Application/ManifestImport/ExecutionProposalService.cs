@@ -38,7 +38,8 @@ public sealed class ExecutionProposalService
         "actualEffortHours",
         "remainingEffortHours",
         "forecastFinish",
-        "blocker"
+        "blocker",
+        "legacyEvidenceReference"
     ];
 
     private static readonly JsonSerializerOptions ExportOptions = new()
@@ -105,11 +106,17 @@ public sealed class ExecutionProposalService
             changes = NormalizeChanges(merged);
         }
         var evidence = request.Evidence is null ? existing.Evidence : NormalizeEvidence(request.Evidence);
+        var updatedAtUtc = DateTimeOffset.UtcNow;
+        if (updatedAtUtc < existing.CreatedAtUtc)
+        {
+            updatedAtUtc = existing.CreatedAtUtc;
+        }
+
         var updated = existing with
         {
             ProposedChanges = changes,
             Evidence = evidence,
-            UpdatedAtUtc = DateTimeOffset.UtcNow
+            UpdatedAtUtc = updatedAtUtc
         };
         updated = Evaluate(updated, request.RequestedLifecycle, official.Metadata);
         state.UpsertProposal(updated);
@@ -344,14 +351,43 @@ public sealed class ExecutionProposalService
                 throw new ArgumentException($"Proposal field '{pair.Key}' is not supported.", nameof(changes));
             }
 
-            normalized[pair.Key] = pair.Value?.Trim();
+            var value = pair.Value?.Trim();
+            if (string.Equals(pair.Key, "legacyEvidenceReference", StringComparison.OrdinalIgnoreCase)
+                && !ControlledEvidenceRules.IsSafeRepositoryPath(value))
+            {
+                throw new ArgumentException("Legacy evidence references must be safe repository-relative paths.", nameof(changes));
+            }
+
+            if (pair.Key is "actualEffortHours" or "remainingEffortHours"
+                && value is not null
+                && (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var hours)
+                    || hours < 0
+                    || decimal.Remainder(hours, 0.5m) != 0))
+            {
+                throw new ArgumentException($"Proposal field '{pair.Key}' must be a non-negative half-hour value.", nameof(changes));
+            }
+
+            normalized[pair.Key] = value;
         }
 
         return normalized;
     }
 
-    private static IReadOnlyList<SourceExecutionEvidence> NormalizeEvidence(IEnumerable<SourceExecutionEvidence>? evidence) =>
-        (evidence ?? Array.Empty<SourceExecutionEvidence>()).Select(NormalizeEvidenceItem).ToArray();
+    private static IReadOnlyList<SourceExecutionEvidence> NormalizeEvidence(IEnumerable<SourceExecutionEvidence>? evidence)
+    {
+        var normalized = (evidence ?? Array.Empty<SourceExecutionEvidence>())
+            .Select(NormalizeEvidenceItem)
+            .ToArray();
+        foreach (var item in normalized)
+        {
+            if (!ControlledEvidenceRules.IsValid(item))
+            {
+                throw new ArgumentException("Proposal evidence must satisfy the source-controlled evidence contract.", nameof(evidence));
+            }
+        }
+
+        return normalized;
+    }
 
     private static SourceExecutionEvidence NormalizeEvidenceItem(SourceExecutionEvidence? item)
     {
@@ -391,18 +427,7 @@ public sealed class ExecutionProposalService
     }
 
     private static bool IsControlledEvidenceValid(SourceExecutionEvidence? item) =>
-        item is not null
-        && !string.IsNullOrWhiteSpace(item.EvidenceId)
-        && ControlledEvidenceRules.SupportedTypes.Contains(item.Type)
-        && !string.IsNullOrWhiteSpace(item.Description)
-        && item.RecordedAt is not null
-        && !string.IsNullOrWhiteSpace(item.RecordedBy)
-        && ControlledEvidenceRules.IsValidCommit(item.Commit)
-        && ((!string.IsNullOrWhiteSpace(item.RepositoryPath)
-                && ManifestCaptureSupport.TryNormalizeRelativePath(item.RepositoryPath, out var normalized)
-                && !normalized.StartsWith(".git/", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(normalized, ".git", StringComparison.OrdinalIgnoreCase))
-            || ControlledEvidenceRules.IsSafeExternalUri(item.ExternalUri));
+        ControlledEvidenceRules.IsValid(item);
 
     private static void ValidateTarget(string targetKind, string targetId, IdeaEngineeringSnapshot official)
     {

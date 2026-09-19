@@ -306,9 +306,10 @@ executable after an independent audit.
   determine blob size before reading blob contents, reject symlink mode `120000`,
   and enforce hard application ceilings in addition to caller-provided limits.
 - **FR-048**: Proposal completion readiness MUST require at least one valid
-  controlled-evidence record with required identity, type, description, recording
-  time, and recorder fields. Non-empty but malformed evidence MUST remain
-  diagnosed and MUST NOT qualify `READY_FOR_REVIEW`.
+  controlled-evidence record with required identity, type, description, result,
+  recording time, and recorder fields. Non-empty but malformed evidence MUST
+  remain diagnosed and MUST NOT qualify `READY_FOR_REVIEW`; the final boundary
+  rule in FR-053 rejects such input before persistence.
 - **FR-049**: `CompilerApplicationState` MUST be the single runtime owner of
   retained local proposals. `CanonicalProject.ExecutionProposals` is its
   persistence projection; create, update, schema `1.0` migration, save, reopen,
@@ -317,6 +318,44 @@ executable after an independent audit.
   source-authoritative, local edits as proposals, and source-provided forecast
   values as source forecasts. It MUST NOT call source execution manual, call a
   proposal action official recording, or call source forecast calculated.
+- **FR-051**: The legacy fixed-path workflow MAY resolve an explicit non-empty
+  `ExecutionOverlay` when `ImportMetadata` is absent. That compatibility path
+  MUST be exercised through the public `ProjectCompiler.ApplyExecutionUpdate`
+  operation and may affect only that legacy document's analysis and Gantt
+  actual projection. A manifest-backed project MUST use `SourceExecution` and
+  MUST NOT allow an overlay to override it. Schema `1.0` migration MUST still
+  neutralize the overlay and retain its values only as proposals.
+- **FR-052**: Exact Git capture MUST compare each blob's declared size with the
+  remaining aggregate byte budget before invoking `git show` or reading its
+  body. The remaining budget MUST be passed to the bounded blob reader and
+  caller-provided limits MUST remain below hard application ceilings.
+- **FR-053**: Proposal creation and update MUST reject every supplied evidence
+  item that fails the source execution evidence contract. A zero-item evidence
+  list is valid for a `DRAFT`; an item MUST contain `evidenceId`, `type`,
+  `description`, `result`, `recordedAt`, and `recordedBy`. Repository path,
+  commit, and external URI are optional locators/metadata and MUST each be
+  validated when supplied. Rejected input MUST leave proposal state unchanged.
+  `READY_FOR_REVIEW` requires completion semantics and at least one valid item.
+- **FR-054**: The compatibility `/api/execution` route MUST create a
+  proposal-only update without fabricating a controlled evidence type,
+  recorder, or result. A legacy evidence reference MAY be retained only as a
+  safe non-controlled proposal field; official source execution remains
+  unchanged.
+- **FR-055**: Canonical v2 semantic validation MUST require a full 40-hex
+  `SourceIdentity` for `GIT_COMMIT`, reject credential-bearing repository URI
+  identities, require source register revision at least `1` (while allowing
+  migrated schema `1.0` proposal revision `0`), enforce half-hour effort
+  granularity, and cross-check metadata project/baseline IDs with the canonical
+  project and source execution IDs plus revision/status date.
+- **FR-056**: When an official import is followed by schema `1.0` reopen and a
+  proposal update, the state owner and every applicable current/canonical
+  proposal projection MUST update from the same proposal values without aliasing
+  or promoting the reopened legacy document to official source state. Save and
+  reopen MUST preserve that update while `SourceExecution` remains immutable.
+- **FR-057**: Feature 003 documentation MUST distinguish the original import,
+  MVP2.2 hardening, and this final micro-pass, record actual verification state,
+  and avoid claims of remote CI or completion not supported by executed local
+  evidence.
 
 ### Key Entities
 
@@ -382,15 +421,37 @@ executable after an independent audit.
   mutation and two unavailable Git-state reads; no unstable preview is accepted.
 - **SC-014**: Exact Git capture rejects oversized blobs before body reads and
   rejects symlink tree entries while accepting a bounded regular blob.
-- **SC-015**: Empty/default/malformed proposal evidence keeps a completion
-  proposal `DRAFT`; valid controlled evidence permits `READY_FOR_REVIEW` without
-  changing official source execution.
+- **SC-015**: Empty proposal evidence is valid for a `DRAFT`; malformed supplied
+  evidence is rejected atomically; valid controlled evidence permits
+  `READY_FOR_REVIEW` without changing official source execution.
 - **SC-016**: A created proposal survives canonical save, reopen, and list with
   the same semantic identity, while a newer official snapshot makes its base
   stale without mutating source execution.
 - **SC-017**: The manifest UI uses `Source execution`, proposal wording, and
   `Source forecast`; no manifest source value is presented as manual or
   compiler-calculated execution.
+- **SC-018**: A public legacy compile followed by `ApplyExecutionUpdate` exposes
+  the explicit legacy overlay in legacy analysis and an `ACTUAL` Gantt lane,
+  while a manifest project remains source-authoritative and a migrated schema
+  `1.0` overlay produces no actual lane.
+- **SC-019**: A Git blob whose declared size exceeds the remaining aggregate
+  budget is rejected before any body-read/show call, while a bounded regular
+  blob remains readable.
+- **SC-020**: Empty proposal evidence remains valid for `DRAFT`; each malformed
+  evidence shape is rejected atomically; a valid source-compatible record makes
+  a completion proposal `READY_FOR_REVIEW`; accepted proposals survive
+  save/reopen/list.
+- **SC-021**: The compatibility execution route never emits
+  `COMPATIBILITY_UPDATE` controlled evidence or invented recorder/result data;
+  it preserves only a safe legacy reference and remains proposal-only.
+- **SC-022**: Tampered canonical v2 full-SHA, URI, revision, effort-granularity,
+  metadata-ID, source-ID, and register-date values fail closed.
+- **SC-023**: An official-import → schema-1.0-reopen → proposal-update →
+  save/reopen session keeps state and canonical projections coherent, does not
+  promote the reopened legacy document, and does not mutate source execution.
+- **SC-024**: The final micro-pass artifacts and handoff report the real .NET 10,
+  dependency-free implementation and exact executed verification commands
+  without stale pre-implementation or remote-CI claims.
 
 ## Assumptions
 

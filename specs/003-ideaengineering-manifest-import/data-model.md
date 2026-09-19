@@ -49,8 +49,8 @@ validation facts, not inferred from display rows.
 
 `SourceExecutionSnapshot`
 
-- source contract `ProjectId` and `BaselineId` identities, cross-checked against
-  import metadata;
+- canonical `Project.Id` and `Baseline.Id` identities in import metadata,
+  cross-checked with `SourceExecutionSnapshot` IDs;
 - source register revision and status date;
 - `Records` keyed by typed delivery-card identity;
 - source provenance for each record;
@@ -82,21 +82,24 @@ The proposal is local, non-authoritative, and absent from official analysis. It 
 
 ### Controlled proposal evidence
 
-Each proposal evidence record used for completion readiness must contain:
+Each proposal evidence record supplied at the create/update boundary must contain:
 
 - non-empty `EvidenceId`;
 - a supported source-contract `Type`: `SOURCE_RECORD`, `COMMIT`, `PULL_REQUEST`,
   `TEST_RESULT`, `REVIEW_RECORD`, `ARTIFACT`, or `EXTERNAL_RECORD`;
 - non-empty `Description`;
+- a source-compatible `Result` value (`NOT_RUN`, `PASS`, `FAIL`, `BLOCKED`, or
+  `NOT_APPLICABLE`);
 - a valid `RecordedAt` timestamp;
 - non-empty `RecordedBy`;
 - an optional safe repository-relative `RepositoryPath` that is not `.git`;
 - an optional hexadecimal commit token; and
-- an optional safe external URI without embedded user information. If both the
-  repository path and URI are absent, the record is invalid.
+- an optional safe external URI without embedded user information. These three
+  optional fields are validated independently when supplied.
 
-Invalid evidence remains attached and diagnosed. It is not silently discarded and
-does not qualify a completion proposal.
+Invalid supplied evidence is rejected atomically and is never persisted. Zero
+evidence is valid for a `DRAFT`; a completion proposal can become
+`READY_FOR_REVIEW` only with at least one valid record.
 
 ## Application state
 
@@ -126,10 +129,15 @@ After deserialization, validation must confirm:
   free of local absolute paths/credentials;
 - source execution records use typed identities, target existing Delivery Cards,
   unique `kind + id`, valid recording/state/result semantics, non-negative effort,
-  safe source paths, and valid controlled evidence;
+  half-hour effort granularity, safe source paths, and valid controlled evidence;
 - proposals target existing Delivery Cards, use supported fields and lifecycle
   values, carry required base snapshot/revision metadata, and contain only valid
-  typed/date/numeric changes and safe evidence.
+  typed/date/numeric changes and safe evidence. Migrated schema-1.0 proposals may
+  retain expected revision `0`; v2 source registers require revision at least `1`.
+- `GIT_COMMIT` metadata uses a full 40-hex `SourceIdentity`; URI-shaped repository
+  identities cannot contain user info. Metadata project/baseline IDs equal the
+  canonical project/baseline and source execution IDs, and revision/status date
+  agree across the metadata and source snapshot.
 
 Any error makes reopen fail closed; successful JSON deserialization alone is not a
 valid canonical reopen.
@@ -140,7 +148,8 @@ Working-tree pre/post fingerprints use independent manifest reads and independen
 declared-boundary reads. Git `HEAD`/status verification is required for a stable
 preview. Exact Git reads inspect tree mode and blob size before reading a blob body;
 mode `120000` is rejected and application ceilings cap caller-requested file and
-total limits.
+total limits. The remaining aggregate budget is passed into each blob read and
+is checked before `git show`.
 
 ## State transition rules
 

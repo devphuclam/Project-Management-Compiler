@@ -181,8 +181,8 @@ boundary.
 
 ### Evidence and proposal ownership
 
-- [X] T060 [US4] Add failing controlled-evidence tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs` for empty/default/malformed evidence and one valid evidence record; acceptance: malformed evidence remains diagnosed and `DRAFT`, while valid controlled evidence alone permits `READY_FOR_REVIEW` without changing official execution (FR-048, SC-015).
-- [X] T061 [US4] Implement controlled evidence validation in `src/ProjectManagementCompiler/Domain/ProposalEntities.cs` and `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: required identity, type, description, recording time, recorder, and safe path/URI rules are enforced before readiness (FR-048).
+- [X] T060 [US4] Add failing controlled-evidence tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs` for empty/default/malformed evidence and one valid evidence record; acceptance: the MVP2.2 baseline proved malformed evidence could not qualify readiness and valid controlled evidence could, without changing official execution; the final micro-pass boundary behavior is specified by T087 (FR-048, SC-015).
+- [X] T061 [US4] Implement the MVP2.2 readiness validation in `src/ProjectManagementCompiler/Domain/ProposalEntities.cs` and `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: the baseline required identity, type, description, recording time, recorder, and safe provenance before readiness; source-compatible result/optional-locator boundary tightening is specified by T088 (FR-048).
 - [X] T062 [US4] Add failing save/reopen/list tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs`, `CanonicalMigrationTests.cs`, and application/API coverage; acceptance: a created proposal survives canonical save, reopen, hydration, list, and stale-base evaluation with the same semantic identity and source execution remains immutable (FR-049, SC-016).
 - [X] T063 [US4] Replace the service-owned mutable proposal dictionary with `CompilerApplicationState` ownership and canonical projection/hydration in `src/ProjectManagementCompiler/Application/CompilerApplicationState.cs`, `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`, `src/ProjectManagementCompiler/Application/ProjectCompiler.cs`, and `src/ProjectManagementCompiler/Program.cs`; acceptance: create/update/list/migration/save/reopen/stale-base all use one retained set and schema 1.0 migrated proposals hydrate through the same path (FR-049).
 
@@ -214,6 +214,105 @@ TDD groups; they do not authorize implementation before the artifact gate.
 - [X] T077 [US4] Validate controlled proposal evidence fields before lifecycle readiness so malformed non-empty evidence cannot produce `READY_FOR_REVIEW` per FR-048 (partial).
 - [X] T078 [US4] Make `CompilerApplicationState` the only mutable proposal owner and hydrate it on canonical reopen/save/list, including migrated proposals, per FR-049 and SC-016 (partial).
 - [X] T079 [US2] Replace manifest-workflow UI wording that says manual/record/calculated with source/proposal/source-forecast wording per FR-050 and SC-017 (partial).
+
+## Phase 11: Final correctness micro-pass
+
+**Purpose**: Correct only the audited Feature 003 compatibility and semantic
+gaps that remain after MVP2.2 hardening. These tasks run on
+`codex/feature003-final-micro-pass` after the source/artifact gate. Every code
+task requires a named red regression, confirmed failure, smallest fix, focused
+green run, and related regression run before it is marked complete.
+
+### Artifact gate
+
+- [X] T080 [US5] Re-read the current Feature 003 spec, plan, research, data model,
+  contracts, quickstart, ADR-0006, handoff, implementation, and tests against
+  the accepted IDEAEngineering source contract; acceptance: the micro-pass
+  requirements are explicit and no source checkout is modified (FR-051–FR-057,
+  SC-018–SC-024).
+- [X] T081 [US5] Run Spec Kit prerequisite check, analyze, and converge before
+  implementation; acceptance: every Critical/High finding is resolved and any
+  converged task is reconciled before code changes begin.
+- [X] T082 [US5] Keep documentation truth synchronized with the actual .NET 10,
+  dependency-free implementation, distinguishing original Feature 003, MVP2.2
+  hardening, this micro-pass, and local verification; acceptance: no stale
+  pre-implementation or remote-CI claim remains (FR-057, SC-024).
+
+### TDD regressions and minimal fixes
+
+- [X] T083 [US1] Add a failing public-path regression using
+  `ProjectCompiler.ApplyExecutionUpdate` proving an explicit legacy overlay
+  drives legacy analysis and Gantt `ACTUAL`, while manifest `SourceExecution`
+  wins and migrated schema-1.0 overlays remain proposal-only; acceptance:
+  tests are red before the resolver fix and cover analysis and Gantt separately
+  (FR-051, SC-018).
+- [X] T084 [US1] Restore the narrow legacy resolver branch without weakening
+  manifest authority; acceptance: legacy behavior is green, overlay cannot
+  override manifest source execution, and migration still clears the overlay
+  (FR-051, SC-018).
+- [X] T085 [US1] Add a failing Git capture regression whose aggregate remaining
+  budget is below a declared blob size and whose fake proves `git show`/body read
+  is never called; acceptance: symlink, hard-ceiling, and bounded regular-blob
+  regressions remain covered (FR-052, SC-019).
+- [X] T086 [US1] Pass remaining aggregate budget into the bounded Git blob read
+  and reject before body read; acceptance: per-file, hard-file, and remaining
+  total limits all apply before `git show` (FR-052, SC-019).
+- [X] T087 [US4] Add failing proposal evidence boundary regressions for empty
+  draft evidence, empty object, missing `RecordedBy`, missing `Result`,
+  unsupported type, unsafe path, credential URI, malformed commit, valid
+  source-compatible evidence without a locator, ready completion, and atomic
+  state preservation; acceptance: each malformed input is red before the
+  boundary fix and no malformed item can persist (FR-053, SC-020).
+- [X] T088 [US4] Implement source-contract-compatible controlled evidence rules
+  shared by source and proposal validation; acceptance: required fields include
+  result, locators are optional but independently safe, zero evidence is draft,
+  and only completion plus valid evidence yields `READY_FOR_REVIEW` (FR-048,
+  FR-053, SC-015, SC-020).
+- [X] T089 [US4] Add a failing `/api/execution` API/web regression for a legacy
+  evidence reference; acceptance: the response contains no fabricated
+  `COMPATIBILITY_UPDATE`, `RecordedBy`, or `Result`, and the official source is
+  unchanged (FR-054, SC-021).
+- [X] T090 [US4] Change the compatibility route to retain only a safe
+  `legacyEvidenceReference` proposal field; acceptance: no unsupported
+  controlled evidence is emitted and unsafe legacy references fail safely
+  (FR-054, SC-021).
+- [X] T091 [US5] Add failing canonical v2 tamper regressions for full Git SHA,
+  credential-bearing URI identity, revision minimum, half-hour effort,
+  metadata/project/baseline IDs, source IDs, and register revision/status date;
+  acceptance: deserialize-successful tampering fails closed (FR-055, SC-022).
+- [X] T092 [US5] Implement the smallest semantic validator/adapter corrections
+  for those v2 invariants, preserving the explicit schema-1.0 migrated proposal
+  revision-zero exception; acceptance: accepted source compatibility remains
+  green and every tamper test rejects without official-state replacement
+  (FR-055, SC-022).
+- [X] T093 [US4] Add a failing mixed-session regression for official import →
+  schema-1.0 reopen → proposal update → save/reopen/list; acceptance: state and
+  both applicable projections agree, legacy is not promoted, and source
+  execution is immutable (FR-056, SC-023).
+- [X] T094 [US4] Make proposal projection updates coherent across current and
+  current-official applicable results without aliasing; acceptance: migrated
+  proposals use the same state owner and survive canonical round-trip (FR-056,
+  SC-023).
+
+### Post-implementation gates
+
+- [X] T095 [US5] Run focused and related regressions after every green group and
+  mark only observed work complete; acceptance: all T083/T085/T087/T089/T091/T093
+  tests pass with exact counts recorded.
+- [X] T096 [US5] Run Spec Kit analyze and converge after implementation and
+  reconcile any remaining task; acceptance: no Critical/High finding or
+  unimplemented micro-pass requirement remains.
+- [X] T097 [US5] Perform manual code review against the fixed baseline and all
+  authority/security contracts; acceptance: no blocking finding, no package,
+  DB, connector, Docker, auth, AI, forecast, UI redesign, or source-repo change.
+- [X] T098 [US5] Run fresh full verification including build/test, all repository
+  verifier scripts, web/launcher checks, JavaScript syntax, diff/safety scans,
+  and source compatibility read-only checks; acceptance: every command exits
+  successfully with exact test count and command output captured.
+- [ ] T099 [US5] Only after T096-T098 are green, fetch `origin/main`, fast-forward
+  `main`, merge this branch with `--ff-only`, push `main`, and verify the remote
+  SHA; acceptance: no force push, no merge commit, and the final report does not
+  claim Feature 003/MVP2.2 closure unless every DoD item is actually green.
 
 ## Dependencies and execution order
 

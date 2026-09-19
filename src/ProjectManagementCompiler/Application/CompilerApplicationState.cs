@@ -221,9 +221,9 @@ public sealed class CompilerApplicationState
                 Project = projectedProject,
                 SourceExecution = projectedProject.SourceExecution
             };
-        if (ReferenceEquals(current, previous))
+        if (current is not null)
         {
-            current = projected;
+            current = ProjectWithProposals(current, proposals);
         }
     }
 

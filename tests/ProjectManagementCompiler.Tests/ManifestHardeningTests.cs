@@ -89,6 +89,27 @@ internal static class ManifestHardeningTests
         TestAssert.True(capture.Diagnostics.Any(diagnostic => diagnostic.Message.Contains("blob size", StringComparison.OrdinalIgnoreCase)), "The capture must explain the bounded blob-size rejection.");
     }
 
+    public static void AggregateGitBudgetRejectsBlobBeforeBodyRead()
+    {
+        var runner = new FakeGitCommandRunner
+        {
+            PayloadMode = "100644",
+            PayloadSize = 4090
+        };
+        var capture = new ManifestGitObjectReader(runner).CaptureAsync(new ManifestImportRequest
+        {
+            RepositoryRoot = Directory.GetCurrentDirectory(),
+            Mode = ManifestImportMode.GitCommit,
+            RequestedCommit = FakeCommit,
+            MaxFileBytes = 4096,
+            MaxTotalBytes = 4096
+        }).GetAwaiter().GetResult();
+
+        TestAssert.False(runner.BodyReadPaths.Contains("payload.txt"), "A blob larger than the remaining aggregate budget must not invoke git show.");
+        TestAssert.True(capture.Diagnostics.Any(diagnostic => diagnostic.Message.Contains("remaining", StringComparison.OrdinalIgnoreCase)
+            || diagnostic.Message.Contains("total", StringComparison.OrdinalIgnoreCase)), "The aggregate budget rejection must be diagnosed.");
+    }
+
     public static void SymlinkGitTreeEntryIsRejectedBeforeBodyRead()
     {
         var runner = new FakeGitCommandRunner

@@ -33,7 +33,10 @@ Proposal routes:
 - `GET /api/proposals/{id}/export`
 
 The existing `/api/execution` endpoint returns the compatibility proposal marker and
-never changes official source execution.
+never changes official source execution. If its legacy `EvidenceReference` is
+provided, it is retained only as a safe `legacyEvidenceReference` proposal field;
+the route MUST NOT emit a fabricated controlled evidence type, `RecordedBy`, or
+`Result`.
 
 Proposal creation/update responses and the UI MUST use local-proposal language;
 they MUST NOT describe source execution as manual execution or imply write-back.

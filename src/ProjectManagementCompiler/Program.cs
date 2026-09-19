@@ -221,29 +221,26 @@ app.MapPost("/api/execution", (
 
     try
     {
+        var proposedChanges = new Dictionary<string, string?>
+        {
+            ["executionState"] = FormatExecutionState(update.ExecutionState),
+            ["actualStart"] = update.ActualStart?.ToString("yyyy-MM-dd"),
+            ["actualFinish"] = update.ActualFinish?.ToString("yyyy-MM-dd"),
+            ["actualEffortHours"] = update.ActualEffortHours?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["remainingEffortHours"] = update.RemainingEffortHours?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["blocker"] = update.Note
+        };
+        if (update.EvidenceReference is not null)
+        {
+            proposedChanges["legacyEvidenceReference"] = update.EvidenceReference.RelativeFile;
+        }
+
         var proposal = proposals.Create(new CreateExecutionProposalRequest
         {
             TargetKind = "DeliveryCard",
             TargetId = update.WorkItemId,
-            ProposedChanges = new Dictionary<string, string?>
-            {
-                ["executionState"] = FormatExecutionState(update.ExecutionState),
-                ["actualStart"] = update.ActualStart?.ToString("yyyy-MM-dd"),
-                ["actualFinish"] = update.ActualFinish?.ToString("yyyy-MM-dd"),
-                ["actualEffortHours"] = update.ActualEffortHours?.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["remainingEffortHours"] = update.RemainingEffortHours?.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["blocker"] = update.Note
-            },
-            Evidence = update.EvidenceReference is null
-                ? Array.Empty<SourceExecutionEvidence>()
-                : [new SourceExecutionEvidence
-                {
-                    EvidenceId = $"compat-{update.WorkItemId}",
-                    Type = "COMPATIBILITY_UPDATE",
-                    RepositoryPath = update.EvidenceReference.RelativeFile,
-                    Description = update.Note,
-                    RecordedAt = update.LastUpdatedAt
-                }]
+            ProposedChanges = proposedChanges,
+            Evidence = Array.Empty<SourceExecutionEvidence>()
         });
         return Results.Ok(new { proposalOnly = true, authoritative = false, proposal });
     }

@@ -4,10 +4,11 @@
 
 The original Feature 003 importer is implemented behind the public
 `IIdeaEngineeringManifestImporter.ImportAsync` seam and verified against the
-accepted source commit. This handoff is now being continued by the dedicated
-MVP2.2 correctness/hardening branch `codex/feature003-hardening`; implementation
-must not start until the updated Spec Kit artifact gate has passed. The
-executable quickstart is in
+accepted source commit. MVP2.2 correctness/hardening has already been merged to
+compiler `main` at the prior verified baseline. This handoff now records the
+separate final correctness micro-pass on branch
+`codex/feature003-final-micro-pass`; its implementation starts only after this
+pass's Spec Kit artifact gate. The executable quickstart is in
 `specs/003-ideaengineering-manifest-import/quickstart.md`.
 
 The design increment is:
@@ -26,11 +27,12 @@ The runtime keeps official source execution separate from local proposal
 previews, retains failed candidates without replacing official state, and
 captures the manifest-declared readiness register as independent evidence.
 
-MVP2.2 hardening is explicitly scoped to correctness and trust boundaries:
+The completed MVP2.2 hardening was explicitly scoped to correctness and trust
+boundaries:
 schema `1.0` overlay neutralization, semantic schema `2.0` validation,
 independent working-tree capture, fail-closed Git capture, bounded tree/blob
 reads, controlled proposal evidence, single proposal ownership in
-`CompilerApplicationState`, and authority-aware UI wording. It adds no package,
+`CompilerApplicationState`, and authority-aware UI wording. It added no package,
 database, connector, Docker setup, or source-repository change.
 
 ## Source compatibility evidence
@@ -57,9 +59,10 @@ replays the seven source-owned fixture outcomes and preserves that warning.
   working-tree reads are visibly labelled `UNCOMMITTED_PREVIEW`.
 - The manifest is the only discovery entry point. A failed manifest import may
   not fall back to the legacy fixed-path importer.
-- `SourceExecutionSnapshot` is source-authoritative.
-  `ExecutionProposal` is local and non-authoritative; the legacy
-  `ExecutionOverlay` is migration input only.
+- In a manifest-import session, `SourceExecutionSnapshot` is source-authoritative
+  and `ExecutionProposal` is local and non-authoritative; the legacy
+  `ExecutionOverlay` is migration input only. The explicit fixed-path legacy
+  workflow may still use its overlay when `ImportMetadata` is absent.
 - Official views and exports ignore proposals. Proposal impact is available
   only in an explicit preview mode.
 - Canonical persistence advances to schema `2.0`; legacy schema `1.0` execution
@@ -79,10 +82,12 @@ replays the seven source-owned fixture outcomes and preserves that warning.
   malformed evidence cannot produce `READY_FOR_REVIEW`.
 - Controlled evidence uses the accepted seven-type allow-list and rejects invalid
   commit tokens or external URIs with embedded user information. Source execution
-  retains register project/baseline identities for metadata cross-checking.
+  retains validated project/baseline identities for metadata cross-checking; the
+  final micro-pass also enforces canonical ID equality, revision, and status-date
+  relationships.
 - Manifest UI labels source-authoritative execution as `Source execution`, local
-  edits as proposals, and `ExecutionProposal` forecast values as `Source
-  forecast` where they originate from the source.
+  edits as proposals, and `SourceExecutionSnapshot.ForecastFinish` as `Source
+  forecast`.
 - A failed or unready candidate cannot replace the last valid official
   snapshot. Runtime state keeps current official, latest attempt, and active
   preview separately.
@@ -94,6 +99,11 @@ replays the seven source-owned fixture outcomes and preserves that warning.
   deterministic human-review artifact only.
 - The legacy fixed-path workflow may remain for compatibility but is never an
   automatic fallback from the manifest workflow.
+- The final micro-pass restores the explicit legacy overlay only for a legacy
+  project with no `ImportMetadata`, checks Git aggregate size before body reads,
+  rejects malformed proposal evidence atomically using the source contract,
+  removes compatibility-route fake evidence, tightens canonical v2 identity and
+  granularity checks, and keeps mixed-session proposal projections coherent.
 - Repository root, manifest path, commit, and preview mode are user inputs;
   no personal absolute path may be committed.
 
@@ -121,13 +131,31 @@ catalogue first, add a public-seam regression test, then rerun the full
 automatic fallback, do not mutate the IDEAEngineering checkout, and do not
 promote proposal or readiness evidence into source execution.
 
-No subagent was required for this implementation.
+The original implementation, MVP2.2 hardening, and final micro-pass were
+completed locally; this handoff does not claim remote CI. The final micro-pass
+artifact gate, TDD regressions, post-implementation analyze/converge, review,
+and fresh verification are green on the dedicated branch. The branch is ready
+for fast-forward integration only after the final main-branch preflight.
+
+Fresh local verification recorded for this pass:
+
+- `dotnet build tests/ProjectManagementCompiler.Tests/ProjectManagementCompiler.Tests.csproj --no-restore`: 0 warnings, 0 errors;
+- `scripts/test.ps1`: 234 PASS, 0 FAIL;
+- `scripts/verify.ps1`: PASS, including launcher and web gates;
+- `scripts/verify-web.ps1`: PASS, loopback health, 53 cards, six XLSX sheets,
+  and security checks;
+- `scripts/verify-launcher.ps1`: `PASS LauncherContract`;
+- `node --check src/ProjectManagementCompiler/wwwroot/app.js`: PASS;
+- `git diff --check` and changed-code safety scan: PASS.
 
 ## Git and local workspace notes
 
-The hardening work is isolated in the managed worktree for
-`codex/feature003-hardening`. The main checkout and the separately checked-out
-IDEAEngineering source repository must remain untouched by implementation.
+The final micro-pass is isolated in the managed worktree for
+`codex/feature003-final-micro-pass`. At handoff time the compiler main baseline is
+`d4acdda85a39b5543253e63cc292bf8d3fdd6338`; final integration is permitted only
+after the post-pass analyze/converge, code review, and fresh verification gates.
+The main checkout and the separately checked-out IDEAEngineering source repository
+must remain untouched by implementation.
 
 The repository is public. Do not copy the IDEAEngineering repository wholesale
 or commit raw private material. Vendor only the minimum public-safe catalogue,

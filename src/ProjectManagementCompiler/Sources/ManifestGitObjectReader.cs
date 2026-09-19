@@ -62,6 +62,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
                 resolvedCommit,
                 ManifestCaptureSupport.SupportedManifestPath,
                 fileLimit,
+                totalLimit,
                 cancellationToken);
             IReadOnlyList<string> declaredPaths;
             try
@@ -97,7 +98,13 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
             foreach (var path in declaredPaths.Where(path => !string.Equals(path, ManifestCaptureSupport.SupportedManifestPath, StringComparison.OrdinalIgnoreCase)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var content = await ReadBlobAsync(request.RepositoryRoot, resolvedCommit, path, fileLimit, cancellationToken);
+                var content = await ReadBlobAsync(
+                    request.RepositoryRoot,
+                    resolvedCommit,
+                    path,
+                    fileLimit,
+                    totalLimit - totalBytes,
+                    cancellationToken);
                 var file = ToFile(path, content);
                 totalBytes = checked(totalBytes + file.SizeBytes);
                 if (totalBytes > totalLimit)
@@ -122,7 +129,13 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
                     .Where(path => !files.ContainsKey(path)))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var content = await ReadBlobAsync(request.RepositoryRoot, resolvedCommit, path, fileLimit, cancellationToken);
+                    var content = await ReadBlobAsync(
+                        request.RepositoryRoot,
+                        resolvedCommit,
+                        path,
+                        fileLimit,
+                        totalLimit - totalBytes,
+                        cancellationToken);
                     var file = ToFile(path, content);
                     totalBytes = checked(totalBytes + file.SizeBytes);
                     if (totalBytes > totalLimit)
@@ -232,6 +245,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
         string commit,
         string relativePath,
         long maxFileBytes,
+        long remainingTotalBytes,
         CancellationToken cancellationToken)
     {
         var tree = await commandRunner.RunAsync(
@@ -271,10 +285,17 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
             throw new InvalidDataException($"Git did not return a valid blob size for '{relativePath}'.");
         }
 
-        var effectiveLimit = Math.Min(maxFileBytes, ManifestImportRequest.HardMaxFileBytes);
+        var effectiveLimit = Math.Min(
+            Math.Min(maxFileBytes, ManifestImportRequest.HardMaxFileBytes),
+            Math.Min(remainingTotalBytes, ManifestImportRequest.HardMaxTotalBytes));
+        if (effectiveLimit <= 0)
+        {
+            throw new IOException($"Git blob '{relativePath}' has no remaining aggregate byte budget before body read.");
+        }
+
         if (blobBytes > effectiveLimit)
         {
-            throw new IOException($"Git blob size {blobBytes} for '{relativePath}' exceeds the {effectiveLimit} byte limit before body read.");
+            throw new IOException($"Git blob size {blobBytes} for '{relativePath}' exceeds the {effectiveLimit} byte limit before body read (remaining aggregate budget).");
         }
 
         var result = await commandRunner.RunAsync(repositoryRoot, ["show", $"{commit}:{relativePath}"], effectiveLimit, cancellationToken);

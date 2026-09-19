@@ -837,6 +837,11 @@ public static class CanonicalProjectValidator
         {
             Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a safe repository identity.", "repositoryIdentity");
         }
+        else if (Uri.TryCreate(metadata.RepositoryIdentity, UriKind.Absolute, out var repositoryUri)
+            && !string.IsNullOrEmpty(repositoryUri.UserInfo))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata repository identity cannot contain URI user info.", "repositoryIdentity");
+        }
 
         if (!Enum.IsDefined(metadata.ImportMode))
         {
@@ -849,9 +854,10 @@ public static class CanonicalProjectValidator
         }
 
         if (string.IsNullOrWhiteSpace(metadata.SourceIdentity)
-            || metadata.SourceIdentity.Any(char.IsControl))
+            || metadata.SourceIdentity.Any(char.IsControl)
+            || (metadata.ImportMode == ManifestImportMode.GitCommit && !IsFullSha(metadata.SourceIdentity)))
         {
-            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a safe source identity.", "sourceIdentity");
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a safe full 40-hex source identity for Git commits.", "sourceIdentity");
         }
 
         if (!IsSafeRelativePath(metadata.ManifestPath)
@@ -875,9 +881,15 @@ public static class CanonicalProjectValidator
             Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a baselineId.", "baselineId");
         }
 
-        if (metadata.RegisterRevision < 0)
+        if (metadata.RegisterRevision < 1)
         {
-            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata registerRevision cannot be negative.", "registerRevision");
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata registerRevision must be at least 1.", "registerRevision");
+        }
+
+        if (!string.Equals(metadata.ProjectId, project.Project.Id, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(metadata.BaselineId, project.Baseline.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata projectId and baselineId must match the canonical project and baseline identities.", "projectId");
         }
 
         if (!Enum.IsDefined(metadata.ValidationResult)
@@ -936,11 +948,11 @@ public static class CanonicalProjectValidator
         if (string.IsNullOrWhiteSpace(snapshot.ProjectId)
             || string.IsNullOrWhiteSpace(snapshot.BaselineId)
             || string.IsNullOrWhiteSpace(snapshot.RegisterId)
-            || snapshot.RegisterRevision < 0
+            || snapshot.RegisterRevision < 1
             || snapshot.StatusDate is null
             || !IsSafeRelativePath(snapshot.SourcePath))
         {
-            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution requires project/baseline/register identities, a non-negative revision, status date, and safe source path.", "sourceExecution");
+            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution requires project/baseline/register identities, a positive revision, status date, and safe source path.", "sourceExecution");
         }
 
         if (!string.Equals(snapshot.ProjectId, metadata.ProjectId, StringComparison.OrdinalIgnoreCase)
@@ -1152,9 +1164,11 @@ public static class CanonicalProjectValidator
                     break;
                 case "actualEffortHours":
                 case "remainingEffortHours":
-                    if (!decimal.TryParse(pair.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var hours) || hours < 0)
+                    if (!decimal.TryParse(pair.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var hours)
+                        || hours < 0
+                        || decimal.Remainder(hours, 0.5m) != 0)
                     {
-                        Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an invalid non-negative value for '{pair.Key}'.", proposal.Id);
+                        Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an invalid non-negative half-hour value for '{pair.Key}'.", proposal.Id);
                     }
 
                     break;
@@ -1199,6 +1213,8 @@ public static class CanonicalProjectValidator
 
         ValidateNonNegative(diagnostics, actualEffort, code + "_EFFORT", owner, "actual effort");
         ValidateNonNegative(diagnostics, remainingEffort, code + "_EFFORT", owner, "remaining effort");
+        ValidateHalfHour(diagnostics, actualEffort, code + "_EFFORT_GRANULARITY", owner, "actual effort");
+        ValidateHalfHour(diagnostics, remainingEffort, code + "_EFFORT_GRANULARITY", owner, "remaining effort");
     }
 
     private static void ValidateControlledEvidence(
@@ -1235,15 +1251,10 @@ public static class CanonicalProjectValidator
     }
 
     private static bool IsControlledEvidenceValid(SourceExecutionEvidence? item) =>
-        item is not null
-        && !string.IsNullOrWhiteSpace(item.EvidenceId)
-        && ControlledEvidenceRules.SupportedTypes.Contains(item.Type)
-        && !string.IsNullOrWhiteSpace(item.Description)
-        && item.RecordedAt is not null
-        && !string.IsNullOrWhiteSpace(item.RecordedBy)
-        && ControlledEvidenceRules.IsValidCommit(item.Commit)
-        && ((!string.IsNullOrWhiteSpace(item.RepositoryPath) && IsSafeRelativePath(item.RepositoryPath))
-            || ControlledEvidenceRules.IsSafeExternalUri(item.ExternalUri));
+        ControlledEvidenceRules.IsValid(item);
+
+    private static bool IsFullSha(string value) =>
+        value.Length == 40 && value.All(Uri.IsHexDigit);
 
     private static bool TryParseExecutionState(string? value) =>
         TryParseExecutionState(value, out _);
@@ -1352,6 +1363,19 @@ public static class CanonicalProjectValidator
         if (value is not null && value.Value.CompareTo(default) < 0)
         {
             Add(diagnostics, code, $"{label} cannot be negative.", owner);
+        }
+    }
+
+    private static void ValidateHalfHour(
+        ICollection<ImportWarning> diagnostics,
+        decimal? value,
+        string code,
+        string? owner,
+        string label)
+    {
+        if (value is not null && decimal.Remainder(value.Value, 0.5m) != 0)
+        {
+            Add(diagnostics, code, $"{label} must use 0.5-hour granularity.", owner);
         }
     }
 

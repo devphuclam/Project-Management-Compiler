@@ -15,10 +15,16 @@ internal static class Program
         ("ProposalPreviewIsLocalAndStaleAware", ProposalTests.ProposalPreviewIsLocalAndStaleAware),
         ("ProposalSaveReopenListRoundTripsThroughApplicationState", ProposalTests.ProposalSaveReopenListRoundTripsThroughApplicationState),
         ("MalformedEvidenceCannotQualifyReadyForReview", ProposalTests.MalformedEvidenceCannotQualifyReadyForReview),
+        ("EmptyProposalEvidenceRemainsDraft", ProposalTests.EmptyProposalEvidenceRemainsDraft),
+        ("ProposalRejectsEachMalformedControlledEvidenceItem", ProposalTests.ProposalRejectsEachMalformedControlledEvidenceItem),
+        ("ProposalUpdateRejectsMalformedEvidenceWithoutMutation", ProposalTests.ProposalUpdateRejectsMalformedEvidenceWithoutMutation),
+        ("ValidEvidenceWithoutLocatorQualifiesCompletion", ProposalTests.ValidEvidenceWithoutLocatorQualifiesCompletion),
+        ("MixedOfficialAndMigratedSessionKeepsProposalProjectionCoherent", FinalMicroPassTests.MixedOfficialAndMigratedSessionKeepsProposalProjectionCoherent),
         ("Schema20PersistsSourceAuthorityAndIgnoresImportTimestampInDigest", CanonicalMigrationTests.Schema20PersistsSourceAuthorityAndIgnoresImportTimestampInDigest),
         ("Schema10OverlayReopensAsLocalProposalWithoutSourcePromotion", CanonicalMigrationTests.Schema10OverlayReopensAsLocalProposalWithoutSourcePromotion),
         ("Schema10OverlayIsNeutralizedFromAllExecutionProjections", CanonicalMigrationTests.Schema10OverlayIsNeutralizedFromAllExecutionProjections),
         ("Schema20RejectsTamperedAuthorityDataAfterDeserialization", CanonicalMigrationTests.Schema20RejectsTamperedAuthorityDataAfterDeserialization),
+        ("Schema20RejectsSemanticAuthorityTampering", CanonicalMigrationTests.Schema20RejectsSemanticAuthorityTampering),
         ("ManagementEvidencePreservesIndependentStatesAndTypedTargets", ManagementEvidenceTests.ManagementEvidencePreservesIndependentStatesAndTypedTargets),
         ("CanonicalProjectDefaultsManagementEvidenceWithoutProfile", ManagementEvidenceTests.CanonicalProjectDefaultsManagementEvidenceWithoutProfile),
         ("CanonicalJsonRoundTripsManagementEvidence", ManagementEvidenceTests.CanonicalJsonRoundTripsManagementEvidence),
@@ -68,6 +74,7 @@ internal static class Program
         ("WorkingTreeRejectsUnexpectedGitStateFailureInsteadOfEscaping", ManifestHardeningTests.WorkingTreeRejectsUnexpectedGitStateFailureInsteadOfEscaping),
         ("WorkingTreeReadsManifestIndependentlyForPreAndPostCapture", ManifestHardeningTests.WorkingTreeReadsManifestIndependentlyForPreAndPostCapture),
         ("OversizedGitBlobIsRejectedBeforeBodyRead", ManifestHardeningTests.OversizedGitBlobIsRejectedBeforeBodyRead),
+        ("AggregateGitBudgetRejectsBlobBeforeBodyRead", ManifestHardeningTests.AggregateGitBudgetRejectsBlobBeforeBodyRead),
         ("SymlinkGitTreeEntryIsRejectedBeforeBodyRead", ManifestHardeningTests.SymlinkGitTreeEntryIsRejectedBeforeBodyRead),
         ("CallerGitLimitCannotBypassApplicationHardCeiling", ManifestHardeningTests.CallerGitLimitCannotBypassApplicationHardCeiling),
         ("CaptureReadsAllowListedDocumentsInFixedOrder", SourceCaptureTests.CaptureReadsAllowListedDocumentsInFixedOrder),
@@ -230,6 +237,7 @@ internal static class Program
         ,("GanttPlanViewUsesCalmTimelineGrid", GanttUiRegressionTests.GanttPlanViewUsesCalmTimelineGrid)
         ,("GanttModeStripPreservesViewMeaning", GanttUiRegressionTests.GanttModeStripPreservesViewMeaning)
         ,("ManifestWorkflowUsesAuthorityAwareExecutionLabels", GanttUiRegressionTests.ManifestWorkflowUsesAuthorityAwareExecutionLabels)
+        ,("LegacyPublicExecutionUpdateDrivesLegacyAnalysisAndGantt", FinalMicroPassTests.LegacyPublicExecutionUpdateDrivesLegacyAnalysisAndGantt)
     ];
 
     public static int Main()

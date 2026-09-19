@@ -23,7 +23,7 @@ internal static class ManifestImportTests
         TestAssert.Equal(ManifestImportClassification.OfficialCommit, result.Classification, $"A validated exact commit should import as official. Diagnostics: {string.Join(" | ", result.Diagnostics.Select(diagnostic => $"{diagnostic.Code}:{diagnostic.Message}"))}");
         TestAssert.True(result.Snapshot is not null, "A successful import should return a snapshot.");
         TestAssert.Equal("0.1.0", result.Snapshot!.Metadata.ContractVersion, "The source contract version should be retained.");
-        TestAssert.Equal("IDEA-ENGINEERING", result.Snapshot.Metadata.ProjectId, "The source project identity should be retained.");
+        TestAssert.Equal(result.Snapshot.Project.Project.Id, result.Snapshot.Metadata.ProjectId, "Import metadata project identity must match the canonical project identity.");
     }
 
     public static void ManifestImportNeverFallsBackToLegacyCapture()

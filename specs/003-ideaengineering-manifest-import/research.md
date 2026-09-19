@@ -135,8 +135,10 @@ The controlled evidence type allow-list follows the accepted execution-register
 contract: `SOURCE_RECORD`, `COMMIT`, `PULL_REQUEST`, `TEST_RESULT`,
 `REVIEW_RECORD`, `ARTIFACT`, and `EXTERNAL_RECORD`. Optional commit values are
 hexadecimal object tokens; external URIs are HTTP(S) without embedded user info.
-The canonical source-execution snapshot also retains the register's project and
-baseline IDs so metadata tampering cannot be accepted merely because JSON parses.
+The canonical source-execution snapshot retains the validated project and
+baseline identities used by the canonical import metadata; their equality and
+revision/status-date relationships are checked so metadata tampering cannot be
+accepted merely because JSON parses.
 
 ### Presentation and environment truth
 
@@ -144,3 +146,36 @@ The UI uses source/proposal/forecast terminology that matches authority. Feature
 003 documentation targets .NET 10 and the dependency-free project file; the
 project has no third-party spreadsheet dependency. The accepted IDEAEngineering
 commit and its seven fixture outcomes remain the compatibility oracle.
+
+## Final correctness micro-pass findings
+
+The post-hardening audit found narrow compatibility and semantic gaps. They do
+not add a product surface or change the source repository.
+
+- The legacy fixed-path compiler remains an explicit compatibility workflow. Its
+  non-empty `ExecutionOverlay` is effective only when no manifest metadata is
+  present. Manifest-backed `SourceExecution` remains authoritative, and schema
+  `1.0` migration still clears the overlay after converting it to proposals.
+- The source execution schema requires `evidenceId`, `type`, `description`,
+  `result`, `recordedAt`, and `recordedBy`. Repository path, commit, and
+  external URI are optional fields, so proposal validation must not invent a
+  locator requirement. Each supplied locator is independently checked.
+- A proposal service must reject malformed supplied evidence at its create/update
+  boundary rather than retain it as a diagnosed draft. This preserves atomic
+  state and lets `READY_FOR_REVIEW` mean both completion semantics and valid
+  evidence. Empty evidence remains a legitimate draft state.
+- The compatibility execution route cannot turn a legacy file reference into a
+  controlled source record. A safe `legacyEvidenceReference` proposal field is
+  the non-authoritative representation; no fake type, recorder, or result is
+  acceptable.
+- The canonical validator must enforce the source schema's full commit identity,
+  credential-free URI identity, revision/date/ID relationships, and 0.5-hour
+  granularity. Schema-1.0 migrated proposal revision zero is the deliberate
+  compatibility exception.
+- Exact Git capture needs the remaining aggregate budget before the body read;
+  checking only after `git show` is too late. A fake runner must prove that the
+  show operation is not called.
+- Mixed sessions need one projection operation for the retained proposal list.
+  Reopening a legacy document must not make it official, but it must not leave
+  `Current.Project.ExecutionProposals` stale when an existing official result is
+  also retained.

@@ -133,6 +133,83 @@ internal static class CanonicalMigrationTests
             "Schema 2.0 must reject proposals whose typed target is not canonical.");
     }
 
+    public static void Schema20RejectsSemanticAuthorityTampering()
+    {
+        var serializer = new CanonicalJsonSerializer();
+        var project = CreateValidSchema20Project();
+        var validJson = serializer.Serialize(project);
+
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["importMetadata"]!["sourceIdentity"] = "abc";
+        }, "Schema 2.0 must reject a Git source identity that is not a full SHA.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["importMetadata"]!["repositoryIdentity"] = "https://user:pass@example.com/repository";
+        }, "Schema 2.0 must reject repository identities containing URI user info.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["importMetadata"]!["registerRevision"] = 0;
+        }, "Schema 2.0 must reject a non-positive import register revision.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["importMetadata"]!["projectId"] = "OTHER-PROJECT";
+        }, "Schema 2.0 must reject metadata whose project identity differs from the canonical project.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["sourceExecution"]!["projectId"] = "OTHER-PROJECT";
+        }, "Schema 2.0 must reject source execution whose project identity differs from metadata.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["sourceExecution"]!["registerRevision"] = 0;
+        }, "Schema 2.0 must reject a non-positive source register revision.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            root["sourceExecution"]!["statusDate"] = "2026-09-20";
+        }, "Schema 2.0 must reject a source status date that differs from metadata.");
+        AssertTamperedJsonRejected(serializer, validJson, root =>
+        {
+            ((JsonObject)((JsonArray)root["sourceExecution"]!["records"]!)[0]!)!["actualEffortHours"] = 1.25m;
+        }, "Schema 2.0 must reject source effort outside the half-hour granularity.");
+
+        var projectWithProposal = project with
+        {
+            ExecutionProposals =
+            [new ExecutionProposal
+            {
+                Id = "proposal-semantic-test",
+                BaseSnapshotId = "snapshot-test",
+                ExpectedRegisterRevision = 1,
+                TargetKind = "DeliveryCard",
+                TargetId = "P01",
+                Lifecycle = ProposalLifecycle.Draft,
+                ProposedChanges = new Dictionary<string, string?>
+                {
+                    ["executionState"] = "IN_PROGRESS"
+                },
+                CreatedAtUtc = new DateTimeOffset(2026, 9, 19, 1, 0, 0, TimeSpan.Zero),
+                UpdatedAtUtc = new DateTimeOffset(2026, 9, 19, 1, 0, 0, TimeSpan.Zero)
+            }]
+        };
+        AssertTamperedJsonRejected(serializer, serializer.Serialize(projectWithProposal), root =>
+        {
+            ((JsonObject)((JsonArray)root["executionProposals"]!)[0]!["proposedChanges"]!)!["actualEffortHours"] = "1.25";
+        }, "Schema 2.0 must reject proposal effort outside the half-hour granularity.");
+    }
+
+    private static void AssertTamperedJsonRejected(
+        CanonicalJsonSerializer serializer,
+        string validJson,
+        Action<JsonObject> tamper,
+        string message)
+    {
+        var root = JsonNode.Parse(validJson)!.AsObject();
+        tamper(root);
+        TestAssert.Throws<InvalidDataException>(
+            () => serializer.Deserialize(root.ToJsonString()),
+            message);
+    }
+
     private static CanonicalProject CreateValidSchema20Project()
     {
         var planningProject = CanonicalJsonTests.CaptureCanonicalProject();

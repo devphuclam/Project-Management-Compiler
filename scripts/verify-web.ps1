@@ -316,8 +316,12 @@ try {
         executionState = 'IN_PROGRESS'
         actualStart = '2026-09-19'
         lastUpdatedAt = '2026-09-19T10:00:00Z'
+        evidenceReference = @{ relativeFile = 'planning/idea-technical-pilot-execution-register.json' }
     }
     Assert-Condition ($compatibilityProposal.proposalOnly -and -not $compatibilityProposal.authoritative) '/api/execution must be a proposal-only compatibility alias.'
+    Assert-Condition (@($compatibilityProposal.proposal.evidence).Count -eq 0) '/api/execution must not fabricate controlled evidence from a legacy reference.'
+    Assert-Condition (-not ($compatibilityProposal | ConvertTo-Json -Depth 30 -Compress).Contains('COMPATIBILITY_UPDATE', [StringComparison]::Ordinal)) '/api/execution must not emit the retired COMPATIBILITY_UPDATE evidence type.'
+    Assert-Condition ($compatibilityProposal.proposal.proposedChanges.legacyEvidenceReference -eq 'planning/idea-technical-pilot-execution-register.json') '/api/execution must preserve a legacy evidence reference as a proposal field.'
     Assert-Condition ((Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get).metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Creating and previewing proposals must not change official snapshot identity.'
 
     $appJs = Get-Content -LiteralPath $appJsPath -Raw

@@ -52,7 +52,7 @@ internal static class SourceExecutionTestFixtures
             RepositoryIdentity = "test/Project-Management-Compiler",
             ImportMode = ManifestImportMode.GitCommit,
             Classification = ManifestImportClassification.OfficialCommit,
-            SourceIdentity = "test-commit",
+            SourceIdentity = "0123456789abcdef0123456789abcdef01234567",
             ManifestPath = "planning/project-management-compiler-manifest.json",
             ContractVersion = "0.1.0",
             ProjectId = project.Project.Id,

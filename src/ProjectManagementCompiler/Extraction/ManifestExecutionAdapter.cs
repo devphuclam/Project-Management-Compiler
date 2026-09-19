@@ -140,8 +140,8 @@ public sealed class ManifestExecutionAdapter
 
         return new SourceExecutionSnapshot
         {
-            ProjectId = projectId,
-            BaselineId = baselineId,
+            ProjectId = planningProject.Project.Id,
+            BaselineId = planningProject.Baseline.Id,
             RegisterId = registerId,
             RegisterRevision = revision,
             StatusDate = statusDate,

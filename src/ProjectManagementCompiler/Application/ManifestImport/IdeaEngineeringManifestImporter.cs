@@ -90,9 +90,9 @@ public sealed class IdeaEngineeringManifestImporter : IIdeaEngineeringManifestIm
         var sourceIdentity = capture.ResolvedCommit ?? capture.PreviewIdentity;
         var importedAtUtc = DateTimeOffset.UtcNow;
         var snapshotId = BuildSnapshotId(
-            contract.ProjectId,
+            planningProject.Project.Id,
             sourceIdentity,
-            contract.BaselineId,
+            planningProject.Baseline.Id,
             execution.RegisterRevision);
         var metadata = new ManifestSnapshotMetadata
         {
@@ -102,8 +102,8 @@ public sealed class IdeaEngineeringManifestImporter : IIdeaEngineeringManifestIm
             SourceIdentity = sourceIdentity,
             ManifestPath = ManifestCaptureSupport.SupportedManifestPath,
             ContractVersion = contract.ContractVersion,
-            ProjectId = contract.ProjectId,
-            BaselineId = contract.BaselineId,
+            ProjectId = planningProject.Project.Id,
+            BaselineId = planningProject.Baseline.Id,
             BaselineVersion = planningProject.Baseline.Version,
             RegisterRevision = execution.RegisterRevision,
             RegisterStatusDate = execution.StatusDate,

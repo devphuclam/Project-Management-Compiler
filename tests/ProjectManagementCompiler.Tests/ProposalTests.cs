@@ -108,7 +108,8 @@ internal static class ProposalTests
 
         TestAssert.Equal(ManifestImportClassification.OfficialCommit, import.Classification, "Evidence validation needs an official source snapshot.");
         var proposals = new ExecutionProposalService(state);
-        var proposal = proposals.Create(new CreateExecutionProposalRequest
+        var before = state.Proposals.Count;
+        TestAssert.Throws<ArgumentException>(() => proposals.Create(new CreateExecutionProposalRequest
         {
             TargetKind = "DeliveryCard",
             TargetId = "P01",
@@ -121,10 +122,8 @@ internal static class ProposalTests
             },
             Evidence = [new SourceExecutionEvidence()],
             RequestedLifecycle = ProposalLifecycle.ReadyForReview
-        });
-
-        TestAssert.Equal(ProposalLifecycle.Draft, proposal.Lifecycle, "Malformed evidence must not qualify a completion proposal for review.");
-        TestAssert.True(proposal.Diagnostics.Any(diagnostic => diagnostic.Code == "PMC-PROPOSAL-007"), "Malformed evidence must produce an explicit controlled-evidence diagnostic.");
+        }), "An empty evidence object must be rejected at proposal creation.");
+        TestAssert.Equal(before, state.Proposals.Count, "Rejected evidence must leave the proposal owner unchanged.");
 
         var valid = proposals.Create(new CreateExecutionProposalRequest
         {
@@ -142,8 +141,8 @@ internal static class ProposalTests
             {
                 EvidenceId = "P01-PROPOSAL-001",
                 Type = "SOURCE_RECORD",
-                RepositoryPath = "specs/004-technical-pilot-readiness/readiness-register.md",
                 Description = "Controlled completion evidence.",
+                Result = "NOT_APPLICABLE",
                 RecordedAt = new DateTimeOffset(2026, 9, 20, 1, 0, 0, TimeSpan.Zero),
                 RecordedBy = "LEAD"
             }],
@@ -151,6 +150,116 @@ internal static class ProposalTests
         });
         TestAssert.Equal(ProposalLifecycle.ReadyForReview, valid.Lifecycle, "A complete proposal with controlled evidence should qualify for review.");
     }
+
+    public static void EmptyProposalEvidenceRemainsDraft()
+    {
+        var (_, proposals) = ImportOfficial();
+        var draft = proposals.Create(new CreateExecutionProposalRequest
+        {
+            TargetId = "P01",
+            ProposedChanges = new Dictionary<string, string?> { ["executionState"] = "IN_PROGRESS" }
+        });
+
+        TestAssert.Equal(ProposalLifecycle.Draft, draft.Lifecycle, "Zero evidence is valid for a non-completion draft proposal.");
+        TestAssert.Equal(0, draft.Evidence.Count, "An empty evidence list must remain empty.");
+    }
+
+    public static void ProposalRejectsEachMalformedControlledEvidenceItem()
+    {
+        var (state, proposals) = ImportOfficial();
+        var cases = new (string Name, SourceExecutionEvidence Evidence)[]
+        {
+            ("empty object", new SourceExecutionEvidence()),
+            ("missing recorded by", ValidEvidence() with { RecordedBy = null }),
+            ("missing result", ValidEvidence() with { Result = null }),
+            ("unsupported type", ValidEvidence() with { Type = "COMPATIBILITY_UPDATE" }),
+            ("unsafe path", ValidEvidence() with { RepositoryPath = "../secret.txt" }),
+            ("credential URI", ValidEvidence() with { ExternalUri = "https://user:pass@example.com/evidence" }),
+            ("malformed commit", ValidEvidence() with { Commit = "not-a-commit" })
+        };
+
+        foreach (var (name, evidence) in cases)
+        {
+            var before = state.Proposals.Count;
+            TestAssert.Throws<ArgumentException>(() => proposals.Create(new CreateExecutionProposalRequest
+            {
+                TargetId = "P01",
+                ProposedChanges = new Dictionary<string, string?> { ["executionState"] = "IN_PROGRESS" },
+                Evidence = [evidence]
+            }), $"The {name} evidence case must be rejected.");
+            TestAssert.Equal(before, state.Proposals.Count, $"The {name} evidence case must not mutate state.");
+        }
+    }
+
+    public static void ProposalUpdateRejectsMalformedEvidenceWithoutMutation()
+    {
+        var (state, proposals) = ImportOfficial();
+        var created = proposals.Create(new CreateExecutionProposalRequest
+        {
+            TargetId = "P01",
+            ProposedChanges = new Dictionary<string, string?> { ["executionState"] = "IN_PROGRESS" }
+        });
+        var before = state.FindProposal(created.Id)!;
+
+        TestAssert.Throws<ArgumentException>(() => proposals.Update(created.Id, new UpdateExecutionProposalRequest
+        {
+            Evidence = [ValidEvidence() with { Result = null }]
+        }), "An update with missing evidence result must be rejected.");
+
+        var after = state.FindProposal(created.Id)!;
+        TestAssert.Equal(before.Evidence.Count, after.Evidence.Count, "Rejected evidence update must preserve the existing evidence.");
+        TestAssert.Equal(before.UpdatedAtUtc, after.UpdatedAtUtc, "Rejected evidence update must not replace proposal metadata.");
+    }
+
+    public static void ValidEvidenceWithoutLocatorQualifiesCompletion()
+    {
+        var (_, proposals) = ImportOfficial();
+        var proposal = proposals.Create(new CreateExecutionProposalRequest
+        {
+            TargetId = "P01",
+            ProposedChanges = CompletionChanges(),
+            Evidence = [ValidEvidence()],
+            RequestedLifecycle = ProposalLifecycle.ReadyForReview
+        });
+
+        TestAssert.Equal(ProposalLifecycle.ReadyForReview, proposal.Lifecycle, "A source-compatible evidence record without a locator must qualify completion.");
+    }
+
+    private static (CompilerApplicationState State, ExecutionProposalService Service) ImportOfficial()
+    {
+        var state = new CompilerApplicationState();
+        var service = new ManifestImportApplicationService(
+            new IdeaEngineeringManifestImporter(new ManifestGitObjectReader()),
+            new ProjectCompiler(),
+            state);
+        var import = service.ImportAsync(new ManifestImportRequest
+        {
+            RepositoryRoot = FindIdeaEngineeringRoot(),
+            ManifestPath = "planning/project-management-compiler-manifest.json",
+            Mode = ManifestImportMode.GitCommit,
+            RequestedCommit = "0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4"
+        }).GetAwaiter().GetResult();
+        TestAssert.Equal(ManifestImportClassification.OfficialCommit, import.Classification, "The proposal test needs an official source snapshot.");
+        return (state, new ExecutionProposalService(state));
+    }
+
+    private static Dictionary<string, string?> CompletionChanges() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["executionState"] = "COMPLETED",
+        ["actualFinish"] = "2026-09-20",
+        ["actualEffortHours"] = "8",
+        ["remainingEffortHours"] = "0"
+    };
+
+    private static SourceExecutionEvidence ValidEvidence() => new()
+    {
+        EvidenceId = "P01-PROPOSAL-VALID-001",
+        Type = "SOURCE_RECORD",
+        Description = "Controlled completion evidence.",
+        Result = "NOT_APPLICABLE",
+        RecordedAt = new DateTimeOffset(2026, 9, 20, 1, 0, 0, TimeSpan.Zero),
+        RecordedBy = "LEAD"
+    };
 
     private static string FindIdeaEngineeringRoot()
     {

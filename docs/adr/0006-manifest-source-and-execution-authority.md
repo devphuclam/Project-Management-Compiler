@@ -44,11 +44,20 @@ The module observes these rules:
 - a failed candidate leaves the current official snapshot unchanged.
 
 Imported execution facts are represented as `SourceExecutionSnapshot` and
-remain distinct from the immutable planning baseline. Local edits are
-represented as `ExecutionProposalOverlay`. Proposals are never official actual
-evidence and never affect official analysis. An explicitly selected proposal
-preview may calculate a scenario, but it is labelled as estimated and cannot
-overwrite or export as an official snapshot.
+remain distinct from the immutable planning baseline. In an imported
+manifest session, local edits are represented as `ExecutionProposal` records
+owned by application state; they are never official actual evidence and never
+affect official analysis. An explicitly selected proposal preview may
+calculate a scenario, but it is labelled as estimated and cannot overwrite
+or export as an official snapshot.
+
+The compiler-owned fixed-path workflow remains a deliberate legacy boundary
+only when `ImportMetadata` is absent. In that mode an explicit
+`ExecutionOverlay` may continue to drive the legacy analysis and Gantt
+compatibility path. It is not a source-authority path: schema `1.0` reopen
+migrates those records to proposals, clears the overlay, and prevents the
+legacy values from affecting imported analysis, alerts, dashboards, or
+official Gantt `ACTUAL` lanes.
 
 Canonical JSON advances from schema `1.0` to `2.0` because the meaning of the
 execution data changes. A schema `1.0` execution overlay can be reopened only
@@ -56,10 +65,11 @@ through a migration that marks its records as proposals and emits a migration
 diagnostic. Source contract version `0.1.0` and canonical schema version `2.0`
 remain independent version domains.
 
-The existing manual execution operation becomes a compatibility alias that
-creates proposals only. Direct write-back to IDEAEngineering is not part of
-this decision. A deterministic proposal artifact may be exported for human
-review and later source-side change control.
+The existing manual execution operation becomes a proposal-only compatibility
+alias when an official manifest snapshot is loaded. Direct write-back to
+IDEAEngineering is not part of this decision. A deterministic proposal
+artifact may be exported for human review and later source-side change
+control.
 
 ## Supersession
 

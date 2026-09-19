@@ -23,14 +23,21 @@ After deserialization the reader MUST validate, before returning a project:
 
 - `importMetadata` identity, mode/classification, manifest path, contract,
   project/baseline/snapshot IDs, register revision, counts, calendars, and safe
-  repository identity;
+  repository identity. A `GIT_COMMIT` `SourceIdentity` is exactly 40 hex
+  characters, and a URI-shaped repository identity has no user-info credentials;
 - `sourceExecution` project/baseline identities matching `importMetadata`, typed
   DeliveryCard identities, target existence, uniqueness,
-  recording/state/result combinations, effort/date semantics, safe source paths,
-  and controlled evidence; and
+  recording/state/result combinations, non-negative half-hour effort/date
+  semantics, safe source paths, revision at least `1`, and controlled evidence;
 - `executionProposals` supported DeliveryCard targets, lifecycle/base metadata,
   supported change fields and syntactically valid values, safe evidence, and no
-  source-authority promotion.
+  source-authority promotion. A migrated schema-1.0 proposal may carry expected
+  revision `0` as its explicit legacy compatibility marker.
+
+The metadata project and baseline IDs must equal `CanonicalProject.Project.Id` and
+`CanonicalProject.Baseline.Id`; source execution IDs, register revision, and
+status date must equal the corresponding metadata values. This is an authority
+relationship, not merely a JSON shape check.
 
 Any semantic error fails closed with diagnostics; parse success is insufficient.
 

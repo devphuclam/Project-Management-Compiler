@@ -1,6 +1,6 @@
 # Implementation Plan: IDEAEngineering Manifest Import
 
-**Branch**: `codex/feature003-hardening` | **Date**: 2026-09-19 | **Spec**: [spec.md](./spec.md)
+**Branch**: `codex/feature003-final-micro-pass` | **Date**: 2026-09-19 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/003-ideaengineering-manifest-import/spec.md`
 
@@ -151,10 +151,20 @@ Gantt projection and legacy compiler remain in place and consume canonical resul
   enforces application ceilings.
 - `CompilerApplicationState`, `ExecutionProposalService`, and reopen/import paths
   share one retained proposal collection and hydrate it from canonical JSON.
+- The explicit legacy fixed-path workflow still resolves a live
+  `ExecutionOverlay`; only manifest-backed projects resolve `SourceExecution`,
+  and schema `1.0` migration clears the overlay after proposal conversion.
 - Proposal evidence validation is explicit and source-contract-compatible through
-  the seven-type controlled-evidence allow-list; source execution retains the
-  register project/baseline identities for semantic cross-checking. UI text
-  changes are semantic wording corrections only.
+  the seven-type controlled-evidence allow-list. Required fields include result;
+  repository path, commit, and external URI are optional and independently
+  validated. Boundary rejection is atomic, while zero evidence is valid only for
+  draft proposals. The compatibility route stores a safe legacy reference rather
+  than fabricated controlled evidence.
+- Canonical v2 validation also checks full commit identity, URI credentials,
+  revision/date/ID relationships, and half-hour effort granularity. The state
+  projection helper updates current and official applicable projections together
+  after a legacy reopen without promoting that document. UI text changes remain
+  semantic wording corrections only.
 
 ## Architecture and State Transitions
 
@@ -185,10 +195,12 @@ proposals `STALE_BASE` without rebase.
 Each slice follows red/green/refactor through the public importer or application/API
 operation. The test runner is kept dependency-free.
 
-For MVP2.2, the artifact gate is deliberately before code: update the hardening
-spec/design artifacts, run Spec Kit analyze, run Spec Kit converge, then implement
-each hardening task through TDD. After implementation, run analyze and converge
-again before code review and full verification.
+For MVP2.2 and this final correctness micro-pass, the artifact gate is deliberately
+before code: update the relevant design artifacts, run Spec Kit analyze, run Spec
+Kit converge, reconcile any appended tasks, then implement each micro-pass task
+through TDD. After implementation, run analyze and converge again before code
+review and full verification. Integration is fast-forward-only after every gate is
+green.
 
 ## Complexity Tracking
 

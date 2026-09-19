@@ -92,9 +92,23 @@ The TDD regression set must prove, through public seams, that:
 
 The final fresh verification must include the focused regression commands,
 `scripts/test.ps1`, `scripts/verify.ps1`, `scripts/verify-web.ps1`,
-`node --check src/ProjectManagementCompiler/wwwroot/app.js`, `git diff --check`,
-and the repository's changed-file safety scans. Do not inspect or modify the
-IDEAEngineering checkout as part of these checks.
+`scripts/verify-launcher.ps1`, `node --check src/ProjectManagementCompiler/wwwroot/app.js`,
+`git diff --check`, and the repository's changed-file safety scans. The exact
+Git aggregate test must prove an oversized blob is rejected before `git show`.
+The proposal tests must cover empty draft evidence, every malformed required
+field/type/path/URI/commit case, valid ready evidence, and save/reopen/list.
+The legacy compatibility test must use `ProjectCompiler.ApplyExecutionUpdate`.
+Do not inspect or modify the IDEAEngineering checkout as part of these checks.
+
+## Final correctness micro-pass
+
+This pass follows the completed original Feature 003 implementation and MVP2.2
+hardening. Its artifact gate is: read source authority, update only changed truth,
+run Spec Kit analyze, run Spec Kit converge, reconcile tasks, then implement on
+`codex/feature003-final-micro-pass` with red → fail → minimal fix → green TDD.
+After implementation repeat analyze/converge, review the diff, run every fresh
+verification command, and only then fast-forward merge and push `main`. This is
+local verification evidence; it is not a remote CI claim.
 
 Do not run the source validator by checking out or modifying the IDEAEngineering
 working tree. Compatibility checks use the accepted Git object/fixture boundary.
