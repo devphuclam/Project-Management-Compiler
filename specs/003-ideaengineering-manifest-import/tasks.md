@@ -309,7 +309,7 @@ green run, and related regression run before it is marked complete.
   verifier scripts, web/launcher checks, JavaScript syntax, diff/safety scans,
   and source compatibility read-only checks; acceptance: every command exits
   successfully with exact test count and command output captured.
-- [ ] T099 [US5] Only after T096-T098 are green, fetch `origin/main`, fast-forward
+- [X] T099 [US5] Only after T096-T098 are green, fetch `origin/main`, fast-forward
   `main`, merge this branch with `--ff-only`, push `main`, and verify the remote
   SHA; acceptance: no force push, no merge commit, and the final report does not
   claim Feature 003/MVP2.2 closure unless every DoD item is actually green.
