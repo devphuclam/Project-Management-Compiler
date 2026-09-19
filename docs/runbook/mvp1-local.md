@@ -23,6 +23,22 @@ dotnet run --project .\tests\ProjectManagementCompiler.Tests\ProjectManagementCo
 dotnet run --project .\src\ProjectManagementCompiler\ProjectManagementCompiler.csproj --no-restore
 ```
 
+For the normal Windows demo, use the repository launcher instead of typing the
+long `dotnet` command:
+
+```powershell
+.\scripts\run-project.ps1
+```
+
+Or double-click `Run Project.cmd` in the repository root. The launcher waits
+for `GET /api/health`, opens `http://127.0.0.1:5050/`, and keeps the application
+running until you press `Ctrl+C`. Use `-NoBrowser` when the browser is already
+open:
+
+```powershell
+.\scripts\run-project.ps1 -NoBrowser
+```
+
 Open [http://127.0.0.1:5050](http://127.0.0.1:5050). The server is loopback
 only by default and is not a LAN service.
 

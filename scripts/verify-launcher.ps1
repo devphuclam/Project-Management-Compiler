@@ -28,6 +28,7 @@ $runner = Get-Content -LiteralPath $runnerPath -Raw
 Assert-Condition ($launcher.Contains('run-project.ps1', [StringComparison]::Ordinal)) 'Root launcher must delegate to scripts/run-project.ps1.'
 Assert-Condition ($launcher.Contains('ExecutionPolicy Bypass', [StringComparison]::OrdinalIgnoreCase)) 'Root launcher must run without requiring a local PowerShell policy change.'
 Assert-Condition ($runner.Contains('ProjectManagementCompiler.csproj', [StringComparison]::Ordinal)) 'Runner must target the ProjectManagementCompiler project.'
+Assert-Condition ($runner.Contains('$quotedProjectPath', [StringComparison]::Ordinal)) 'Runner must quote the project path before passing it to Start-Process.'
 Assert-Condition ($runner.Contains('127.0.0.1:5050', [StringComparison]::Ordinal)) 'Runner must use the loopback application URL.'
 Assert-Condition ($runner.Contains('api/health', [StringComparison]::Ordinal)) 'Runner must wait for the application health endpoint.'
 Assert-Condition ($runner.Contains('publicNetworkBinding', [StringComparison]::Ordinal)) 'Runner must verify that the health response is loopback-only.'

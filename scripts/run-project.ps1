@@ -17,12 +17,13 @@ try {
     }
 
     $dotnetCommand = Get-Command -Name 'dotnet' -CommandType Application -ErrorAction Stop
+    $quotedProjectPath = '"{0}"' -f $projectPath
     Write-Host 'Starting Project Management Compiler...'
     Write-Host "Project: $projectPath"
 
     $process = Start-Process `
         -FilePath $dotnetCommand.Source `
-        -ArgumentList @('run', '--project', $projectPath, '--no-launch-profile') `
+        -ArgumentList @('run', '--project', $quotedProjectPath, '--no-launch-profile') `
         -WorkingDirectory $repositoryRoot `
         -PassThru
 
