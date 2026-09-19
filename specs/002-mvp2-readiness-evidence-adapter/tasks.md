@@ -35,7 +35,7 @@
 - [x] T021 Run build, test, and full verify from a fresh process.
 - [x] T022 Inspect status, diff, fixture content, and commit boundaries.
 - [x] T023 Review against all 30 regression categories.
-- [ ] T024 Report exact branch/commit/push/handoff state.
+- [x] T024 Report exact branch/commit/push/handoff state.
 
 ## Completion rule
 
