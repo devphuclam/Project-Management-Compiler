@@ -61,6 +61,37 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains("predecessorKey + \" → \" + subjectKey", appJs, "Gantt inspector must show dependency direction explicitly.");
     }
 
+    public static void GanttDependencyImpactOffersDirectionalFocus()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("dependencyFocus: \"both\"", appJs, "Gantt must keep an explicit dependency impact focus mode.");
+        TestAssert.Contains("Depends on", appJs, "Gantt must offer an upstream dependency focus.");
+        TestAssert.Contains("Affects", appJs, "Gantt must offer a downstream dependency focus.");
+        TestAssert.Contains("Both", appJs, "Gantt must offer a combined dependency impact focus.");
+        TestAssert.Contains("data-gantt-focus", appJs, "Directional impact controls must expose a stable browser interaction seam.");
+    }
+
+    public static void GanttDependencyImpactTraversesTheWholeChain()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("function dependencyImpact", appJs, "Gantt must calculate a dependency impact projection.");
+        TestAssert.Contains("while (frontier.length)", appJs, "Dependency impact must traverse beyond only the directly linked row.");
+        TestAssert.Contains("gantt-upstream", appJs, "Upstream rows must be visually distinguishable.");
+        TestAssert.Contains("gantt-downstream", appJs, "Downstream rows must be visually distinguishable.");
+    }
+
+    public static void GanttDependencyInspectorShowsNamedDrivingImpact()
+    {
+        var appJs = ReadAppJs();
+        var styles = ReadStyles();
+
+        TestAssert.Contains("Driving impact", appJs, "Gantt inspector must explain the downstream scheduling consequence.");
+        TestAssert.Contains("dependencyNodeLabel", appJs, "Dependency impact details must use readable node names instead of only typed keys.");
+        TestAssert.Contains("gantt-impact-summary", styles, "Dependency impact summary must have a distinct visual treatment.");
+    }
+
     public static void SelectingGanttRowKeepsTimelineEvidenceVisible()
     {
         var appJs = ReadAppJs();

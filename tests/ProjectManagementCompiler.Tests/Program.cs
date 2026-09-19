@@ -201,6 +201,9 @@ internal static class Program
         ,("GanttDependencyControlsExplainDirection", GanttUiRegressionTests.GanttDependencyControlsExplainDirection)
         ,("GanttDependencyConnectorsOnlyRenderWhenEnabled", GanttUiRegressionTests.GanttDependencyConnectorsOnlyRenderWhenEnabled)
         ,("GanttDependencyInspectorShowsImpact", GanttUiRegressionTests.GanttDependencyInspectorShowsImpact)
+        ,("GanttDependencyImpactOffersDirectionalFocus", GanttUiRegressionTests.GanttDependencyImpactOffersDirectionalFocus)
+        ,("GanttDependencyImpactTraversesTheWholeChain", GanttUiRegressionTests.GanttDependencyImpactTraversesTheWholeChain)
+        ,("GanttDependencyInspectorShowsNamedDrivingImpact", GanttUiRegressionTests.GanttDependencyInspectorShowsNamedDrivingImpact)
         ,("SelectingGanttRowKeepsTimelineEvidenceVisible", GanttUiRegressionTests.SelectingGanttRowKeepsTimelineEvidenceVisible)
     ];
 
