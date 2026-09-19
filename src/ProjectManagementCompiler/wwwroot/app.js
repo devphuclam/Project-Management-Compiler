@@ -1238,11 +1238,22 @@
     const impact = dependencyImpact(selectedRowKey, dependencyView);
     const dependencyEdges = (state.views && state.views.dependencyNetwork && state.views.dependencyNetwork.edges) || dependencyView && dependencyView.edges || [];
     const eligibleEdges = dependencyEdges.filter(edge => edge.includedInAnalysis !== false);
-    eligibleEdges.forEach(edge => {
+    const connectorEdges = selectedRowKey
+      ? eligibleEdges.filter(edge => {
+        const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
+        const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
+        const isDirect = subjectKey === selectedRowKey || predecessorKey === selectedRowKey;
+        const isUpstream = subjectKey === selectedRowKey;
+        const isDownstream = predecessorKey === selectedRowKey;
+        const focus = state.gantt.dependencyFocus || "both";
+        return isDirect && ((focus !== "downstream" && isUpstream) || (focus !== "upstream" && isDownstream));
+      })
+      : [];
+    connectorEdges.forEach(edge => {
       const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
       if (!visibleIndex.has(predecessorKey) || !visibleIndex.has(subjectKey)) return;
-      const isRelated = selectedRowKey && impact.focusEdgeKeys.has(dependencyEdgeKey(edge));
+      const isRelated = Boolean(selectedRowKey && impact.directEdgeKeys.has(dependencyEdgeKey(edge)));
       const predecessor = visibleRows[visibleIndex.get(predecessorKey)];
       const subject = visibleRows[visibleIndex.get(subjectKey)];
       const predecessorTimestamp = parseDate(predecessor.plan.finish || predecessor.plan.start);
@@ -1381,6 +1392,7 @@
       downstreamKeys: new Set(),
       directUpstreamKeys: new Set(),
       directDownstreamKeys: new Set(),
+      directEdgeKeys: new Set(),
       upstreamEdgeKeys: new Set(),
       downstreamEdgeKeys: new Set(),
       focusKeys: new Set(),
@@ -1392,8 +1404,14 @@
     dependencyEdges.forEach(edge => {
       const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
-      if (subjectKey === selectedRowKey) impact.directUpstreamKeys.add(predecessorKey);
-      if (predecessorKey === selectedRowKey) impact.directDownstreamKeys.add(subjectKey);
+      if (subjectKey === selectedRowKey) {
+        impact.directUpstreamKeys.add(predecessorKey);
+        impact.directEdgeKeys.add(dependencyEdgeKey(edge));
+      }
+      if (predecessorKey === selectedRowKey) {
+        impact.directDownstreamKeys.add(subjectKey);
+        impact.directEdgeKeys.add(dependencyEdgeKey(edge));
+      }
     });
 
     const traverse = (direction, keys, edgeKeys) => {
@@ -1504,8 +1522,8 @@
     const dependencyHint = node("p", null, "gantt-dependency-hint muted");
     dependencyHint.appendChild(node("strong", "Dependency lines: "));
     dependencyHint.appendChild(document.createTextNode(state.gantt.showDependencies
-      ? "predecessor → successor. Select a row to inspect its impact."
-      : "hidden. Use Show dependencies to display predecessor → successor."));
+      ? "selected direct links only · predecessor → successor. Use Depends on or Affects to switch direction."
+      : "hidden. Select a row, then use Show dependencies to inspect its direct links."));
     toolbar.appendChild(dependencyHint);
 
     if (state.gantt.selectedRowKey) {
@@ -1602,7 +1620,7 @@
     if (state.gantt.executionFilter === "WITH_EVIDENCE") modeLabels.push("execution evidence");
     else if (state.gantt.executionFilter !== "ALL") modeLabels.push(stateLabel(state.gantt.executionFilter));
     if (state.gantt.criticalPath) modeLabels.push("CPM overlay on");
-    if (state.gantt.showDependencies) modeLabels.push("connectors on");
+    if (state.gantt.showDependencies) modeLabels.push("direct links on");
     if (state.gantt.selectedRowKey) modeLabels.push("impact: " + dependencyFocusLabel(state.gantt.dependencyFocus));
     if (state.gantt.attentionOnly) modeLabels.push("attention only");
     if (state.gantt.structureMode) modeLabels.push("full hierarchy");
