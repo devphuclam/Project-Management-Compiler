@@ -1,9 +1,12 @@
-# Handoff — Gantt dependency impact focus
+# Handoff — Focused Gantt workspace and dependency impact
 
 ## What changed
 
 The Gantt view now follows the dependency-reading pattern used by established project-management tools:
 
+- entering Gantt switches the page into a schedule-first workspace: the setup panel, dashboard summary, and execution updater leave the schedule surface;
+- the application header becomes compact while Gantt is active, with a small project context bar preserving the project name, baseline window, and reporting date;
+- the schedule keeps the task grid, timeline, and row inspector as the primary surface, while controls are grouped into a compact toolbar;
 - selecting a row exposes an `Impact focus` control with `Depends on`, `Affects`, and `Both`;
 - the selected direction highlights the corresponding upstream or downstream chain in the task pane and timeline;
 - the optional connector layer draws only the selected row's direct links, so the timeline does not become a full-graph spiderweb;
@@ -18,10 +21,12 @@ The baseline model and execution overlay are unchanged. This is a presentation a
 
 1. Start the local app and load `tests/fixtures/ideaengineering-real-shaped`.
 2. Open `Gantt`.
-3. Select a delivery card such as `P04`.
-4. Use `Depends on` to isolate predecessor work, `Affects` to isolate successor work, or `Both` to see the complete neighborhood.
-5. Use `Show dependencies` when the connector paths are needed. Only the selected card's direct links are drawn; hovering a connector exposes the named predecessor, successor, and dependency type.
-6. Read `DEPENDENCY IMPACT` in the row inspector. Expand `Show full successor chain` only when the short preview is not enough.
+3. Confirm the summary dashboard is no longer above the schedule; the compact header and project context remain.
+4. Select a delivery card such as `P04`.
+5. Use `Depends on` to isolate predecessor work, `Affects` to isolate successor work, or `Both` to see the complete neighborhood.
+6. Use `Show dependencies` when the connector paths are needed. Only the selected card's direct links are drawn; hovering a connector exposes the named predecessor, successor, and dependency type.
+7. Read `DEPENDENCY IMPACT` in the row inspector. Expand `Show full successor chain` only when the short preview is not enough.
+8. Return to `Dashboard` to restore the control-center summary and the normal application chrome.
 
 ## Verification
 
