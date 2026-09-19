@@ -12,22 +12,29 @@ The Gantt UI now supports the three metadata columns as optional controls:
   the timeline;
 - selecting a row keeps timeline bars and dependency evidence fully visible;
   only unrelated task-pane metadata is de-emphasized.
+- dependency lines stay hidden until `Show dependencies` is enabled;
+- enabled dependency lines use stepped paths with hover text such as
+  `P04 → P06 · FINISH_TO_START`;
+- the inspector now has a `DEPENDENCY IMPACT` section with plain-language
+  `Depends on` and `Affects` fields.
 
 ## Repository state
 
 - Product repository: `devphuclam/Project-Management-Compiler`
-- Branch: `codex/gantt-column-options-visible`
+- Branch: `codex/gantt-dependency-clarity`
 - Worktree: dedicated isolated worktree for this branch
 - Test commit: `aba3719` — `test: cover Gantt metadata visibility and selection contrast`
 - Implementation commit: `8395eb3` — `fix: make Gantt metadata columns optional and visible`
 - Follow-up test commit: `b5d8bd9` — `test: keep Gantt column controls visible`
 - Follow-up implementation commit: `0fb3e50` — `fix: keep Gantt column controls visible`
+- Dependency clarity test commit: `f945ca4` — `test: clarify Gantt dependency impact`
+- Dependency clarity implementation commit: `d65c926` — `fix: make Gantt dependency impact readable`
 - The original checkout's existing `.gitignore`, `package.json`, and
   `package-lock.json` changes were not touched.
 
 ## Verification
 
-- Custom runner: 194 registered, 194 executed, 194 passed, 0 failed.
+- Custom runner: 198 registered, 198 executed, 198 passed, 0 failed.
 - `scripts/build.ps1`: pass.
 - `scripts/verify.ps1`: pass, including launcher and web/API verification.
 - `node --check src/ProjectManagementCompiler/wwwroot/app.js`: pass.
@@ -40,4 +47,5 @@ Push this branch, fast-forward `main`, and then restart the local app before
 checking the browser at `http://127.0.0.1:5050/`. Open `Plan` and use the
 always-visible `Columns` checkboxes below the view presets to verify the
 optional metadata layout. `Advanced filters` remains a separate disclosure
-for schedule filters.
+for schedule filters. To explain dependency flow, enable `Show dependencies`,
+then select a row and read `Depends on` / `Affects` in the inspector.
