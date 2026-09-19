@@ -199,7 +199,7 @@ boundary.
 - [X] T069 [US5] Run Spec Kit converge again after implementation and reconcile any remaining implementation gaps in `tasks.md`; acceptance: no unimplemented hardening requirement remains before review.
 - [X] T070 [US5] Perform code review against repository standards and Feature 003 authority, including fail-closed behavior, bounded reads, source immutability, proposal ownership, and UI truth; acceptance: no blocking finding remains.
 - [X] T071 [US5] Run fresh full verification: `scripts/test.ps1`, `scripts/verify.ps1`, `scripts/verify-web.ps1`, `node --check src/ProjectManagementCompiler/wwwroot/app.js`, `git diff --check`, and changed-file safety scans; acceptance: every command exits successfully with exact output recorded in the final report.
-- [ ] T072 [US5] Only after T068-T071 are green, fetch `origin/main`, fast-forward local `main`, merge `codex/feature003-hardening` with `--ff-only`, push `main`, and verify the remote SHA; acceptance: no force push, no merge commit, and remote `main` equals the verified commit.
+- [X] T072 [US5] Only after T068-T071 are green, fetch `origin/main`, fast-forward local `main`, merge `codex/feature003-hardening` with `--ff-only`, push `main`, and verify the remote SHA; acceptance: no force push, no merge commit, and remote `main` equals the verified commit.
 
 ## Phase 10: Convergence
 
