@@ -112,6 +112,18 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains("opacity: 1", styles, "Timeline evidence must remain fully visible after row selection.");
     }
 
+    public static void GanttUsesFocusedWorkspaceLayout()
+    {
+        var appJs = ReadAppJs();
+        var styles = ReadStyles();
+
+        TestAssert.Contains("is-gantt-focus", appJs, "Gantt must enter a focused schedule workspace.");
+        TestAssert.Contains("gantt-context-bar", appJs, "Focused Gantt mode must retain a compact project context header.");
+        TestAssert.Contains(".page.is-gantt-focus #summary-panel", styles, "Focused Gantt mode must remove the dashboard summary from the schedule surface.");
+        TestAssert.Contains(".page.is-gantt-focus #execution-panel", styles, "Focused Gantt mode must remove the execution updater from the schedule surface.");
+        TestAssert.Contains("gantt-toolbar-tools", styles, "Focused Gantt controls must use a compact tool row.");
+    }
+
     private static string ReadAppJs() => File.ReadAllText(Path.Combine(
         Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "app.js"));
 

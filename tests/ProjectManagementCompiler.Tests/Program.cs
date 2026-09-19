@@ -206,6 +206,7 @@ internal static class Program
         ,("GanttDependencyInspectorShowsNamedDrivingImpact", GanttUiRegressionTests.GanttDependencyInspectorShowsNamedDrivingImpact)
         ,("GanttDependencyConnectorsStayFocusedOnTheSelectedRow", GanttUiRegressionTests.GanttDependencyConnectorsStayFocusedOnTheSelectedRow)
         ,("SelectingGanttRowKeepsTimelineEvidenceVisible", GanttUiRegressionTests.SelectingGanttRowKeepsTimelineEvidenceVisible)
+        ,("GanttUsesFocusedWorkspaceLayout", GanttUiRegressionTests.GanttUsesFocusedWorkspaceLayout)
     ];
 
     public static int Main()
