@@ -246,6 +246,18 @@
     return "Planned · result not evaluated";
   }
 
+  function managementDiscoveryLabel(value) {
+    const state = String(value || "NOT_REQUESTED").toUpperCase();
+    return {
+      NOT_REQUESTED: "Not requested",
+      NOT_CONFIGURED: "Not configured",
+      UNKNOWN: "Could not resolve increment",
+      AMBIGUOUS: "Ambiguous",
+      UNAVAILABLE: "Unavailable",
+      KNOWN: "Loaded"
+    }[state] || "Not available";
+  }
+
   function evidenceScopeMessage(summary) {
     const management = summary && (summary.managementControl || summary.views && summary.views.managementControl) || {};
     const discoveryState = String(management.discoveryState || "NOT_REQUESTED").toUpperCase();
@@ -255,11 +267,15 @@
     if (discoveryState === "KNOWN") {
       return "Planning baseline: Loaded · " + execution + " · Repository readiness: Loaded · Gate/decision evidence: Loaded · As of " + formatDate(summary.analysis && summary.analysis.asOfDate) + ".";
     }
-    if (discoveryState === "UNKNOWN" || discoveryState === "AMBIGUOUS" || discoveryState === "UNAVAILABLE") {
-      const discoveryLabel = discoveryState.replaceAll("_", " ").toLowerCase().replace(/(^|\s)\S/g, letter => letter.toUpperCase());
-      return "Planning baseline: Loaded · " + execution + " · Repository readiness: " + discoveryLabel + ". Readiness/gate execution records are not part of the current MVP1 intake.";
-    }
-    return "Planning baseline: Loaded · " + execution + ". Readiness/gate execution records are not part of the current MVP1 intake.";
+    const labels = {
+      NOT_REQUESTED: "Not requested",
+      NOT_CONFIGURED: "Not configured",
+      UNKNOWN: "Could not resolve increment",
+      AMBIGUOUS: "Ambiguous",
+      UNAVAILABLE: "Unavailable"
+    };
+    const discoveryLabel = labels[discoveryState] || "Not available";
+    return "Planning baseline: Loaded · " + execution + " · Repository readiness: " + discoveryLabel + ".";
   }
 
   function renderControlStrip(summary, context) {
@@ -311,7 +327,7 @@
       readinessCopy.appendChild(node("span", "Evidence-derived control context; it does not replace the scheduled baseline phase.", "muted summary-semantic-note"));
       const gate = context.managementControl.currentGate || {};
       readinessCopy.appendChild(node("span", "CURRENT GATE EVIDENCE", "summary-control-kicker"));
-      readinessCopy.appendChild(node("strong", "PG4 · " + (gate.executionState || "Not recorded") + " / " + (gate.outcome || "Not recorded")));
+      readinessCopy.appendChild(node("strong", (gate.gateId || "No gate evidence") + " · " + (gate.executionState || "Not recorded") + " / " + (gate.outcome || "Not recorded")));
       readinessCard.appendChild(readinessCopy);
       const readinessAction = node("button", "Open evidence", "text-action");
       readinessAction.type = "button";
@@ -349,8 +365,8 @@
       clearState.appendChild(node("strong", "No active schedule alerts"));
       clearState.appendChild(node("span", "No schedule exceptions are derived from the loaded evidence.", "muted"));
       clearState.appendChild(node("span", hasExecutionEvidence(summary)
-        ? "Readiness/gate execution records are not part of the current MVP1 intake."
-        : "Planning baseline loaded. No execution evidence recorded in Compiler; readiness/gate execution records are not part of the current MVP1 intake.", "muted"));
+        ? evidenceScopeMessage(summary)
+        : "Planning baseline loaded. No execution evidence is recorded in Compiler.", "muted"));
       queue.appendChild(clearState);
       return queue;
     }
@@ -603,7 +619,7 @@
       readinessCard.appendChild(node("h3", (readiness.incrementPhaseId || "Phase unresolved") + " · " + (readiness.incrementName || readiness.incrementId || "Increment unresolved")));
       const firstRow = context.readinessRows[0];
       readinessCard.appendChild(node("p", firstRow ? firstRow.workPackageId + " · " + (firstRow.stateCode || "UNKNOWN") + " / " + (firstRow.resultCode || "UNKNOWN") : "No readiness rows", "muted"));
-      readinessCard.appendChild(node("p", "Gate PG4 · " + ((readiness.currentGate && readiness.currentGate.executionState) || "Not recorded") + " / " + ((readiness.currentGate && readiness.currentGate.outcome) || "Not recorded"), "readout-row"));
+      readinessCard.appendChild(node("p", "Gate " + ((readiness.currentGate && readiness.currentGate.gateId) || "not recorded") + " · " + ((readiness.currentGate && readiness.currentGate.executionState) || "Not recorded") + " / " + ((readiness.currentGate && readiness.currentGate.outcome) || "Not recorded"), "readout-row"));
       contextGrid.appendChild(readinessCard);
     }
     fragment.appendChild(contextGrid);
@@ -1524,11 +1540,14 @@
     items.forEach(item => {
       const fields = node("div", null, "gantt-detail-fields");
       appendDetailField(fields, "Target", "WorkPackage:" + item.sourceRecordId);
-      appendDetailField(fields, "Task state", item.stateCode || "Not recorded");
-      appendDetailField(fields, "Readiness result", item.resultCode || "Not evaluated");
-      appendDetailField(fields, "Owner / waiting role", item.ownerRole || "Not recorded");
-      appendDetailField(fields, "Due condition", item.dueCondition || "Not recorded");
-      appendDetailField(fields, "Gate effect", item.gateEffect || "Not recorded");
+      appendDetailField(fields, "Task state", item.taskState || item.stateCode || "Not recorded");
+      appendDetailField(fields, "Readiness result", item.readinessResult || item.resultCode || "Not evaluated");
+      appendDetailField(fields, "Owner", item.ownerRoleLabel || item.ownerRole || "Not recorded");
+      appendDetailField(fields, "Waiting for", item.waitingForRoleLabel || item.waitingForRole || "Not recorded");
+      appendDetailField(fields, "Pending action", item.pendingActionSummary || "Not recorded");
+      appendDetailField(fields, "Due condition", item.dueConditionSummary || item.dueCondition || "Not recorded");
+      appendDetailField(fields, "Gate effect", item.gateEffectSummary || item.gateEffect || "Not recorded");
+      appendDetailField(fields, "Blocker", item.blockerSummary || "Not recorded");
       section.appendChild(fields);
       renderSourceEvidence(section, { sourceReferences: item.sourceReferences || [] });
     });
@@ -1912,14 +1931,15 @@
 
     const scope = view || {};
     const scopeGrid = node("div", null, "dashboard-context-grid");
+    const currentGate = scope.currentGate || {};
     [
-      ["Discovery", scope.discoveryState || "NOT_REQUESTED"],
+      ["Repository readiness", managementDiscoveryLabel(scope.discoveryState)],
       ["Increment", scope.incrementId || "Not resolved"],
       ["Readiness phase", scope.incrementPhaseId || "Not resolved"],
       ["Status", scope.incrementStatus || "Not available"],
       ["Observations", String(scope.evidenceScope && scope.evidenceScope.observationCount || 0)],
-      ["PG4 execution", scope.currentGate && scope.currentGate.executionState || "Not recorded"],
-      ["PG4 outcome", scope.currentGate && scope.currentGate.outcome || "Not recorded"]
+      [String(currentGate.gateId || "Gate") + " execution", currentGate.executionState || "Not recorded"],
+      [String(currentGate.gateId || "Gate") + " outcome", currentGate.outcome || "Not recorded"]
     ].forEach(([label, value]) => {
       const card = node("section", null, "dashboard-card");
       card.appendChild(node("span", label, "summary-control-kicker"));
@@ -1932,14 +1952,15 @@
     readiness.appendChild(node("h3", "P01–P07 readiness", null));
     const readinessRows = (scope.readiness || []).map(item => [
       item.workPackageId,
-      item.stateCode || "UNKNOWN",
-      item.resultCode || "UNKNOWN",
+      item.taskState || item.stateCode || "UNKNOWN",
+      item.readinessResult || item.resultCode || "UNKNOWN",
+      item.waitingForRoleLabel || item.waitingForRole || "—",
       item.reconciliationStatus || "UNMATCHED",
       item.gateEffect || "Not recorded"
     ]);
     readiness.appendChild(renderTable(
-      ["Work package", "Task state", "Result", "Reconciliation", "Gate effect"],
-      readinessRows.length ? readinessRows : [["No readiness evidence", "UNKNOWN", "UNKNOWN", "UNMATCHED", "Not requested"]]
+      ["Work package", "Task state", "Result", "Waiting for", "Reconciliation", "Gate effect"],
+      readinessRows.length ? readinessRows : [["No readiness evidence", "UNKNOWN", "UNKNOWN", "—", "UNMATCHED", "Not requested"]]
     ));
     section.appendChild(readiness);
 
@@ -1970,11 +1991,13 @@
       String(item.evidenceKind || "").replaceAll("_", " "),
       item.stateCode || "—",
       item.resultCode || "—",
+      item.ownerRoleLabel || item.waitingForRoleLabel || item.requiredAuthorityRoleLabel || item.summary || item.actionSummary || "—",
+      item.reconciliationStatus || "—",
       (item.sourceReferences || []).map(reference => reference.relativeFile).join(", ") || "No source reference"
     ]);
     inspector.appendChild(renderTable(
-      ["Record", "Kind", "State", "Result", "Safe provenance"],
-      inspectorRows.length ? inspectorRows : [["No evidence", "NOT_REQUESTED", "—", "—", "No source reference"]]
+      ["Record", "Kind", "State", "Result", "Meaning / role", "Reconciliation", "Safe provenance"],
+      inspectorRows.length ? inspectorRows : [["No evidence", "NOT_REQUESTED", "—", "—", "—", "—", "No source reference"]]
     ));
     section.appendChild(inspector);
     return section;
@@ -2029,6 +2052,11 @@
       setStatus("Capturing and analyzing…");
       const includeManagementEvidence = byId("include-management-evidence").checked;
       const managementEvidenceIncrementPath = byId("management-evidence-path").value.trim() || null;
+      if (includeManagementEvidence && !managementEvidenceIncrementPath) {
+        showError(new Error("Select the readiness increment path before including repository readiness evidence."));
+        setStatus("Analysis failed.");
+        return;
+      }
       const summary = await request("/api/compile", jsonOptions({
         sourcePath,
         asOfDate,
