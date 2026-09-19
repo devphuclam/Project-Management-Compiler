@@ -29,7 +29,7 @@ internal static class GanttUiRegressionTests
     {
         var appJs = ReadAppJs();
 
-        TestAssert.Contains("gantt-menu gantt-columns-menu", appJs, "Column choices must live in a compact disclosure menu.");
+        TestAssert.Contains("createMenu(\"Columns\", \"gantt-columns-menu\")", appJs, "Column choices must live in a compact disclosure menu.");
         TestAssert.Contains("Visible in the task list", appJs, "The Columns menu must explain what its choices control.");
         TestAssert.False(appJs.Contains("toolbar.appendChild(columnOptions)", StringComparison.Ordinal), "Column checkboxes must not consume an always-visible toolbar row.");
     }
@@ -139,6 +139,15 @@ internal static class GanttUiRegressionTests
         TestAssert.False(appJs.Contains("node(\"span\", \"—\", \"gantt-actual-empty\")", StringComparison.Ordinal), "Plan view must not repeat empty actual-evidence dashes down the chart.");
         TestAssert.Contains(".gantt-zoom-week .gantt-day-grid:not(.gantt-week-start)", styles, "Weekly view must suppress dense daily grid lines.");
         TestAssert.Contains(".gantt-plan-view .gantt-actual-lane", styles, "Plan view must collapse the unused actual lane.");
+    }
+
+    public static void GanttModeStripPreservesViewMeaning()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("state.gantt.preset === \"plan\" && !state.gantt.selectedRowKey", appJs, "Plan mode must only appear active for the actual Plan preset.");
+        TestAssert.Contains("action === \"dependency-mode\"", appJs, "Dependency focus must have a non-toggle mode action.");
+        TestAssert.Contains("applyGanttPreset(\"plan\")", appJs, "Returning to Plan must reset secondary view state through the preset contract.");
     }
 
     private static string ReadAppJs() => File.ReadAllText(Path.Combine(

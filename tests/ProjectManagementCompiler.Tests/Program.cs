@@ -208,6 +208,7 @@ internal static class Program
         ,("SelectingGanttRowKeepsTimelineEvidenceVisible", GanttUiRegressionTests.SelectingGanttRowKeepsTimelineEvidenceVisible)
         ,("GanttUsesFocusedWorkspaceLayout", GanttUiRegressionTests.GanttUsesFocusedWorkspaceLayout)
         ,("GanttPlanViewUsesCalmTimelineGrid", GanttUiRegressionTests.GanttPlanViewUsesCalmTimelineGrid)
+        ,("GanttModeStripPreservesViewMeaning", GanttUiRegressionTests.GanttModeStripPreservesViewMeaning)
     ];
 
     public static int Main()
