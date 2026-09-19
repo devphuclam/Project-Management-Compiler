@@ -692,3 +692,68 @@ th, td { border-bottom-color: var(--line); }
   .gantt-task-row, .gantt-task-header { grid-template-columns: var(--gantt-task-columns); gap: 5px; padding-inline: 7px; }
   .gantt-task-header { font-size: 8px; }
 }
+
+/* Focused Gantt workspace: the schedule is the product surface, not a dashboard card. */
+.page.is-gantt-focus { gap: 0; padding-top: 18px; }
+.page.is-gantt-focus .gantt-context-bar { margin-top: 0; }
+body.is-gantt-focus .app-header { padding-block: 12px; }
+body.is-gantt-focus .app-header-brand { align-items: center; gap: 10px; }
+body.is-gantt-focus .brand-mark { width: 30px; height: 30px; flex-basis: 30px; border-radius: 7px; font-size: 10px; }
+body.is-gantt-focus .app-header-copy .eyebrow { margin-bottom: 0; font-size: 9px; }
+body.is-gantt-focus .app-header-copy h1 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+body.is-gantt-focus .app-header-copy .header-description,
+body.is-gantt-focus .app-header-copy #connection-status { display: none; }
+.page.is-gantt-focus #source-intake-panel,
+.page.is-gantt-focus #summary-panel,
+.page.is-gantt-focus #execution-panel { display: none; }
+.page.is-gantt-focus .views-panel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.page.is-gantt-focus .tabs { margin: 0 0 12px; padding-bottom: 10px; }
+.page.is-gantt-focus .view-content { padding-top: 0; }
+.page.is-gantt-focus .gantt-shell { gap: 9px; }
+.gantt-context-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 2px 3px;
+}
+.gantt-context-identity { min-width: 0; }
+.gantt-context-identity h2 { overflow: hidden; margin: 1px 0 2px; font-size: 21px; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-context-identity p:last-child { margin: 0; font-size: 12px; }
+.gantt-context-meta { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.gantt-context-chip { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 10px; font-weight: 750; white-space: nowrap; }
+.page.is-gantt-focus .gantt-toolbar { gap: 7px; padding: 10px 12px; border-radius: 8px; box-shadow: none; }
+.page.is-gantt-focus .gantt-toolbar-tools { align-items: center; gap: 14px; }
+.page.is-gantt-focus .gantt-toolbar-heading h3 { margin-bottom: 1px; font-size: 16px; }
+.page.is-gantt-focus .gantt-toolbar-heading p:last-child { max-width: 520px; font-size: 11px; }
+.page.is-gantt-focus .gantt-toolbar-actions { gap: 5px; }
+.page.is-gantt-focus .gantt-action { padding: 5px 8px; font-size: 11px; }
+.page.is-gantt-focus .gantt-preset-nav { gap: 4px; padding-top: 6px; }
+.page.is-gantt-focus .gantt-preset { padding: 5px 8px; }
+.page.is-gantt-focus .gantt-dependency-hint { padding-top: 5px; border-top: 0; font-size: 10px; }
+.page.is-gantt-focus .gantt-impact-controls { padding-top: 6px; }
+.page.is-gantt-focus .gantt-column-options { justify-content: flex-start; width: auto; padding: 5px 0 0; border-top: 0; }
+.page.is-gantt-focus .gantt-filter-disclosure { border-top: 1px solid var(--line); }
+.page.is-gantt-focus .gantt-toolbar-status { padding: 7px 9px; font-size: 10px; }
+.page.is-gantt-focus .gantt-legend { padding-inline: 1px; font-size: 10px; }
+.page.is-gantt-focus .gantt-scroll { max-height: calc(100vh - 250px); min-height: 500px; border-radius: 8px; }
+.page.is-gantt-focus .gantt-workspace { grid-template-columns: minmax(0, 1fr) 310px; gap: 10px; }
+.page.is-gantt-focus .gantt-detail-panel { border-radius: 8px; }
+
+@media (max-width: 1100px) {
+  .page.is-gantt-focus .gantt-workspace { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .gantt-context-bar { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .gantt-context-meta { justify-content: flex-start; }
+  .page.is-gantt-focus .gantt-toolbar-tools { align-items: flex-start; flex-direction: column; }
+  .page.is-gantt-focus .gantt-toolbar-actions { justify-content: flex-start; }
+  .page.is-gantt-focus .gantt-scroll { max-height: none; min-height: 420px; }
+}

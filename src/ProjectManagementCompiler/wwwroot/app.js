@@ -444,6 +444,12 @@
     document.querySelectorAll(".tab").forEach(item => item.classList.toggle("active", item.dataset.view === view));
   }
 
+  function updateWorkspaceMode() {
+    const page = document.querySelector(".page");
+    if (page) page.classList.toggle("is-gantt-focus", state.activeView === "gantt");
+    document.body.classList.toggle("is-gantt-focus", state.activeView === "gantt");
+  }
+
   function activateView(view) {
     state.activeView = view;
     updateActiveTab(view);
@@ -1482,11 +1488,11 @@
 
   function renderGanttToolbar(rows, visibleRows, range, analysis) {
     const toolbar = node("div", null, "gantt-toolbar");
-    const toolbarTop = node("div", null, "gantt-toolbar-top");
+    const toolbarTop = node("div", null, "gantt-toolbar-top gantt-toolbar-tools");
     const toolbarHeading = node("div", null, "gantt-toolbar-heading");
-    toolbarHeading.appendChild(node("p", "PLAN CONTROL", "eyebrow"));
-    toolbarHeading.appendChild(node("h3", state.gantt.structureMode ? "Structure view" : "When is work planned?"));
-    toolbarHeading.appendChild(node("p", state.gantt.structureMode ? "Inspect the full Project → Phase → WorkPackage → DeliveryCard hierarchy." : "Read the immutable baseline first; use Needs attention to isolate derived schedule exceptions.", "muted"));
+    toolbarHeading.appendChild(node("p", "GANTT", "eyebrow"));
+    toolbarHeading.appendChild(node("h3", state.gantt.structureMode ? "Structure view" : "Project schedule"));
+    toolbarHeading.appendChild(node("p", state.gantt.structureMode ? "Inspect the full Project → Phase → WorkPackage → DeliveryCard hierarchy." : "Baseline dates, delivery timing, and dependency impact.", "muted"));
     toolbarTop.appendChild(toolbarHeading);
     const actions = node("div", null, "gantt-toolbar-actions");
     const addAction = (label, action, pressed) => {
@@ -1500,7 +1506,6 @@
     };
     addAction("Expand all", "expand-all");
     addAction("Collapse all", "collapse-all");
-    addAction("Needs attention", "attention", state.gantt.attentionOnly);
     addAction("−", "zoom-out");
     addAction("+", "zoom-in");
     addAction("Fit project", "fit-project");
@@ -1888,6 +1893,18 @@
     const shell = node("section", null, "gantt-shell");
     shell.dataset.ganttProject = projectId || "project";
     shell.style.setProperty("--timeline-width", width + "px");
+    const summary = currentSummary();
+    const contextBar = node("div", null, "gantt-context-bar");
+    const contextIdentity = node("div", null, "gantt-context-identity");
+    contextIdentity.appendChild(node("p", "PROJECT SCHEDULE", "eyebrow"));
+    contextIdentity.appendChild(node("h2", normalizeDisplayTitle(summary && summary.project && summary.project.name, projectId || "Project")));
+    contextIdentity.appendChild(node("p", "Baseline " + displayDate(baseline && baseline.planningStart) + " → " + displayDate(baseline && baseline.planningFinish), "muted"));
+    contextBar.appendChild(contextIdentity);
+    const contextMeta = node("div", null, "gantt-context-meta");
+    contextMeta.appendChild(node("span", "Plan baseline", "gantt-context-chip"));
+    contextMeta.appendChild(node("span", "As of " + formatDate(analysis && analysis.asOfDate), "gantt-context-chip"));
+    contextBar.appendChild(contextMeta);
+    shell.appendChild(contextBar);
     shell.appendChild(renderGanttToolbar(rows, visibleRows, range, analysis || {}));
 
     const legend = node("div", null, "gantt-legend");
@@ -2219,6 +2236,7 @@
   }
 
   function renderActiveView() {
+    updateWorkspaceMode();
     const content = byId("view-content");
     clear(content);
     if (!state.views || !state.project) {
