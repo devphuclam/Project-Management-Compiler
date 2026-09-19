@@ -421,9 +421,10 @@ executable after an independent audit.
   mutation and two unavailable Git-state reads; no unstable preview is accepted.
 - **SC-014**: Exact Git capture rejects oversized blobs before body reads and
   rejects symlink tree entries while accepting a bounded regular blob.
-- **SC-015**: Empty proposal evidence is valid for a `DRAFT`; malformed supplied
-  evidence is rejected atomically; valid controlled evidence permits
-  `READY_FOR_REVIEW` without changing official source execution.
+- **SC-015**: **MVP2.2 baseline compatibility** — empty proposal evidence is
+  valid for a `DRAFT`, while malformed supplied evidence is rejected
+  atomically. This baseline remains true after hardening without changing
+  official source execution.
 - **SC-016**: A created proposal survives canonical save, reopen, and list with
   the same semantic identity, while a newer official snapshot makes its base
   stale without mutating source execution.
@@ -437,10 +438,10 @@ executable after an independent audit.
 - **SC-019**: A Git blob whose declared size exceeds the remaining aggregate
   budget is rejected before any body-read/show call, while a bounded regular
   blob remains readable.
-- **SC-020**: Empty proposal evidence remains valid for `DRAFT`; each malformed
+- **SC-020**: **Final micro-pass persistence boundary** — each malformed
   evidence shape is rejected atomically; a valid source-compatible record makes
   a completion proposal `READY_FOR_REVIEW`; accepted proposals survive
-  save/reopen/list.
+  save/reopen/list, while the SC-015 baseline behavior remains unchanged.
 - **SC-021**: The compatibility execution route never emits
   `COMPATIBILITY_UPDATE` controlled evidence or invented recorder/result data;
   it preserves only a safe legacy reference and remains proposal-only.

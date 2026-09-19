@@ -98,7 +98,10 @@ Git aggregate test must prove an oversized blob is rejected before `git show`.
 The proposal tests must cover empty draft evidence, every malformed required
 field/type/path/URI/commit case, valid ready evidence, and save/reopen/list.
 The legacy compatibility test must use `ProjectCompiler.ApplyExecutionUpdate`.
-Do not inspect or modify the IDEAEngineering checkout as part of these checks.
+Do not mutate the IDEAEngineering checkout as part of these checks. Read-only
+inspection of its HEAD, status, and bounded Git objects is required for source
+compatibility and working-tree stability verification; checkout writes,
+staging, commits, and resets are prohibited.
 
 ## Final correctness micro-pass
 
