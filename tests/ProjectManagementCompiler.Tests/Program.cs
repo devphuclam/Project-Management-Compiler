@@ -198,6 +198,9 @@ internal static class Program
         ,("GanttOffersOptionalMetadataColumns", GanttUiRegressionTests.GanttOffersOptionalMetadataColumns)
         ,("GanttMetadataColumnLayoutCannotOverflowTaskPane", GanttUiRegressionTests.GanttMetadataColumnLayoutCannotOverflowTaskPane)
         ,("GanttMetadataColumnOptionsAreAlwaysVisible", GanttUiRegressionTests.GanttMetadataColumnOptionsAreAlwaysVisible)
+        ,("GanttDependencyControlsExplainDirection", GanttUiRegressionTests.GanttDependencyControlsExplainDirection)
+        ,("GanttDependencyConnectorsOnlyRenderWhenEnabled", GanttUiRegressionTests.GanttDependencyConnectorsOnlyRenderWhenEnabled)
+        ,("GanttDependencyInspectorShowsImpact", GanttUiRegressionTests.GanttDependencyInspectorShowsImpact)
         ,("SelectingGanttRowKeepsTimelineEvidenceVisible", GanttUiRegressionTests.SelectingGanttRowKeepsTimelineEvidenceVisible)
     ];
 

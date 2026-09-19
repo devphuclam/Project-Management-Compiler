@@ -32,6 +32,35 @@ internal static class GanttUiRegressionTests
         TestAssert.False(appJs.Contains("filters.appendChild(columnOptions)", StringComparison.Ordinal), "Gantt column options must not be hidden inside Advanced filters.");
     }
 
+    public static void GanttDependencyControlsExplainDirection()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("predecessor → successor", appJs, "Gantt must explain dependency arrow direction in the UI.");
+        TestAssert.Contains("Dependency lines:", appJs, "Gantt must explain what dependency connectors represent.");
+        TestAssert.Contains("state.gantt.showDependencies ? \"Hide dependencies\" : \"Show dependencies\"", appJs, "Gantt dependency control must communicate its current action.");
+    }
+
+    public static void GanttDependencyConnectorsOnlyRenderWhenEnabled()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("if (!state.gantt.showDependencies) return svg;", appJs, "Gantt connectors must be explicitly opt-in.");
+        TestAssert.False(appJs.Contains("if (!state.gantt.showDependencies && !isRelated) return;", StringComparison.Ordinal), "Selecting a row must not reveal dependency lines while the dependency view is off.");
+        TestAssert.Contains(" L \" + bend + \" ", appJs, "Gantt dependency connectors must use clear stepped paths.");
+        TestAssert.Contains("path.appendChild(title)", appJs, "Gantt dependency connectors must expose endpoint text on hover.");
+    }
+
+    public static void GanttDependencyInspectorShowsImpact()
+    {
+        var appJs = ReadAppJs();
+
+        TestAssert.Contains("DEPENDENCY IMPACT", appJs, "Gantt inspector must name the dependency impact section plainly.");
+        TestAssert.Contains("Depends on", appJs, "Gantt inspector must show upstream dependencies in plain language.");
+        TestAssert.Contains("Affects", appJs, "Gantt inspector must show downstream impact in plain language.");
+        TestAssert.Contains("predecessorKey + \" → \" + subjectKey", appJs, "Gantt inspector must show dependency direction explicitly.");
+    }
+
     public static void SelectingGanttRowKeepsTimelineEvidenceVisible()
     {
         var appJs = ReadAppJs();
