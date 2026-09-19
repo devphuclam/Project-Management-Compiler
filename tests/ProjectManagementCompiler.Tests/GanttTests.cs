@@ -10,15 +10,15 @@ internal static class GanttTests
     public static void GanttKeepsPlanAndAddsActualAndAlertLanes()
     {
         var project = CaptureCanonicalProject();
-        var update = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        var updated = SourceExecutionTestFixtures.Apply(project, new ExecutionUpdate
         {
             WorkItemId = "P04-A",
             ExecutionState = ExecutionState.InProgress,
             ActualStart = new DateOnly(2026, 9, 25),
             LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero)
         });
-        var analyzed = new ManagementAnalysisOrchestrator().Analyze(update.Project, new DateOnly(2026, 9, 28));
-        var gantt = new GanttProjector().Build(update.Project, analyzed, new DateOnly(2026, 9, 28));
+        var analyzed = new ManagementAnalysisOrchestrator().Analyze(updated, new DateOnly(2026, 9, 28));
+        var gantt = new GanttProjector().Build(updated, analyzed, new DateOnly(2026, 9, 28));
         var item = gantt.Items.Single(item => item.WorkItemId == "P04-A");
 
         var plan = item.Lanes.Single(lane => lane.Lane == GanttLane.Plan);
@@ -36,7 +36,7 @@ internal static class GanttTests
             string.Join(",", item.LogicalRoles),
             "Gantt must expose available logical responsibility roles without fabricating concrete identities.");
         TestAssert.True(item.IsCritical, "Gantt must expose dependency-critical highlighting from shared analysis.");
-        TestAssert.True(item.HasExecutionEvidence, "Gantt must distinguish an explicit execution overlay from planning-only state.");
+        TestAssert.True(item.HasExecutionEvidence, "Gantt must distinguish explicit source execution from planning-only state.");
         TestAssert.True(item.SourceReferences.Count > 0, "Gantt delivery-card rows must retain safe item-level source references.");
     }
 
@@ -56,15 +56,15 @@ internal static class GanttTests
     {
         var project = CaptureCanonicalProject();
         var asOfDate = new DateOnly(2026, 9, 28);
-        var update = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        var updated = SourceExecutionTestFixtures.Apply(project, new ExecutionUpdate
         {
             WorkItemId = "P04-A",
             ExecutionState = ExecutionState.InProgress,
             ActualStart = new DateOnly(2026, 9, 25),
             LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero)
         });
-        var analysis = new ManagementAnalysisOrchestrator().Analyze(update.Project, asOfDate);
-        var actual = new GanttProjector().Build(update.Project, analysis, asOfDate)
+        var analysis = new ManagementAnalysisOrchestrator().Analyze(updated, asOfDate);
+        var actual = new GanttProjector().Build(updated, analysis, asOfDate)
             .Items.Single(item => item.WorkItemId == "P04-A")
             .Lanes.Single(lane => lane.Lane == GanttLane.Actual);
 
@@ -75,15 +75,15 @@ internal static class GanttTests
     {
         var project = CaptureCanonicalProject();
         var asOfDate = new DateOnly(2026, 9, 28);
-        var update = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        var updated = SourceExecutionTestFixtures.Apply(project, new ExecutionUpdate
         {
             WorkItemId = "P05-A",
             ExecutionState = ExecutionState.Completed,
             ActualFinish = asOfDate,
             LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 30, TimeSpan.Zero)
         });
-        var analysis = new ManagementAnalysisOrchestrator().Analyze(update.Project, asOfDate);
-        var item = new GanttProjector().Build(update.Project, analysis, asOfDate)
+        var analysis = new ManagementAnalysisOrchestrator().Analyze(updated, asOfDate);
+        var item = new GanttProjector().Build(updated, analysis, asOfDate)
             .Items.Single(item => item.WorkItemId == "P05-A");
         var actual = item.Lanes.Single(lane => lane.Lane == GanttLane.Actual);
 

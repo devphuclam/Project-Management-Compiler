@@ -6,8 +6,24 @@ using ProjectManagementCompiler.Domain;
 
 namespace ProjectManagementCompiler.Sources;
 
+public interface IManifestGitCommandRunner
+{
+    Task<(string Stdout, string Stderr)> RunAsync(
+        string repositoryRoot,
+        IReadOnlyList<string> arguments,
+        long maxOutputBytes,
+        CancellationToken cancellationToken);
+}
+
 public sealed class ManifestGitObjectReader : IManifestSourceReader
 {
+    private readonly IManifestGitCommandRunner commandRunner;
+
+    public ManifestGitObjectReader(IManifestGitCommandRunner? commandRunner = null)
+    {
+        this.commandRunner = commandRunner ?? new ProcessGitCommandRunner();
+    }
+
     public async Task<ManifestSourceCapture> CaptureAsync(
         ManifestImportRequest request,
         CancellationToken cancellationToken = default)
@@ -21,9 +37,11 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
 
         try
         {
-            var remote = await RunGitAsync(request.RepositoryRoot, ["remote", "get-url", "origin"], request.MaxFileBytes, cancellationToken);
+            var fileLimit = Math.Min(request.MaxFileBytes, ManifestImportRequest.HardMaxFileBytes);
+            var totalLimit = Math.Min(request.MaxTotalBytes, ManifestImportRequest.HardMaxTotalBytes);
+            var remote = await commandRunner.RunAsync(request.RepositoryRoot, ["remote", "get-url", "origin"], fileLimit, cancellationToken);
             var repositoryIdentity = SafeRepositoryIdentity(remote.Stdout);
-            var commit = await RunGitAsync(
+            var commit = await commandRunner.RunAsync(
                 request.RepositoryRoot,
                 ["rev-parse", "--verify", $"{request.RequestedCommit}^{'{'}commit{'}'}"],
                 256,
@@ -43,7 +61,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
                 request.RepositoryRoot,
                 resolvedCommit,
                 ManifestCaptureSupport.SupportedManifestPath,
-                request.MaxFileBytes,
+                fileLimit,
                 cancellationToken);
             IReadOnlyList<string> declaredPaths;
             try
@@ -79,15 +97,15 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
             foreach (var path in declaredPaths.Where(path => !string.Equals(path, ManifestCaptureSupport.SupportedManifestPath, StringComparison.OrdinalIgnoreCase)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var content = await ReadBlobAsync(request.RepositoryRoot, resolvedCommit, path, request.MaxFileBytes, cancellationToken);
+                var content = await ReadBlobAsync(request.RepositoryRoot, resolvedCommit, path, fileLimit, cancellationToken);
                 var file = ToFile(path, content);
                 totalBytes = checked(totalBytes + file.SizeBytes);
-                if (totalBytes > request.MaxTotalBytes)
+                if (totalBytes > totalLimit)
                 {
                     diagnostics.Add(ManifestCaptureSupport.Diagnostic(
                         "PMC-PATH-002",
                         WarningSeverity.Error,
-                        $"The manifest-declared source exceeds the {request.MaxTotalBytes} byte total limit.",
+                    $"The manifest-declared source exceeds the {totalLimit} byte total limit.",
                         path,
                         recommendedAction: "Reduce the selected source boundary or increase the bounded limit explicitly."));
                     return Failed(request, diagnostics, repositoryIdentity, resolvedCommit);
@@ -104,15 +122,15 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
                     .Where(path => !files.ContainsKey(path)))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var content = await ReadBlobAsync(request.RepositoryRoot, resolvedCommit, path, request.MaxFileBytes, cancellationToken);
+                    var content = await ReadBlobAsync(request.RepositoryRoot, resolvedCommit, path, fileLimit, cancellationToken);
                     var file = ToFile(path, content);
                     totalBytes = checked(totalBytes + file.SizeBytes);
-                    if (totalBytes > request.MaxTotalBytes)
+                    if (totalBytes > totalLimit)
                     {
                         diagnostics.Add(ManifestCaptureSupport.Diagnostic(
                             "PMC-PATH-002",
                             WarningSeverity.Error,
-                            $"The manifest-declared fixture source exceeds the {request.MaxTotalBytes} byte total limit.",
+                        $"The manifest-declared fixture source exceeds the {totalLimit} byte total limit.",
                             path,
                             recommendedAction: "Reduce the selected source boundary or increase the bounded limit explicitly."));
                         return Failed(request, diagnostics, repositoryIdentity, resolvedCommit);
@@ -209,27 +227,85 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
         return (stdout, stderr);
     }
 
-    internal static async Task<string> ReadBlobAsync(
+    private async Task<string> ReadBlobAsync(
         string repositoryRoot,
         string commit,
         string relativePath,
         long maxFileBytes,
         CancellationToken cancellationToken)
     {
-        var type = await RunGitAsync(repositoryRoot, ["cat-file", "-t", $"{commit}:{relativePath}"], 64, cancellationToken);
-        if (!string.Equals(type.Stdout.Trim(), "blob", StringComparison.Ordinal))
+        var tree = await commandRunner.RunAsync(
+            repositoryRoot,
+            ["ls-tree", "-z", commit, "--", relativePath],
+            4096,
+            cancellationToken);
+        var entry = ParseTreeEntry(tree.Stdout, relativePath);
+        if (entry is null)
+        {
+            throw new InvalidDataException($"Manifest-declared source '{relativePath}' does not resolve to one Git tree entry.");
+        }
+
+        if (string.Equals(entry.Value.Mode, "120000", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Manifest-declared source '{relativePath}' is a symlink Git entry and cannot be captured.");
+        }
+
+        if (!string.Equals(entry.Value.Mode, "100644", StringComparison.Ordinal)
+            && !string.Equals(entry.Value.Mode, "100755", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Manifest-declared source '{relativePath}' is not a regular Git file mode.");
+        }
+
+        if (!string.Equals(entry.Value.Type, "blob", StringComparison.Ordinal))
         {
             throw new InvalidDataException($"Manifest-declared source '{relativePath}' is not a regular Git blob.");
         }
 
-        var result = await RunGitAsync(repositoryRoot, ["show", $"{commit}:{relativePath}"], maxFileBytes, cancellationToken);
-        var bytes = Encoding.UTF8.GetByteCount(result.Stdout);
-        if (bytes > maxFileBytes)
+        var size = await commandRunner.RunAsync(
+            repositoryRoot,
+            ["cat-file", "-s", $"{commit}:{relativePath}"],
+            64,
+            cancellationToken);
+        if (!long.TryParse(size.Stdout.Trim(), out var blobBytes))
         {
-            throw new IOException($"Manifest-declared source '{relativePath}' exceeds the {maxFileBytes} byte limit.");
+            throw new InvalidDataException($"Git did not return a valid blob size for '{relativePath}'.");
+        }
+
+        var effectiveLimit = Math.Min(maxFileBytes, ManifestImportRequest.HardMaxFileBytes);
+        if (blobBytes > effectiveLimit)
+        {
+            throw new IOException($"Git blob size {blobBytes} for '{relativePath}' exceeds the {effectiveLimit} byte limit before body read.");
+        }
+
+        var result = await commandRunner.RunAsync(repositoryRoot, ["show", $"{commit}:{relativePath}"], effectiveLimit, cancellationToken);
+        var bytes = Encoding.UTF8.GetByteCount(result.Stdout);
+        if (bytes > effectiveLimit)
+        {
+            throw new IOException($"Manifest-declared source '{relativePath}' exceeds the {effectiveLimit} byte limit.");
         }
 
         return result.Stdout;
+    }
+
+    private static (string Mode, string Type)? ParseTreeEntry(string output, string expectedPath)
+    {
+        var line = output.TrimEnd('\0', '\r', '\n');
+        var separator = line.IndexOf('\t');
+        if (separator <= 0)
+        {
+            return null;
+        }
+
+        var path = line[(separator + 1)..];
+        if (!string.Equals(path, expectedPath, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var fields = line[..separator].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return fields.Length >= 2
+            ? (fields[0], fields[1])
+            : null;
     }
 
     private static bool TryValidateRequest(ManifestImportRequest request, ICollection<ManifestDiagnostic> diagnostics)
@@ -319,6 +395,16 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
 
     private static bool IsCommitToken(string value) =>
         value.Length is >= 7 and <= 64 && value.All(character => Uri.IsHexDigit(character));
+
+    private sealed class ProcessGitCommandRunner : IManifestGitCommandRunner
+    {
+        public Task<(string Stdout, string Stderr)> RunAsync(
+            string repositoryRoot,
+            IReadOnlyList<string> arguments,
+            long maxOutputBytes,
+            CancellationToken cancellationToken) =>
+            RunGitAsync(repositoryRoot, arguments, maxOutputBytes, cancellationToken);
+    }
 
     private sealed class GitCommandException : IOException
     {

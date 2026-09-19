@@ -9,7 +9,7 @@ Canonical output includes:
 - import/snapshot metadata and safe provenance;
 - validation result, source readiness, and diagnostics;
 - source execution register revision/status date and records;
-- retained proposal overlay with lifecycle/base metadata;
+- retained execution-proposal projection with lifecycle/base metadata;
 - separate baseline and forecast calendar identities;
 - existing analysis and view projections derived from the canonical model.
 
@@ -24,7 +24,8 @@ After deserialization the reader MUST validate, before returning a project:
 - `importMetadata` identity, mode/classification, manifest path, contract,
   project/baseline/snapshot IDs, register revision, counts, calendars, and safe
   repository identity;
-- `sourceExecution` typed DeliveryCard identities, target existence, uniqueness,
+- `sourceExecution` project/baseline identities matching `importMetadata`, typed
+  DeliveryCard identities, target existence, uniqueness,
   recording/state/result combinations, effort/date semantics, safe source paths,
   and controlled evidence; and
 - `executionProposals` supported DeliveryCard targets, lifecycle/base metadata,

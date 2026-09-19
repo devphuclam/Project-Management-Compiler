@@ -131,9 +131,16 @@ and create/update updates the current canonical projection without mutating
 `SourceExecution`. Proposal completion requires valid controlled evidence, not a
 non-empty list.
 
+The controlled evidence type allow-list follows the accepted execution-register
+contract: `SOURCE_RECORD`, `COMMIT`, `PULL_REQUEST`, `TEST_RESULT`,
+`REVIEW_RECORD`, `ARTIFACT`, and `EXTERNAL_RECORD`. Optional commit values are
+hexadecimal object tokens; external URIs are HTTP(S) without embedded user info.
+The canonical source-execution snapshot also retains the register's project and
+baseline IDs so metadata tampering cannot be accepted merely because JSON parses.
+
 ### Presentation and environment truth
 
 The UI uses source/proposal/forecast terminology that matches authority. Feature
-003 documentation targets .NET 10 and the dependency-free project file; no
-ClosedXML dependency is part of the implementation. The accepted IDEAEngineering
+003 documentation targets .NET 10 and the dependency-free project file; the
+project has no third-party spreadsheet dependency. The accepted IDEAEngineering
 commit and its seven fixture outcomes remain the compatibility oracle.

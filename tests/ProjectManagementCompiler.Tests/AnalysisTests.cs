@@ -38,7 +38,7 @@ internal static class AnalysisTests
 
         TestAssert.True(analysis.Alerts.Any(alert => alert.WorkItemId == "P04-A" && alert.AlertCode == "OVERDUE" && alert.VarianceWorkingMinutes == 480), "Monday after a Friday finish must derive 480 working minutes of active overdue variance.");
         TestAssert.Equal(ExecutionState.NotStarted, project.DeliveryCards.Single(card => card.Id == "P04-A").State, "Derived overdue must not mutate the source execution state.");
-        TestAssert.Equal(ExecutionState.InProgress, project.ExecutionOverlay.Records.Single().ExecutionState, "Derived overdue must leave the manual execution state as IN_PROGRESS.");
+        TestAssert.Equal(ExecutionState.InProgress, project.SourceExecution.Records.Single(record => record.Entity.Id == "P04-A").ExecutionState, "Derived overdue must leave the source execution state as IN_PROGRESS.");
     }
 
     public static void StatusAnalysisDerivesCompletedOnTimeAndLateSeparately()
@@ -173,11 +173,7 @@ internal static class AnalysisTests
     private static DateTimeOffset UpdatedAt() => new(2026, 9, 28, 10, 0, 0, TimeSpan.Zero);
 
     private static CanonicalProject Apply(CanonicalProject project, ExecutionUpdate update)
-    {
-        var result = new ExecutionOverlayUpdater().Apply(project, update);
-        TestAssert.True(result.Accepted, "The analysis fixture update should be accepted.");
-        return result.Project;
-    }
+        => SourceExecutionTestFixtures.Apply(project, update);
 
     private static CanonicalProject CaptureCanonicalProject(string fixtureName = "ideaengineering")
     {

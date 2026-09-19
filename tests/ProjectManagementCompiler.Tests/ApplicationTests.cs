@@ -126,16 +126,16 @@ internal static class ApplicationTests
             SourcePath = FixturePath(),
             AsOfDate = new DateOnly(2026, 9, 28)
         }, CancellationToken.None).GetAwaiter().GetResult();
-        var updated = compiler.ApplyExecutionUpdate(initial, new ExecutionUpdate
+        var updatedProject = SourceExecutionTestFixtures.Apply(initial.Project, new ExecutionUpdate
         {
             WorkItemId = "P04-A",
             ExecutionState = ExecutionState.InProgress,
             ActualStart = new DateOnly(2026, 9, 25),
             LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero)
-        }, new DateOnly(2026, 9, 28));
-        TestAssert.True(updated.Accepted, "The explicit-as-of determinism setup update must be accepted.");
+        });
+        var updated = SourceExecutionTestFixtures.BuildResult(updatedProject, new DateOnly(2026, 9, 28));
 
-        var json = compiler.SaveJson(updated.Result);
+        var json = compiler.SaveJson(updated);
         var sameDateFirst = compiler.Reopen(json, new DateOnly(2026, 9, 28));
         var sameDateSecond = compiler.Reopen(json, new DateOnly(2026, 9, 28));
         var firstAlerts = string.Join("|", sameDateFirst.Analysis.Alerts.Select(alert => $"{alert.WorkItemId}:{alert.AlertCode}:{alert.VarianceWorkingMinutes}"));
@@ -156,24 +156,24 @@ internal static class ApplicationTests
             AsOfDate = new DateOnly(2026, 9, 28)
         }, CancellationToken.None).GetAwaiter().GetResult();
 
-        var updated = compiler.ApplyExecutionUpdate(initial, new ExecutionUpdate
+        var updatedProject = SourceExecutionTestFixtures.Apply(initial.Project, new ExecutionUpdate
         {
             WorkItemId = "P04-A",
             ExecutionState = ExecutionState.InProgress,
             ActualStart = new DateOnly(2026, 9, 25),
             LastUpdatedAt = new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero)
-        }, new DateOnly(2026, 9, 28));
+        });
+        var updated = SourceExecutionTestFixtures.BuildResult(updatedProject, new DateOnly(2026, 9, 28));
 
-        TestAssert.True(updated.Accepted, "Application execution update must be accepted.");
-        TestAssert.True(updated.Result.Views.Dashboard.Overdue == 1, "Application update must recalculate overdue status.");
-        var json = compiler.SaveJson(updated.Result);
+        TestAssert.True(updated.Views.Dashboard.Overdue == 1, "Application source execution must recalculate overdue status.");
+        var json = compiler.SaveJson(updated);
         var reopened = compiler.Reopen(json, new DateOnly(2026, 9, 28));
 
         TestAssert.Equal(initial.Project.Baseline, reopened.Project.Baseline, "Reopen must preserve the immutable baseline.");
         TestAssert.Equal(new DateOnly(2026, 9, 18), reopened.Project.DeliveryCards.Single(card => card.Id == "P01-A").PlannedStart, "Reopen must preserve planned dates.");
-        TestAssert.Equal(ExecutionState.InProgress, reopened.Project.ExecutionOverlay.Records.Single().ExecutionState, "Reopen must preserve execution overlay state.");
+        TestAssert.Equal(ExecutionState.InProgress, reopened.Project.SourceExecution.Records.Single(record => record.Entity.Id == "P04-A").ExecutionState, "Reopen must preserve source execution state.");
         TestAssert.True(reopened.Project.Analysis?.Alerts.Any(alert => alert.WorkItemId == "P04-A" && alert.AlertCode == "OVERDUE") == true, "Reopen must recalculate execution-derived alerts.");
-        TestAssert.Equal(CanonicalJsonDigest.Compute(updated.Result.Project), CanonicalJsonDigest.Compute(reopened.Project), "Reopen must preserve the semantic project digest.");
+        TestAssert.Equal(CanonicalJsonDigest.Compute(updated.Project), CanonicalJsonDigest.Compute(reopened.Project), "Reopen must preserve the semantic project digest.");
     }
 
     public static void CompilerRejectsInvalidExecutionUpdateWithoutMutatingResult()

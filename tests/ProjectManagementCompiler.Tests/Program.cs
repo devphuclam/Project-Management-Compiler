@@ -13,8 +13,12 @@ internal static class Program
         ("AcceptedFixtureCatalogueMatchesDeclaredOracle", ManifestImportTests.AcceptedFixtureCatalogueMatchesDeclaredOracle),
         ("OfficialAnalysisUsesRecordedSourceExecutionOnly", ManifestExecutionTests.OfficialAnalysisUsesRecordedSourceExecutionOnly),
         ("ProposalPreviewIsLocalAndStaleAware", ProposalTests.ProposalPreviewIsLocalAndStaleAware),
+        ("ProposalSaveReopenListRoundTripsThroughApplicationState", ProposalTests.ProposalSaveReopenListRoundTripsThroughApplicationState),
+        ("MalformedEvidenceCannotQualifyReadyForReview", ProposalTests.MalformedEvidenceCannotQualifyReadyForReview),
         ("Schema20PersistsSourceAuthorityAndIgnoresImportTimestampInDigest", CanonicalMigrationTests.Schema20PersistsSourceAuthorityAndIgnoresImportTimestampInDigest),
         ("Schema10OverlayReopensAsLocalProposalWithoutSourcePromotion", CanonicalMigrationTests.Schema10OverlayReopensAsLocalProposalWithoutSourcePromotion),
+        ("Schema10OverlayIsNeutralizedFromAllExecutionProjections", CanonicalMigrationTests.Schema10OverlayIsNeutralizedFromAllExecutionProjections),
+        ("Schema20RejectsTamperedAuthorityDataAfterDeserialization", CanonicalMigrationTests.Schema20RejectsTamperedAuthorityDataAfterDeserialization),
         ("ManagementEvidencePreservesIndependentStatesAndTypedTargets", ManagementEvidenceTests.ManagementEvidencePreservesIndependentStatesAndTypedTargets),
         ("CanonicalProjectDefaultsManagementEvidenceWithoutProfile", ManagementEvidenceTests.CanonicalProjectDefaultsManagementEvidenceWithoutProfile),
         ("CanonicalJsonRoundTripsManagementEvidence", ManagementEvidenceTests.CanonicalJsonRoundTripsManagementEvidence),
@@ -60,6 +64,12 @@ internal static class Program
         ("RecognizedFixturePathsExistAndArePublicSafe", FixtureShapeTests.RecognizedFixturePathsExistAndArePublicSafe),
         ("FixtureHasRequiredCountsAndAuthoritativeEffort", FixtureShapeTests.FixtureHasRequiredCountsAndAuthoritativeEffort),
         ("SourceRequestUsesSafeSizeDefaults", SourceCaptureTests.SourceRequestUsesSafeSizeDefaults),
+        ("WorkingTreeRejectsUnavailableGitStateInsteadOfComparingSentinel", ManifestHardeningTests.WorkingTreeRejectsUnavailableGitStateInsteadOfComparingSentinel),
+        ("WorkingTreeRejectsUnexpectedGitStateFailureInsteadOfEscaping", ManifestHardeningTests.WorkingTreeRejectsUnexpectedGitStateFailureInsteadOfEscaping),
+        ("WorkingTreeReadsManifestIndependentlyForPreAndPostCapture", ManifestHardeningTests.WorkingTreeReadsManifestIndependentlyForPreAndPostCapture),
+        ("OversizedGitBlobIsRejectedBeforeBodyRead", ManifestHardeningTests.OversizedGitBlobIsRejectedBeforeBodyRead),
+        ("SymlinkGitTreeEntryIsRejectedBeforeBodyRead", ManifestHardeningTests.SymlinkGitTreeEntryIsRejectedBeforeBodyRead),
+        ("CallerGitLimitCannotBypassApplicationHardCeiling", ManifestHardeningTests.CallerGitLimitCannotBypassApplicationHardCeiling),
         ("CaptureReadsAllowListedDocumentsInFixedOrder", SourceCaptureTests.CaptureReadsAllowListedDocumentsInFixedOrder),
         ("CapturePreservesNormalizedReferencesAndOneTimestamp", SourceCaptureTests.CapturePreservesNormalizedReferencesAndOneTimestamp),
         ("SnapshotMetadataNeverExposesAbsoluteLocalRoot", SourceCaptureTests.SnapshotMetadataNeverExposesAbsoluteLocalRoot),
@@ -219,6 +229,7 @@ internal static class Program
         ,("GanttUsesFocusedWorkspaceLayout", GanttUiRegressionTests.GanttUsesFocusedWorkspaceLayout)
         ,("GanttPlanViewUsesCalmTimelineGrid", GanttUiRegressionTests.GanttPlanViewUsesCalmTimelineGrid)
         ,("GanttModeStripPreservesViewMeaning", GanttUiRegressionTests.GanttModeStripPreservesViewMeaning)
+        ,("ManifestWorkflowUsesAuthorityAwareExecutionLabels", GanttUiRegressionTests.ManifestWorkflowUsesAuthorityAwareExecutionLabels)
     ];
 
     public static int Main()

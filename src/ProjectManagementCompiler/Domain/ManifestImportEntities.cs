@@ -63,6 +63,9 @@ public enum ManifestSourceRole
 
 public sealed record ManifestImportRequest
 {
+    public const long HardMaxFileBytes = 8 * 1024 * 1024;
+    public const long HardMaxTotalBytes = 64 * 1024 * 1024;
+
     public string RepositoryRoot { get; init; } = string.Empty;
     public string ManifestPath { get; init; } = "planning/project-management-compiler-manifest.json";
     public ManifestImportMode Mode { get; init; } = ManifestImportMode.GitCommit;
@@ -125,6 +128,8 @@ public sealed record SourceExecutionRecord
 
 public sealed record SourceExecutionSnapshot
 {
+    public string ProjectId { get; init; } = string.Empty;
+    public string BaselineId { get; init; } = string.Empty;
     public string RegisterId { get; init; } = string.Empty;
     public int RegisterRevision { get; init; }
     public DateOnly? StatusDate { get; init; }

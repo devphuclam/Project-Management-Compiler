@@ -319,8 +319,8 @@
     const management = summary && (summary.managementControl || summary.views && summary.views.managementControl) || {};
     const discoveryState = String(management.discoveryState || "NOT_REQUESTED").toUpperCase();
     const execution = hasExecutionEvidence(summary)
-      ? "Manual execution: Loaded"
-      : "Manual execution: Not recorded";
+      ? "Source execution: Loaded"
+      : "Source execution: Not recorded";
     if (discoveryState === "KNOWN") {
       return "Planning baseline: Loaded · " + execution + " · Repository readiness: Loaded · Gate/decision evidence: Loaded · As of " + formatDate(summary.analysis && summary.analysis.asOfDate) + ".";
     }
@@ -594,7 +594,7 @@
       progressStats.appendChild(node("span", String(dashboard.inProgress || 0) + " in progress"));
       progressStats.appendChild(node("span", String(dashboard.notStarted || 0) + " not started"));
     } else {
-      progressStats.appendChild(node("span", "Execution overlay not yet recorded"));
+      progressStats.appendChild(node("span", "Source execution not yet recorded"));
     }
     progressCard.appendChild(progressStats);
     mainGrid.appendChild(progressCard);
@@ -602,7 +602,7 @@
     const scheduleCard = node("section", null, "summary-milestone-card summary-schedule-card");
     scheduleCard.appendChild(node("p", "SCHEDULE HEALTH", "eyebrow"));
     scheduleCard.appendChild(node("h3", "Baseline versus analysis"));
-    [["Baseline finish", dashboard.baselineFinish || "Not recorded"], ["Dependency CPM Finish", dashboard.cpmFinish || "Not calculated"], ["Forecast", dashboard.forecastFinish || "Not calculated"]].forEach(([label, value]) => {
+    [["Baseline finish", dashboard.baselineFinish || "Not recorded"], ["Dependency CPM Finish", dashboard.cpmFinish || "Not calculated"], ["Source forecast", dashboard.forecastFinish || "Not recorded"]].forEach(([label, value]) => {
       const dateRow = node("div", null, "summary-date-row");
       dateRow.appendChild(node("span", label, "muted"));
       dateRow.appendChild(node("strong", value));
@@ -1966,7 +1966,7 @@
     }
 
     if (row.kind === "DeliveryCard") {
-      const record = node("button", "Record execution", "primary gantt-record-execution");
+      const record = node("button", "Propose execution update", "primary gantt-record-execution");
       record.type = "button";
       record.dataset.ganttAction = "record-execution";
       record.dataset.ganttKey = row.id;
@@ -2313,7 +2313,7 @@
       const executionDetails = node("details", null, "source-execution-details");
       executionDetails.appendChild(node("summary", "Show recorded execution register", "dashboard-details-summary"));
       executionDetails.appendChild(renderTable(
-        ["Entity", "Recording", "Execution", "Result", "Actual", "Remaining", "Forecast", "Blocker", "Updated", "Source file"],
+        ["Entity", "Recording", "Execution", "Result", "Actual", "Remaining", "Source forecast", "Blocker", "Updated", "Source file"],
         (execution.records || []).map(record => [
           ((record.entity && record.entity.kind) || "UNKNOWN") + ":" + ((record.entity && record.entity.id) || "UNKNOWN"),
           stateLabel(record.recordingState),
@@ -2343,7 +2343,7 @@
     const heading = node("div", null, "dashboard-heading");
     heading.appendChild(node("p", "READINESS EVIDENCE", "eyebrow"));
     heading.appendChild(node("h2", "Management control view"));
-    heading.appendChild(node("p", "Readiness evidence is additive: planning baseline and execution overlay remain independent.", "muted"));
+    heading.appendChild(node("p", "Readiness evidence is additive: planning baseline and source execution remain independent.", "muted"));
     section.appendChild(heading);
 
     const scope = view || {};

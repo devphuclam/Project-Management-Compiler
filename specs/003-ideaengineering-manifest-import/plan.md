@@ -151,7 +151,9 @@ Gantt projection and legacy compiler remain in place and consume canonical resul
   enforces application ceilings.
 - `CompilerApplicationState`, `ExecutionProposalService`, and reopen/import paths
   share one retained proposal collection and hydrate it from canonical JSON.
-- Proposal evidence validation is explicit and source-contract-compatible; UI text
+- Proposal evidence validation is explicit and source-contract-compatible through
+  the seven-type controlled-evidence allow-list; source execution retains the
+  register project/baseline identities for semantic cross-checking. UI text
   changes are semantic wording corrections only.
 
 ## Architecture and State Transitions

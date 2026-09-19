@@ -48,9 +48,11 @@ The proposal service MUST NOT keep an independent mutable dictionary.
 ## Controlled evidence
 
 `Evidence.Count > 0` is not sufficient. A record qualifies only when it has a
-non-empty ID, supported type, description, recording timestamp, recorder, and
-safe optional repository path/commit/URI. Invalid records remain diagnosed and a
-completion proposal remains `DRAFT`.
+non-empty ID, one of `SOURCE_RECORD`, `COMMIT`, `PULL_REQUEST`, `TEST_RESULT`,
+`REVIEW_RECORD`, `ARTIFACT`, or `EXTERNAL_RECORD`, description, recording
+timestamp, recorder, and a safe repository path or HTTP(S) URI without user info;
+an optional commit token must be hexadecimal. Invalid records remain diagnosed
+and a completion proposal remains `DRAFT`.
 
 `/api/execution` remains a compatibility alias only. It creates or updates a
 proposal and returns a proposal-only marker; it cannot mutate source execution or

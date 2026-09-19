@@ -50,8 +50,6 @@ public sealed class ExecutionProposalService
     };
 
     private readonly CompilerApplicationState state;
-    private readonly object gate = new();
-    private readonly Dictionary<string, ExecutionProposal> proposals = new(StringComparer.OrdinalIgnoreCase);
 
     public ExecutionProposalService(CompilerApplicationState state)
     {
@@ -82,11 +80,7 @@ public sealed class ExecutionProposalService
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
         proposal = Evaluate(proposal, request.RequestedLifecycle, official.Metadata);
-        lock (gate)
-        {
-            proposals[proposal.Id] = proposal;
-            SyncState();
-        }
+        state.UpsertProposal(proposal);
 
         return proposal;
     }
@@ -96,14 +90,8 @@ public sealed class ExecutionProposalService
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(request);
         var official = RequireOfficial();
-        ExecutionProposal existing;
-        lock (gate)
-        {
-            if (!proposals.TryGetValue(id, out existing!))
-            {
-                throw new KeyNotFoundException($"Execution proposal '{id}' was not found.");
-            }
-        }
+        var existing = state.FindProposal(id)
+            ?? throw new KeyNotFoundException($"Execution proposal '{id}' was not found.");
 
         var changes = existing.ProposedChanges;
         if (request.ProposedChanges is not null)
@@ -124,11 +112,7 @@ public sealed class ExecutionProposalService
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
         updated = Evaluate(updated, request.RequestedLifecycle, official.Metadata);
-        lock (gate)
-        {
-            proposals[id] = updated;
-            SyncState();
-        }
+        state.UpsertProposal(updated);
 
         return updated;
     }
@@ -136,14 +120,11 @@ public sealed class ExecutionProposalService
     public IReadOnlyList<ExecutionProposal> List(string? snapshotId = null)
     {
         var official = state.CurrentOfficialSnapshot;
-        lock (gate)
-        {
-            return proposals.Values
-                .Select(proposal => official is null ? proposal : Evaluate(proposal, null, official.Metadata))
-                .Where(proposal => snapshotId is null || string.Equals(proposal.BaseSnapshotId, snapshotId, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(proposal => proposal.Id, StringComparer.Ordinal)
-                .ToArray();
-        }
+        return state.Proposals
+            .Select(proposal => official is null ? proposal : Evaluate(proposal, null, official.Metadata))
+            .Where(proposal => snapshotId is null || string.Equals(proposal.BaseSnapshotId, snapshotId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(proposal => proposal.Id, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public ProposalPreviewResult Preview(string id)
@@ -213,6 +194,11 @@ public sealed class ExecutionProposalService
         }
 
         var requestedReady = requestedLifecycle == ProposalLifecycle.ReadyForReview || proposal.Lifecycle == ProposalLifecycle.ReadyForReview;
+        if (proposal.Evidence.Count > 0 && !proposal.Evidence.All(IsControlledEvidenceValid))
+        {
+            diagnostics.Add(Diagnostic("PMC-PROPOSAL-007", WarningSeverity.Warning, "Proposal evidence must include an ID, type, description, recorded time, recorder, and a safe repository path or external URI before it can qualify completion.", proposal.TargetKind, proposal.TargetId));
+        }
+
         if (requestedReady && !CompletionIsReady(proposal))
         {
             diagnostics.Add(Diagnostic("PMC-PROPOSAL-002", WarningSeverity.Warning, "A completion proposal remains DRAFT until finish, actual effort, zero remaining effort, and controlled evidence are present.", proposal.TargetKind, proposal.TargetId));
@@ -240,7 +226,8 @@ public sealed class ExecutionProposalService
             && actualHours >= 0
             && decimal.TryParse(remaining, NumberStyles.Number, CultureInfo.InvariantCulture, out var remainingHours)
             && remainingHours == 0
-            && proposal.Evidence.Count > 0;
+            && proposal.Evidence.Count > 0
+            && proposal.Evidence.All(IsControlledEvidenceValid);
     }
 
     private static SourceExecutionRecord ApplyChanges(
@@ -363,12 +350,24 @@ public sealed class ExecutionProposalService
         return normalized;
     }
 
-    private static IReadOnlyList<SourceExecutionEvidence> NormalizeEvidence(IEnumerable<SourceExecutionEvidence> evidence) =>
-        evidence.Select(item => item with
+    private static IReadOnlyList<SourceExecutionEvidence> NormalizeEvidence(IEnumerable<SourceExecutionEvidence>? evidence) =>
+        (evidence ?? Array.Empty<SourceExecutionEvidence>()).Select(NormalizeEvidenceItem).ToArray();
+
+    private static SourceExecutionEvidence NormalizeEvidenceItem(SourceExecutionEvidence? item)
+    {
+        var source = item ?? new SourceExecutionEvidence();
+        return source with
         {
-            RepositoryPath = NormalizeEvidencePath(item.RepositoryPath),
-            ExternalUri = string.IsNullOrWhiteSpace(item.ExternalUri) ? null : item.ExternalUri.Trim()
-        }).ToArray();
+            EvidenceId = source.EvidenceId.Trim(),
+            Type = source.Type.Trim(),
+            RepositoryPath = NormalizeEvidencePath(source.RepositoryPath),
+            ExternalUri = string.IsNullOrWhiteSpace(source.ExternalUri) ? null : source.ExternalUri.Trim(),
+            Description = string.IsNullOrWhiteSpace(source.Description) ? null : source.Description.Trim(),
+            Commit = string.IsNullOrWhiteSpace(source.Commit) ? null : source.Commit.Trim(),
+            Result = string.IsNullOrWhiteSpace(source.Result) ? null : source.Result.Trim(),
+            RecordedBy = string.IsNullOrWhiteSpace(source.RecordedBy) ? null : source.RecordedBy.Trim()
+        };
+    }
 
     private static string NormalizeEvidencePath(string value)
     {
@@ -390,6 +389,20 @@ public sealed class ExecutionProposalService
 
         return normalized;
     }
+
+    private static bool IsControlledEvidenceValid(SourceExecutionEvidence? item) =>
+        item is not null
+        && !string.IsNullOrWhiteSpace(item.EvidenceId)
+        && ControlledEvidenceRules.SupportedTypes.Contains(item.Type)
+        && !string.IsNullOrWhiteSpace(item.Description)
+        && item.RecordedAt is not null
+        && !string.IsNullOrWhiteSpace(item.RecordedBy)
+        && ControlledEvidenceRules.IsValidCommit(item.Commit)
+        && ((!string.IsNullOrWhiteSpace(item.RepositoryPath)
+                && ManifestCaptureSupport.TryNormalizeRelativePath(item.RepositoryPath, out var normalized)
+                && !normalized.StartsWith(".git/", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(normalized, ".git", StringComparison.OrdinalIgnoreCase))
+            || ControlledEvidenceRules.IsSafeExternalUri(item.ExternalUri));
 
     private static void ValidateTarget(string targetKind, string targetId, IdeaEngineeringSnapshot official)
     {
@@ -442,5 +455,4 @@ public sealed class ExecutionProposalService
             RecommendedAction = "Review the local proposal and compare it with the current official source snapshot."
         };
 
-    private void SyncState() => state.ReplaceProposals(proposals.Values.OrderBy(item => item.Id, StringComparer.Ordinal));
 }

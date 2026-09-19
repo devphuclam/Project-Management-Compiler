@@ -77,6 +77,9 @@ replays the seven source-owned fixture outcomes and preserves that warning.
   entries, and body reads beyond hard application ceilings fail closed.
 - Proposal completion requires a valid controlled-evidence record; non-empty
   malformed evidence cannot produce `READY_FOR_REVIEW`.
+- Controlled evidence uses the accepted seven-type allow-list and rejects invalid
+  commit tokens or external URIs with embedded user information. Source execution
+  retains register project/baseline identities for metadata cross-checking.
 - Manifest UI labels source-authoritative execution as `Source execution`, local
   edits as proposals, and `ExecutionProposal` forecast values as `Source
   forecast` where they originate from the source.

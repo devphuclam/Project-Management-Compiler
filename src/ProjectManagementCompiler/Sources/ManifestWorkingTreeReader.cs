@@ -5,8 +5,28 @@ using ProjectManagementCompiler.Domain;
 
 namespace ProjectManagementCompiler.Sources;
 
+public interface IManifestWorkingTreeProbe
+{
+    ManifestSourceFile ReadFile(
+        string repositoryRoot,
+        string relativePath,
+        long maxFileBytes,
+        long remainingTotalBytes);
+
+    Task<string> ReadGitStateAsync(
+        string repositoryRoot,
+        CancellationToken cancellationToken);
+}
+
 public sealed class ManifestWorkingTreeReader : IManifestSourceReader
 {
+    private readonly IManifestWorkingTreeProbe probe;
+
+    public ManifestWorkingTreeReader(IManifestWorkingTreeProbe? probe = null)
+    {
+        this.probe = probe ?? new PhysicalManifestWorkingTreeProbe();
+    }
+
     public async Task<ManifestSourceCapture> CaptureAsync(
         ManifestImportRequest request,
         CancellationToken cancellationToken = default)
@@ -38,16 +58,12 @@ public sealed class ManifestWorkingTreeReader : IManifestSourceReader
         try
         {
             var normalizedRoot = SourcePathPolicy.NormalizeRoot(request.RepositoryRoot);
-            var manifest = ReadText(normalizedRoot, ManifestCaptureSupport.SupportedManifestPath, request.MaxFileBytes, request.MaxTotalBytes, out var manifestBytes);
-            var paths = ManifestCaptureSupport.ReadDeclaredPaths(manifest);
-            var pre = CaptureFiles(normalizedRoot, paths, request, cancellationToken, manifest, manifestBytes);
-            paths = ExpandFixturePaths(paths, manifest, pre);
-            pre = CaptureFiles(normalizedRoot, paths, request, cancellationToken, manifest, manifestBytes);
+            var pre = CaptureSnapshot(normalizedRoot, request, cancellationToken);
             var preFingerprint = Fingerprint(pre);
-            var preHeadAndStatus = await GitStateAsync(normalizedRoot, cancellationToken);
-            var post = CaptureFiles(normalizedRoot, paths, request, cancellationToken, manifest, manifestBytes);
+            var preHeadAndStatus = await ReadVerifiedGitStateAsync(normalizedRoot, cancellationToken);
+            var post = CaptureSnapshot(normalizedRoot, request, cancellationToken);
             var postFingerprint = Fingerprint(post);
-            var postHeadAndStatus = await GitStateAsync(normalizedRoot, cancellationToken);
+            var postHeadAndStatus = await ReadVerifiedGitStateAsync(normalizedRoot, cancellationToken);
             var stable = string.Equals(preFingerprint, postFingerprint, StringComparison.Ordinal)
                 && string.Equals(preHeadAndStatus, postHeadAndStatus, StringComparison.Ordinal);
             if (!stable)
@@ -87,6 +103,15 @@ public sealed class ManifestWorkingTreeReader : IManifestSourceReader
             diagnostics.Add(ManifestCaptureSupport.Diagnostic("PMC-PATH-001", WarningSeverity.Error, exception.Message, exception.PathValue));
             return Failed(request, diagnostics);
         }
+        catch (GitStateUnavailableException exception)
+        {
+            diagnostics.Add(ManifestCaptureSupport.Diagnostic(
+                "PMC-SNAPSHOT-002",
+                WarningSeverity.Error,
+                $"Git HEAD/status could not be verified: {exception.Message}",
+                recommendedAction: "Run the preview from a readable Git working tree or import an exact commit."));
+            return Failed(request, diagnostics);
+        }
         catch (JsonException exception)
         {
             diagnostics.Add(ManifestCaptureSupport.Diagnostic("PMC-SCHEMA-001", WarningSeverity.Error, exception.Message, ManifestCaptureSupport.SupportedManifestPath));
@@ -99,78 +124,72 @@ public sealed class ManifestWorkingTreeReader : IManifestSourceReader
         }
     }
 
-    private static Dictionary<string, ManifestSourceFile> CaptureFiles(
+    private Dictionary<string, ManifestSourceFile> CaptureSnapshot(
+        string root,
+        ManifestImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        var manifestFile = probe.ReadFile(
+            root,
+            ManifestCaptureSupport.SupportedManifestPath,
+            EffectiveFileLimit(request),
+            EffectiveTotalLimit(request));
+        var paths = ManifestCaptureSupport.ReadDeclaredPaths(manifestFile.Content);
+        var first = CaptureFiles(root, paths, request, cancellationToken, manifestFile);
+        paths = ExpandFixturePaths(paths, manifestFile.Content, first);
+        return CaptureFiles(root, paths, request, cancellationToken, manifestFile);
+    }
+
+    private Dictionary<string, ManifestSourceFile> CaptureFiles(
         string root,
         IReadOnlyList<string> paths,
         ManifestImportRequest request,
         CancellationToken cancellationToken,
-        string manifest,
-        long manifestBytes)
+        ManifestSourceFile manifestFile)
     {
         var files = new Dictionary<string, ManifestSourceFile>(StringComparer.OrdinalIgnoreCase)
         {
-            [ManifestCaptureSupport.SupportedManifestPath] = ToFile(ManifestCaptureSupport.SupportedManifestPath, manifest, manifestBytes)
+            [ManifestCaptureSupport.SupportedManifestPath] = manifestFile
         };
-        long total = manifestBytes;
+        long total = manifestFile.SizeBytes;
         foreach (var path in paths.Where(path => !string.Equals(path, ManifestCaptureSupport.SupportedManifestPath, StringComparison.OrdinalIgnoreCase)))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var content = ReadText(root, path, request.MaxFileBytes, request.MaxTotalBytes - total, out var bytes);
-            total = checked(total + bytes);
-            files[path] = ToFile(path, content, bytes);
+            var file = probe.ReadFile(root, path, EffectiveFileLimit(request), EffectiveTotalLimit(request) - total);
+            total = checked(total + file.SizeBytes);
+            files[path] = file;
         }
 
         return files;
     }
 
-    private static string ReadText(string root, string relativePath, long maxFileBytes, long remainingTotalBytes, out long bytes)
-    {
-        if (!ManifestCaptureSupport.TryNormalizeRelativePath(relativePath, out var normalized))
-        {
-            throw new ManifestUnsafePathException(relativePath);
-        }
-
-        var fullPath = SourcePathPolicy.ResolvePath(root, normalized, new PhysicalManifestFileSystem());
-        var info = new FileInfo(fullPath);
-        if (!info.Exists)
-        {
-            throw new FileNotFoundException($"Manifest-declared source '{normalized}' does not exist.", fullPath);
-        }
-
-        if (!SourcePathPolicy.HasSafeSegments(root, fullPath, new PhysicalManifestFileSystem())
-            || File.GetAttributes(fullPath).HasFlag(FileAttributes.ReparsePoint))
-        {
-            throw new ManifestUnsafePathException(relativePath);
-        }
-
-        if (info.Length > maxFileBytes || info.Length > remainingTotalBytes)
-        {
-            throw new IOException($"Manifest-declared source '{normalized}' exceeds its bounded capture size.");
-        }
-
-        var content = File.ReadAllText(fullPath, new UTF8Encoding(false, true));
-        bytes = Encoding.UTF8.GetByteCount(content);
-        if (bytes > maxFileBytes || bytes > remainingTotalBytes)
-        {
-            throw new IOException($"Manifest-declared source '{normalized}' exceeds its bounded capture size.");
-        }
-
-        return content;
-    }
-
-    private static async Task<string> GitStateAsync(string root, CancellationToken cancellationToken)
+    private async Task<string> ReadVerifiedGitStateAsync(string root, CancellationToken cancellationToken)
     {
         try
         {
-            var head = await ManifestGitObjectReader.RunGitAsync(root, ["rev-parse", "HEAD"], 256, cancellationToken);
-            var status = await ManifestGitObjectReader.RunGitAsync(root, ["status", "--porcelain=v1", "--untracked-files=all"], 4 * 1024 * 1024, cancellationToken);
-            return head.Stdout.Trim() + "\n" + status.Stdout;
+            var state = await probe.ReadGitStateAsync(root, cancellationToken);
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                throw new IOException("Git state command returned no verifiable state.");
+            }
+
+            return state;
         }
-        catch (IOException)
+        catch (OperationCanceledException)
         {
-            return "git-state-unavailable";
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new GitStateUnavailableException(exception.Message, exception);
         }
     }
+
+    private static long EffectiveFileLimit(ManifestImportRequest request) =>
+        Math.Min(request.MaxFileBytes, ManifestImportRequest.HardMaxFileBytes);
+
+    private static long EffectiveTotalLimit(ManifestImportRequest request) =>
+        Math.Min(request.MaxTotalBytes, ManifestImportRequest.HardMaxTotalBytes);
 
     private static string Fingerprint(IReadOnlyDictionary<string, ManifestSourceFile> files)
     {
@@ -182,14 +201,6 @@ public sealed class ManifestWorkingTreeReader : IManifestSourceReader
 
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()))).ToLowerInvariant();
     }
-
-    private static ManifestSourceFile ToFile(string path, string content, long bytes) => new()
-    {
-        RelativePath = path,
-        Content = content,
-        SizeBytes = bytes,
-        Format = ManifestCaptureSupport.GetFormat(path)
-    };
 
     private static IReadOnlyList<string> ExpandFixturePaths(
         IReadOnlyList<string> paths,
@@ -216,23 +227,89 @@ public sealed class ManifestWorkingTreeReader : IManifestSourceReader
         Diagnostics = diagnostics
     };
 
-    private sealed class PhysicalManifestFileSystem : IRepositoryFileSystem
+    private sealed class PhysicalManifestWorkingTreeProbe : IManifestWorkingTreeProbe
     {
-        public bool DirectoryExists(string path) => Directory.Exists(path);
-        public bool FileExists(string path) => File.Exists(path);
-        public bool IsReparsePoint(string path)
+        public ManifestSourceFile ReadFile(string repositoryRoot, string relativePath, long maxFileBytes, long remainingTotalBytes)
+        {
+            if (!ManifestCaptureSupport.TryNormalizeRelativePath(relativePath, out var normalized))
+            {
+                throw new ManifestUnsafePathException(relativePath);
+            }
+
+            var fullPath = SourcePathPolicy.ResolvePath(repositoryRoot, normalized, new PhysicalManifestFileSystem());
+            var info = new FileInfo(fullPath);
+            if (!info.Exists)
+            {
+                throw new FileNotFoundException($"Manifest-declared source '{normalized}' does not exist.", fullPath);
+            }
+
+            if (!SourcePathPolicy.HasSafeSegments(repositoryRoot, fullPath, new PhysicalManifestFileSystem())
+                || File.GetAttributes(fullPath).HasFlag(FileAttributes.ReparsePoint))
+            {
+                throw new ManifestUnsafePathException(relativePath);
+            }
+
+            if (info.Length > maxFileBytes || info.Length > remainingTotalBytes)
+            {
+                throw new IOException($"Manifest-declared source '{normalized}' exceeds its bounded capture size.");
+            }
+
+            var content = File.ReadAllText(fullPath, new UTF8Encoding(false, true));
+            var bytes = Encoding.UTF8.GetByteCount(content);
+            if (bytes > maxFileBytes || bytes > remainingTotalBytes)
+            {
+                throw new IOException($"Manifest-declared source '{normalized}' exceeds its bounded capture size.");
+            }
+
+            return new ManifestSourceFile
+            {
+                RelativePath = normalized,
+                Content = content,
+                SizeBytes = bytes,
+                Format = ManifestCaptureSupport.GetFormat(normalized)
+            };
+        }
+
+        public async Task<string> ReadGitStateAsync(string repositoryRoot, CancellationToken cancellationToken)
         {
             try
             {
-                return File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint);
+                var head = await ManifestGitObjectReader.RunGitAsync(repositoryRoot, ["rev-parse", "HEAD"], 256, cancellationToken);
+                var status = await ManifestGitObjectReader.RunGitAsync(repositoryRoot, ["status", "--porcelain=v1", "--untracked-files=all"], 4 * 1024 * 1024, cancellationToken);
+                return head.Stdout.Trim() + "\n" + status.Stdout;
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException)
+            catch (IOException exception)
             {
-                return true;
+                throw new GitStateUnavailableException(exception.Message, exception);
             }
         }
 
-        public RepositoryFileReadResult ReadFile(string allowedRoot, string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes) =>
-            throw new NotSupportedException("Working tree capture uses the manifest-specific bounded reader.");
+        private sealed class PhysicalManifestFileSystem : IRepositoryFileSystem
+        {
+            public bool DirectoryExists(string path) => Directory.Exists(path);
+            public bool FileExists(string path) => File.Exists(path);
+            public bool IsReparsePoint(string path)
+            {
+                try
+                {
+                    return File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException)
+                {
+                    return true;
+                }
+            }
+
+            public RepositoryFileReadResult ReadFile(string allowedRoot, string path, Encoding encoding, long maxFileBytes, long remainingTotalBytes) =>
+                throw new NotSupportedException("Working tree capture uses the manifest-specific bounded reader.");
+        }
+    }
+
+    private sealed class GitStateUnavailableException : IOException
+    {
+        public GitStateUnavailableException(string message, Exception innerException)
+            : base(message, innerException)
+        {
+        }
     }
 }

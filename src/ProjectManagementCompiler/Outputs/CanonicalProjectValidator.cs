@@ -1,5 +1,7 @@
 using ProjectManagementCompiler.Domain;
 
+using System.Globalization;
+
 namespace ProjectManagementCompiler.Outputs;
 
 public static class CanonicalProjectValidator
@@ -26,6 +28,12 @@ public static class CanonicalProjectValidator
         ValidateSourceReferences(project, diagnostics, sourceIds);
         ValidateManagementEvidence(project, diagnostics, sourceIds);
         ValidateOverlay(project, diagnostics, cardIds);
+        ValidateV2AuthorityData(project, diagnostics, cardIds);
+        if (!string.Equals(project.SchemaVersion, "2.0", StringComparison.Ordinal)
+            && project.ExecutionProposals.Count > 0)
+        {
+            ValidateExecutionProposals(project, null, diagnostics, cardIds);
+        }
         ValidatePoliciesAndMeasures(project, diagnostics);
 
         return diagnostics;
@@ -789,6 +797,485 @@ public static class CanonicalProjectValidator
         {
             Add(diagnostics, "INVALID_WIP_POLICY", "Work-in-progress limit cannot be negative.", "policy");
         }
+    }
+
+    private static void ValidateV2AuthorityData(
+        CanonicalProject project,
+        ICollection<ImportWarning> diagnostics,
+        ISet<string> cardIds)
+    {
+        if (!string.Equals(project.SchemaVersion, "2.0", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var metadata = project.ImportMetadata;
+        if (metadata is null)
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Schema 2.0 requires semantic import metadata.", null);
+            return;
+        }
+
+        ValidateImportMetadata(project, metadata, diagnostics);
+        ValidateSourceExecution(project, metadata, diagnostics, cardIds);
+        ValidateExecutionProposals(project, metadata, diagnostics, cardIds);
+
+        if (project.ExecutionOverlay.Records.Count > 0)
+        {
+            Add(diagnostics, "LEGACY_EXECUTION_OVERLAY_PRESENT", "Schema 2.0 cannot retain effective legacy execution overlay records.", null);
+        }
+    }
+
+    private static void ValidateImportMetadata(
+        CanonicalProject project,
+        ManifestSnapshotMetadata metadata,
+        ICollection<ImportWarning> diagnostics)
+    {
+        if (string.IsNullOrWhiteSpace(metadata.RepositoryIdentity)
+            || Path.IsPathRooted(metadata.RepositoryIdentity)
+            || metadata.RepositoryIdentity.Any(char.IsControl))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a safe repository identity.", "repositoryIdentity");
+        }
+
+        if (!Enum.IsDefined(metadata.ImportMode))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata has an unsupported import mode.", "importMode");
+        }
+
+        if (!Enum.IsDefined(metadata.Classification))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata has an unsupported classification.", "classification");
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.SourceIdentity)
+            || metadata.SourceIdentity.Any(char.IsControl))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a safe source identity.", "sourceIdentity");
+        }
+
+        if (!IsSafeRelativePath(metadata.ManifestPath)
+            || !string.Equals(metadata.ManifestPath.Replace('\\', '/'), "planning/project-management-compiler-manifest.json", StringComparison.Ordinal))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata manifestPath must be the supported repository-relative manifest path.", "manifestPath");
+        }
+
+        if (!string.Equals(metadata.ContractVersion, "0.1.0", StringComparison.Ordinal))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata contractVersion must be supported contract 0.1.0.", "contractVersion");
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.ProjectId))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a projectId.", "projectId");
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.BaselineId))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a baselineId.", "baselineId");
+        }
+
+        if (metadata.RegisterRevision < 0)
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata registerRevision cannot be negative.", "registerRevision");
+        }
+
+        if (!Enum.IsDefined(metadata.ValidationResult)
+            || !Enum.IsDefined(metadata.SourceReadiness))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata validation and readiness states must be supported enum values.", "validationResult");
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.SnapshotId)
+            || metadata.ImportedAtUtc == default
+            || metadata.WarningCount < 0
+            || metadata.ErrorCount < 0)
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata requires a snapshot ID, import time, and non-negative diagnostic counts.", "snapshotId");
+        }
+
+        if (metadata.Classification == ManifestImportClassification.OfficialCommit
+            && (metadata.ImportMode != ManifestImportMode.GitCommit
+                || metadata.SourceReadiness != SourceReadinessState.Pass
+                || metadata.ValidationResult == ManifestValidationResult.Fail))
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "An official commit must be a Git commit with passed readiness and non-failed validation.", "classification");
+        }
+
+        if (metadata.ImportMode == ManifestImportMode.UncommittedPreview
+            && metadata.Classification != ManifestImportClassification.UncommittedPreview
+            && metadata.Classification != ManifestImportClassification.Failed)
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "An uncommitted import must remain an uncommitted preview or failed attempt.", "classification");
+        }
+
+        if (metadata.RegisterStatusDate == DateOnly.MinValue)
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata registerStatusDate cannot use DateOnly.MinValue.", "registerStatusDate");
+        }
+
+        if (metadata.Calendars is null)
+        {
+            Add(diagnostics, "INVALID_IMPORT_METADATA", "Import metadata calendars cannot be null.", "calendars");
+        }
+    }
+
+    private static void ValidateSourceExecution(
+        CanonicalProject project,
+        ManifestSnapshotMetadata metadata,
+        ICollection<ImportWarning> diagnostics,
+        ISet<string> cardIds)
+    {
+        var snapshot = project.SourceExecution;
+        if (snapshot is null)
+        {
+            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Schema 2.0 requires a source execution snapshot.", null);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(snapshot.ProjectId)
+            || string.IsNullOrWhiteSpace(snapshot.BaselineId)
+            || string.IsNullOrWhiteSpace(snapshot.RegisterId)
+            || snapshot.RegisterRevision < 0
+            || snapshot.StatusDate is null
+            || !IsSafeRelativePath(snapshot.SourcePath))
+        {
+            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution requires project/baseline/register identities, a non-negative revision, status date, and safe source path.", "sourceExecution");
+        }
+
+        if (!string.Equals(snapshot.ProjectId, metadata.ProjectId, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(snapshot.BaselineId, metadata.BaselineId, StringComparison.OrdinalIgnoreCase))
+        {
+            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution project and baseline identities must match import metadata.", "sourceExecution");
+        }
+
+        if (snapshot.RegisterRevision != metadata.RegisterRevision
+            || snapshot.StatusDate != metadata.RegisterStatusDate)
+        {
+            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution revision and status date must match import metadata.", "sourceExecution");
+        }
+
+        if (snapshot.Records is null)
+        {
+            Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution records cannot be null.", "records");
+            return;
+        }
+
+        var seen = new HashSet<CanonicalWorkItemKey>();
+        foreach (var record in snapshot.Records)
+        {
+            if (record is null)
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION", "Source execution records cannot contain null entries.", "records");
+                continue;
+            }
+
+            var key = record.Entity;
+            if (!string.Equals(key.Kind, "DeliveryCard", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(key.Id)
+                || !cardIds.Contains(key.Id))
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION_TARGET", $"Source execution target '{key}' must resolve to a canonical DeliveryCard.", key.Id);
+            }
+
+            if (!string.IsNullOrWhiteSpace(key.Kind)
+                && !string.IsNullOrWhiteSpace(key.Id)
+                && !seen.Add(key))
+            {
+                Add(diagnostics, "DUPLICATE_SOURCE_EXECUTION_IDENTITY", $"Source execution contains duplicate identity '{key}'.", key.Id);
+            }
+
+            if (!Enum.IsDefined(record.RecordingState)
+                || (record.ExecutionState is not null && !Enum.IsDefined(record.ExecutionState.Value))
+                || (record.ResultState is not null && !Enum.IsDefined(record.ResultState.Value)))
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION_STATE", $"Source execution record '{key.Id}' contains an unsupported state.", key.Id);
+            }
+
+            if (!IsSafeRelativePath(record.SourcePath))
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION_PATH", $"Source execution record '{key.Id}' has an unsafe source path.", key.Id);
+            }
+
+            ValidateDateRangeAndEffort(
+                diagnostics,
+                key.Id,
+                record.ActualStart,
+                record.ActualFinish,
+                record.ActualEffortHours,
+                record.RemainingEffortHours,
+                "INVALID_SOURCE_EXECUTION");
+
+            if (record.RecordingState == SourceRecordingState.NotRecorded
+                && (record.ExecutionState is not null
+                    || record.ResultState is not null
+                    || record.ActualStart is not null
+                    || record.ActualFinish is not null
+                    || record.ActualEffortHours is not null
+                    || record.RemainingEffortHours is not null
+                    || record.ForecastFinish is not null
+                    || !string.IsNullOrWhiteSpace(record.Blocker)
+                    || (record.Evidence?.Count ?? 0) > 0
+                    || record.LastUpdatedAt is not null
+                    || !string.IsNullOrWhiteSpace(record.RecordedBy)))
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION_STATE", $"NOT_RECORDED source execution record '{key.Id}' cannot carry execution evidence.", key.Id);
+            }
+
+            if (record.RecordingState == SourceRecordingState.Recorded
+                && (record.ExecutionState is null || record.ResultState is null || record.LastUpdatedAt is null))
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION_STATE", $"RECORDED source execution record '{key.Id}' requires execution state, result state, and lastUpdatedAt.", key.Id);
+            }
+
+            ValidateControlledEvidence(diagnostics, record.Evidence, key.Id, "source execution evidence");
+            if (record.ExecutionState == ExecutionState.Completed
+                && (record.ActualFinish is null
+                    || record.ActualEffortHours is null
+                    || record.RemainingEffortHours != 0
+                    || (record.Evidence?.Count ?? 0) == 0))
+            {
+                Add(diagnostics, "INVALID_SOURCE_EXECUTION_COMPLETION", $"Completed source execution record '{key.Id}' requires finish, actual effort, zero remaining effort, and controlled evidence.", key.Id);
+            }
+        }
+    }
+
+    private static void ValidateExecutionProposals(
+        CanonicalProject project,
+        ManifestSnapshotMetadata? metadata,
+        ICollection<ImportWarning> diagnostics,
+        ISet<string> cardIds)
+    {
+        if (project.ExecutionProposals is null)
+        {
+            Add(diagnostics, "INVALID_EXECUTION_PROPOSALS", "Schema 2.0 executionProposals cannot be null.", null);
+            return;
+        }
+
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var allowedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "executionState", "resultState", "actualStart", "actualFinish",
+            "actualEffortHours", "remainingEffortHours", "forecastFinish", "blocker",
+            "note", "legacyEvidenceReference"
+        };
+
+        foreach (var proposal in project.ExecutionProposals)
+        {
+            if (proposal is null)
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL", "Execution proposals cannot contain null entries.", null);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(proposal.Id) || !seenIds.Add(proposal.Id))
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_ID", "Every execution proposal requires a unique non-empty ID.", proposal.Id);
+            }
+
+            if (string.IsNullOrWhiteSpace(proposal.BaseSnapshotId)
+                || proposal.ExpectedRegisterRevision < 0
+                || proposal.CreatedAtUtc == default
+                || proposal.UpdatedAtUtc == default
+                || proposal.UpdatedAtUtc < proposal.CreatedAtUtc)
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL", $"Execution proposal '{proposal.Id}' has invalid base or timestamp metadata.", proposal.Id);
+            }
+
+            if (!Enum.IsDefined(proposal.Lifecycle))
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_LIFECYCLE", $"Execution proposal '{proposal.Id}' has an unsupported lifecycle.", proposal.Id);
+            }
+
+            if (!string.Equals(CanonicalWorkItemKey.NormalizeKind(proposal.TargetKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(proposal.TargetId)
+                || !cardIds.Contains(proposal.TargetId))
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_TARGET", $"Execution proposal '{proposal.Id}' target must resolve to a canonical DeliveryCard.", proposal.Id);
+            }
+
+            if (proposal.ProposedChanges is null)
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGES", $"Execution proposal '{proposal.Id}' changes cannot be null.", proposal.Id);
+            }
+            else
+            {
+                ValidateProposalChanges(diagnostics, proposal, allowedFields);
+            }
+
+            ValidateControlledEvidence(diagnostics, proposal.Evidence, proposal.Id, "proposal evidence");
+            if (proposal.Lifecycle == ProposalLifecycle.ReadyForReview && !ProposalCompletionIsReady(proposal))
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_LIFECYCLE", $"Execution proposal '{proposal.Id}' cannot be READY_FOR_REVIEW without complete changes and controlled evidence.", proposal.Id);
+            }
+
+            if (metadata is not null
+                && !string.Equals(proposal.BaseSnapshotId, metadata.SnapshotId, StringComparison.OrdinalIgnoreCase)
+                && proposal.Lifecycle != ProposalLifecycle.StaleBase)
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_BASE", $"Execution proposal '{proposal.Id}' must be STALE_BASE when its base snapshot differs from the current official snapshot.", proposal.Id);
+            }
+        }
+    }
+
+    private static void ValidateProposalChanges(
+        ICollection<ImportWarning> diagnostics,
+        ExecutionProposal proposal,
+        ISet<string> allowedFields)
+    {
+        foreach (var pair in proposal.ProposedChanges)
+        {
+            if (!allowedFields.Contains(pair.Key))
+            {
+                Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains unsupported change field '{pair.Key}'.", proposal.Id);
+                continue;
+            }
+
+            if (pair.Value is null)
+            {
+                continue;
+            }
+
+            switch (pair.Key)
+            {
+                case "executionState" when !TryParseExecutionState(pair.Value):
+                case "resultState" when !TryParseResultState(pair.Value):
+                    Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an unsupported state value for '{pair.Key}'.", proposal.Id);
+                    break;
+                case "actualStart":
+                case "actualFinish":
+                    if (!DateOnly.TryParseExact(pair.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                    {
+                        Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an invalid date for '{pair.Key}'.", proposal.Id);
+                    }
+
+                    break;
+                case "actualEffortHours":
+                case "remainingEffortHours":
+                    if (!decimal.TryParse(pair.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var hours) || hours < 0)
+                    {
+                        Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an invalid non-negative value for '{pair.Key}'.", proposal.Id);
+                    }
+
+                    break;
+                case "forecastFinish":
+                    if (!DateTimeOffset.TryParse(pair.Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _))
+                    {
+                        Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an invalid date-time for forecastFinish.", proposal.Id);
+                    }
+
+                    break;
+                case "legacyEvidenceReference" when !IsSafeRelativePath(pair.Value):
+                    Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' contains an unsafe legacy evidence reference.", proposal.Id);
+                    break;
+            }
+        }
+
+        if (proposal.ProposedChanges.TryGetValue("actualStart", out var start)
+            && proposal.ProposedChanges.TryGetValue("actualFinish", out var finish)
+            && DateOnly.TryParseExact(start, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var startDate)
+            && DateOnly.TryParseExact(finish, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var finishDate)
+            && finishDate < startDate)
+        {
+            Add(diagnostics, "INVALID_EXECUTION_PROPOSAL_CHANGE", $"Execution proposal '{proposal.Id}' has a finish before its start.", proposal.Id);
+        }
+    }
+
+    private static void ValidateDateRangeAndEffort(
+        ICollection<ImportWarning> diagnostics,
+        string owner,
+        DateOnly? start,
+        DateOnly? finish,
+        decimal? actualEffort,
+        decimal? remainingEffort,
+        string code)
+    {
+        ValidateDate(diagnostics, start, code + "_DATE", owner, "actual start");
+        ValidateDate(diagnostics, finish, code + "_DATE", owner, "actual finish");
+        if (start is not null && finish is not null && finish < start)
+        {
+            Add(diagnostics, code + "_DATE_RANGE", $"Execution record '{owner}' has an actual finish before its actual start.", owner);
+        }
+
+        ValidateNonNegative(diagnostics, actualEffort, code + "_EFFORT", owner, "actual effort");
+        ValidateNonNegative(diagnostics, remainingEffort, code + "_EFFORT", owner, "remaining effort");
+    }
+
+    private static void ValidateControlledEvidence(
+        ICollection<ImportWarning> diagnostics,
+        IEnumerable<SourceExecutionEvidence>? evidence,
+        string owner,
+        string label)
+    {
+        foreach (var item in evidence ?? Array.Empty<SourceExecutionEvidence>())
+        {
+            if (!IsControlledEvidenceValid(item))
+            {
+                Add(diagnostics, "INVALID_CONTROLLED_EVIDENCE", $"{label} for '{owner}' does not satisfy the controlled evidence contract.", owner);
+            }
+        }
+    }
+
+    private static bool ProposalCompletionIsReady(ExecutionProposal proposal)
+    {
+        var changes = proposal.ProposedChanges;
+        return changes.TryGetValue("executionState", out var state)
+            && TryParseExecutionState(state, out var parsedState)
+            && parsedState == ExecutionState.Completed
+            && changes.TryGetValue("actualFinish", out var finish)
+            && DateOnly.TryParseExact(finish, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+            && changes.TryGetValue("actualEffortHours", out var actual)
+            && decimal.TryParse(actual, NumberStyles.Number, CultureInfo.InvariantCulture, out var actualHours)
+            && actualHours >= 0
+            && changes.TryGetValue("remainingEffortHours", out var remaining)
+            && decimal.TryParse(remaining, NumberStyles.Number, CultureInfo.InvariantCulture, out var remainingHours)
+            && remainingHours == 0
+            && (proposal.Evidence?.Count ?? 0) > 0
+            && (proposal.Evidence ?? Array.Empty<SourceExecutionEvidence>()).All(item => IsControlledEvidenceValid(item));
+    }
+
+    private static bool IsControlledEvidenceValid(SourceExecutionEvidence? item) =>
+        item is not null
+        && !string.IsNullOrWhiteSpace(item.EvidenceId)
+        && ControlledEvidenceRules.SupportedTypes.Contains(item.Type)
+        && !string.IsNullOrWhiteSpace(item.Description)
+        && item.RecordedAt is not null
+        && !string.IsNullOrWhiteSpace(item.RecordedBy)
+        && ControlledEvidenceRules.IsValidCommit(item.Commit)
+        && ((!string.IsNullOrWhiteSpace(item.RepositoryPath) && IsSafeRelativePath(item.RepositoryPath))
+            || ControlledEvidenceRules.IsSafeExternalUri(item.ExternalUri));
+
+    private static bool TryParseExecutionState(string? value) =>
+        TryParseExecutionState(value, out _);
+
+    private static bool TryParseExecutionState(string? value, out ExecutionState state)
+    {
+        var parsed = Enum.TryParse<ExecutionState>(value?.Replace("_", string.Empty, StringComparison.Ordinal), true, out state);
+        return parsed && Enum.IsDefined(state);
+    }
+
+    private static bool TryParseResultState(string? value) =>
+        Enum.TryParse<SourceResultState>(value?.Replace("_", string.Empty, StringComparison.Ordinal), true, out var parsed)
+        && Enum.IsDefined(parsed);
+
+    private static bool IsSafeRelativePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || Path.IsPathRooted(value)
+            || value.StartsWith("/", StringComparison.Ordinal)
+            || value.StartsWith("\\", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var normalized = value.Replace('\\', '/');
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0
+            && !segments.Any(segment => segment is "." or ".."
+                                        || segment.Contains(':')
+                                        || segment.Any(char.IsControl))
+            && !normalized.Equals(".git", StringComparison.OrdinalIgnoreCase)
+            && !normalized.StartsWith(".git/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ValidatePlannedEntityDatesAndMeasures(

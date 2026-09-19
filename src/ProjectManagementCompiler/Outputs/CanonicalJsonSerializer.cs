@@ -164,6 +164,7 @@ public sealed class CanonicalJsonSerializer
 
         return project with
         {
+            ExecutionOverlay = new ExecutionOverlay(),
             ExecutionProposals = proposals,
             Warnings = project.Warnings.Concat(
                 [new ImportWarning

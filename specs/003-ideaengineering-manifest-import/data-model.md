@@ -49,6 +49,8 @@ validation facts, not inferred from display rows.
 
 `SourceExecutionSnapshot`
 
+- source contract `ProjectId` and `BaselineId` identities, cross-checked against
+  import metadata;
 - source register revision and status date;
 - `Records` keyed by typed delivery-card identity;
 - source provenance for each record;
@@ -64,7 +66,7 @@ Unknown values remain null. `NOT_RECORDED` is not translated to `NOT_STARTED`.
 Readiness evidence is a separate management-evidence collection and cannot populate
 execution fields.
 
-## Proposal overlay
+## Execution proposal
 
 `ExecutionProposal`
 
@@ -83,13 +85,15 @@ The proposal is local, non-authoritative, and absent from official analysis. It 
 Each proposal evidence record used for completion readiness must contain:
 
 - non-empty `EvidenceId`;
-- a supported source-contract `Type`;
+- a supported source-contract `Type`: `SOURCE_RECORD`, `COMMIT`, `PULL_REQUEST`,
+  `TEST_RESULT`, `REVIEW_RECORD`, `ARTIFACT`, or `EXTERNAL_RECORD`;
 - non-empty `Description`;
 - a valid `RecordedAt` timestamp;
 - non-empty `RecordedBy`;
 - an optional safe repository-relative `RepositoryPath` that is not `.git`;
 - an optional hexadecimal commit token; and
-- an optional safe external URI without embedded user information.
+- an optional safe external URI without embedded user information. If both the
+  repository path and URI are absent, the record is invalid.
 
 Invalid evidence remains attached and diagnosed. It is not silently discarded and
 does not qualify a completion proposal.

@@ -150,9 +150,27 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains("applyGanttPreset(\"plan\")", appJs, "Returning to Plan must reset secondary view state through the preset contract.");
     }
 
+    public static void ManifestWorkflowUsesAuthorityAwareExecutionLabels()
+    {
+        var appJs = ReadAppJs();
+        var indexHtml = ReadIndexHtml();
+
+        TestAssert.Contains("Source execution: Loaded", appJs, "Manifest workflow must label recorded execution as source execution.");
+        TestAssert.Contains("Source execution: Not recorded", appJs, "Manifest workflow must distinguish an unrecorded source execution state.");
+        TestAssert.Contains("Propose execution update", appJs, "Execution editing must describe a local proposal instead of source write-back.");
+        TestAssert.Contains("Source forecast", appJs, "SourceExecution.ForecastFinish must be presented as source forecast.");
+        TestAssert.Contains("propose execution updates", indexHtml, "The application framing must describe proposal intent instead of source write-back.");
+        TestAssert.False(appJs.Contains("Manual execution:", StringComparison.Ordinal), "Manifest workflow must not label source execution as manual execution.");
+        TestAssert.False(appJs.Contains("Record execution", StringComparison.Ordinal), "Manifest workflow must not imply that the browser records source execution.");
+        TestAssert.False(indexHtml.Contains("record execution", StringComparison.Ordinal), "The application framing must not imply that the browser records source execution.");
+    }
+
     private static string ReadAppJs() => File.ReadAllText(Path.Combine(
         Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "app.js"));
 
     private static string ReadStyles() => File.ReadAllText(Path.Combine(
         Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "styles.css"));
+
+    private static string ReadIndexHtml() => File.ReadAllText(Path.Combine(
+        Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "index.html"));
 }

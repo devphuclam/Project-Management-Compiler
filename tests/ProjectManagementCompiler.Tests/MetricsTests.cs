@@ -40,16 +40,14 @@ internal static class MetricsTests
     public static void ActualStartAloneDoesNotFabricateForecastFromCpmFinish()
     {
         var project = CaptureCanonicalProject();
-        var updated = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        var updated = SourceExecutionTestFixtures.Apply(project, new ExecutionUpdate
         {
             WorkItemId = "P01-A",
             ExecutionState = ExecutionState.InProgress,
             ActualStart = new DateOnly(2026, 9, 18),
             LastUpdatedAt = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero)
         });
-        TestAssert.True(updated.Accepted, "An actual start should be accepted for forecast semantics testing.");
-
-        var analysis = Analyze(updated.Project);
+        var analysis = Analyze(updated);
 
         TestAssert.Equal(DataState.Calculated, analysis.CpmState, "The fixture should still produce a calculated CPM finish.");
         TestAssert.True(analysis.CalculatedFinish is not null, "The fixture should expose an independent CPM calculated finish.");
@@ -64,7 +62,7 @@ internal static class MetricsTests
     public static void DashboardSummariesExposeKnownActualAndRemainingEffort()
     {
         var project = CaptureCanonicalProject();
-        var updated = new ExecutionOverlayUpdater().Apply(project, new ExecutionUpdate
+        var updated = SourceExecutionTestFixtures.Apply(project, new ExecutionUpdate
         {
             WorkItemId = "P01-A",
             ExecutionState = ExecutionState.InProgress,
@@ -73,9 +71,7 @@ internal static class MetricsTests
             RemainingEffortHours = 2m,
             LastUpdatedAt = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero)
         });
-        TestAssert.True(updated.Accepted, "Actual and remaining effort evidence should be accepted.");
-
-        var analysis = Analyze(updated.Project);
+        var analysis = Analyze(updated);
         TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.actual-effort" && summary.Value == "4h" && summary.State == DataState.Calculated), "Dashboard must expose known actual effort.");
         TestAssert.True(analysis.ViewSummaries.Any(summary => summary.ViewId == "dashboard.remaining-effort" && summary.Value == "2h" && summary.State == DataState.Calculated), "Dashboard must expose known remaining effort.");
     }

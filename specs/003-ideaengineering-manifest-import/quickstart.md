@@ -44,6 +44,9 @@ Expected accepted-source state:
 - P01 recorded/in progress/not applicable with unknown actual and remaining;
 - 52 cards with `NOT_RECORDED` recording state.
 
+The canonical source-execution snapshot also retains the register `projectId` and
+`baselineId`; these must match import metadata during v2 reopen validation.
+
 ## Preview and proposal demonstration
 
 1. Import the working tree with `mode = UNCOMMITTED_PREVIEW`.

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ProjectManagementCompiler.Domain;
 
 /// <summary>
@@ -7,6 +9,7 @@ namespace ProjectManagementCompiler.Domain;
 /// </summary>
 public readonly struct CanonicalWorkItemKey : IEquatable<CanonicalWorkItemKey>
 {
+    [JsonConstructor]
     public CanonicalWorkItemKey(string kind, string id)
     {
         Kind = NormalizeKind(kind);
@@ -24,8 +27,8 @@ public readonly struct CanonicalWorkItemKey : IEquatable<CanonicalWorkItemKey>
     public override bool Equals(object? obj) => obj is CanonicalWorkItemKey other && Equals(other);
 
     public override int GetHashCode() => HashCode.Combine(
-        StringComparer.OrdinalIgnoreCase.GetHashCode(Kind),
-        StringComparer.OrdinalIgnoreCase.GetHashCode(Id));
+        StringComparer.OrdinalIgnoreCase.GetHashCode(Kind ?? string.Empty),
+        StringComparer.OrdinalIgnoreCase.GetHashCode(Id ?? string.Empty));
 
     public override string ToString() => $"{Kind}:{Id}";
 

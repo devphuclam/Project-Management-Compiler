@@ -303,6 +303,12 @@ internal static class ManifestImportTests
 
     private static string FindIdeaEngineeringRoot()
     {
+        var configured = Environment.GetEnvironmentVariable("IDEAENGINEERING_ROOT");
+        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+        {
+            return Path.GetFullPath(configured);
+        }
+
         var current = new DirectoryInfo(Directory.GetCurrentDirectory());
         for (var depth = 0; depth < 6 && current is not null; depth++, current = current.Parent)
         {

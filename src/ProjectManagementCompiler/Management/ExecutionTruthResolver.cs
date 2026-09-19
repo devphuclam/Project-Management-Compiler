@@ -21,40 +21,26 @@ public static class ExecutionTruthResolver
 
     public static EffectiveExecutionRecord? ForCard(CanonicalProject project, string cardId)
     {
-        if (UsesSourceExecution(project))
+        if (!UsesSourceExecution(project))
         {
-            var source = project.SourceExecution.Records
-                .FirstOrDefault(record => string.Equals(record.Entity.Kind, "DeliveryCard", StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(record.Entity.Id, cardId, StringComparison.OrdinalIgnoreCase));
-            return source is null
-                ? null
-                : new EffectiveExecutionRecord
-                {
-                    WorkItemId = cardId,
-                    IsRecorded = source.RecordingState == SourceRecordingState.Recorded,
-                    ExecutionState = source.ExecutionState,
-                    ActualStart = source.ActualStart,
-                    ActualFinish = source.ActualFinish,
-                    ActualEffortHours = source.ActualEffortHours,
-                    RemainingEffortHours = source.RemainingEffortHours,
-                    LastUpdatedAt = source.LastUpdatedAt
-                };
+            return null;
         }
 
-        var legacy = project.ExecutionOverlay.Records
-            .FirstOrDefault(record => string.Equals(record.WorkItemId, cardId, StringComparison.OrdinalIgnoreCase));
-        return legacy is null
+        var source = project.SourceExecution.Records
+            .FirstOrDefault(record => string.Equals(record.Entity.Kind, "DeliveryCard", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(record.Entity.Id, cardId, StringComparison.OrdinalIgnoreCase));
+        return source is null
             ? null
             : new EffectiveExecutionRecord
             {
                 WorkItemId = cardId,
-                IsRecorded = true,
-                ExecutionState = legacy.ExecutionState,
-                ActualStart = legacy.ActualStart,
-                ActualFinish = legacy.ActualFinish,
-                ActualEffortHours = legacy.ActualEffortHours,
-                RemainingEffortHours = legacy.RemainingEffortHours,
-                LastUpdatedAt = legacy.LastUpdatedAt
+                IsRecorded = source.RecordingState == SourceRecordingState.Recorded,
+                ExecutionState = source.ExecutionState,
+                ActualStart = source.ActualStart,
+                ActualFinish = source.ActualFinish,
+                ActualEffortHours = source.ActualEffortHours,
+                RemainingEffortHours = source.RemainingEffortHours,
+                LastUpdatedAt = source.LastUpdatedAt
             };
     }
 

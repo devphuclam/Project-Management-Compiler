@@ -62,6 +62,8 @@ public sealed class ManifestExecutionAdapter
         ICollection<ManifestDiagnostic> diagnostics)
     {
         var registerId = StringValue(root, "registerId");
+        var projectId = StringValue(root, "projectId");
+        var baselineId = StringValue(root, "baselineId");
         var revision = IntValue(root, "registerRevision");
         var statusDate = ParseDate(StringValue(root, "statusDate"), sourcePath, "statusDate", diagnostics);
         var timeZone = StringValue(root, "timeZone");
@@ -138,6 +140,8 @@ public sealed class ManifestExecutionAdapter
 
         return new SourceExecutionSnapshot
         {
+            ProjectId = projectId,
+            BaselineId = baselineId,
             RegisterId = registerId,
             RegisterRevision = revision,
             StatusDate = statusDate,

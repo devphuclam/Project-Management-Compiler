@@ -45,13 +45,14 @@ internal static class CanonicalJsonTests
 
         var reopened = new CanonicalJsonSerializer().Deserialize(new CanonicalJsonSerializer().Serialize(updated));
         var reopenedCard = reopened.DeliveryCards.Single(card => card.Id == originalCard.Id);
-        var record = reopened.ExecutionOverlay.Records.Single();
+        var proposal = reopened.ExecutionProposals.Single();
 
         TestAssert.Equal(originalCard.PlannedStart, reopenedCard.PlannedStart, "Reopen must retain the original planned start.");
         TestAssert.Equal(originalCard.PlannedFinish, reopenedCard.PlannedFinish, "Reopen must retain the original planned finish.");
-        TestAssert.Equal(ExecutionState.Completed, record.ExecutionState, "Reopen must retain execution state.");
-        TestAssert.Equal(new DateOnly(2026, 9, 25), record.ActualFinish, "Reopen must retain actual finish.");
-        TestAssert.Equal(8m, record.ActualEffortHours, "Reopen must retain actual effort independently.");
+        TestAssert.Equal(0, reopened.ExecutionOverlay.Records.Count, "Reopen must neutralize the legacy overlay after migration.");
+        TestAssert.Equal("COMPLETED", proposal.ProposedChanges["executionState"], "Reopen must retain proposed execution state.");
+        TestAssert.Equal("2026-09-25", proposal.ProposedChanges["actualFinish"], "Reopen must retain proposed actual finish.");
+        TestAssert.Equal("8", proposal.ProposedChanges["actualEffortHours"], "Reopen must retain proposed effort independently.");
     }
 
     public static void Schema10JsonWithoutOverlayUsesEmptyOverlay()
