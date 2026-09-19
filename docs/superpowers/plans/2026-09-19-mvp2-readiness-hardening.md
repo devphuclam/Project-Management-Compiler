@@ -118,13 +118,13 @@
 - Modify: `docs/runbook/*` or the specific MVP2.1 runbook identified during inspection
 - Create: `docs/superpowers/research/2026-09-19-ideaengineering-readiness-compatibility.md`
 
-- [ ] Document explicit path intake, standalone evidence, role semantics, bounded summaries, gate path/precedence, optional actual record, effective selection, and conflict behavior.
-- [ ] Record current IDEAEngineering HEAD review and approval-policy compatibility finding without copying private documents.
-- [ ] Update stale test counts and verification/runbook naming.
-- [ ] Run the complete custom test runner, approved restore/build, `scripts/verify.ps1`, `scripts/verify-web.ps1`, launcher verification, Node syntax check, and `git diff --check`.
-- [ ] Run real current IDEAEngineering compatibility cases A–J using the authorized checkout and a temporary synthetic gate-record projection outside the public fixture.
-- [ ] Perform self code review against the hardening prompt and report exact files, commits, branch/worktree, final SHA, status, push/merge state, and deferred items.
-- [ ] Commit with `docs: close MVP2.1 evidence fidelity hardening`.
+- [x] Document explicit path intake, standalone evidence, role semantics, bounded summaries, gate path/precedence, optional actual record, effective selection, and conflict behavior.
+- [x] Record current IDEAEngineering HEAD review and approval-policy compatibility finding without copying private documents.
+- [x] Update stale test counts and verification/runbook naming.
+- [x] Run the complete custom test runner, approved restore/build, `scripts/verify.ps1`, `scripts/verify-web.ps1`, launcher verification, Node syntax check, and `git diff --check`.
+- [x] Run real current IDEAEngineering compatibility cases A–J using the authorized checkout and a temporary synthetic gate-record projection outside the public fixture.
+- [x] Perform self code review against the hardening prompt and report exact files, commits, branch/worktree, final SHA, status, push/merge state, and deferred items.
+- [x] Commit with `docs: close MVP2.1 evidence fidelity hardening`.
 
 ## Self-review coverage
 

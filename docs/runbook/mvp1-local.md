@@ -30,6 +30,10 @@ long `dotnet` command:
 .\scripts\run-project.ps1
 ```
 
+The current hardening closeout registers and executes 186 custom-runner tests;
+the verification scripts also cover the launcher, web/API flow, JSON/XLSX
+outputs, and browser-source safety assertions.
+
 Or double-click `Run Project.cmd` in the repository root. The launcher waits
 for `GET /api/health`, opens `http://127.0.0.1:5050/`, and keeps the application
 running until you press `Ctrl+C`. Use `-NoBrowser` when the browser is already
