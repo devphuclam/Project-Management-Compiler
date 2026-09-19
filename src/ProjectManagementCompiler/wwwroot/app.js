@@ -1233,6 +1233,7 @@
     });
     svg.appendChild(defs);
     const visibleIndex = new Map(visibleRows.map((row, index) => [row.key, index]));
+    if (!state.gantt.showDependencies) return svg;
     const dependencyEdges = (state.views && state.views.dependencyNetwork && state.views.dependencyNetwork.edges) || dependencyView && dependencyView.edges || [];
     const eligibleEdges = dependencyEdges.filter(edge => edge.includedInAnalysis !== false);
     eligibleEdges.forEach(edge => {
@@ -1240,7 +1241,6 @@
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
       if (!visibleIndex.has(predecessorKey) || !visibleIndex.has(subjectKey)) return;
       const isRelated = selectedRowKey && (selectedRowKey === predecessorKey || selectedRowKey === subjectKey);
-      if (!state.gantt.showDependencies && !isRelated) return;
       const predecessor = visibleRows[visibleIndex.get(predecessorKey)];
       const subject = visibleRows[visibleIndex.get(subjectKey)];
       const predecessorTimestamp = parseDate(predecessor.plan.finish || predecessor.plan.start);
@@ -1252,9 +1252,12 @@
       const y1 = visibleIndex.get(predecessorKey) * rowHeight + rowHeight / 2;
       const y2 = visibleIndex.get(subjectKey) * rowHeight + rowHeight / 2;
       const bend = x1 + Math.max(18, Math.abs(x2 - x1) / 2);
-      path.setAttribute("d", "M " + x1 + " " + y1 + " C " + bend + " " + y1 + ", " + bend + " " + y2 + ", " + x2 + " " + y2);
+      path.setAttribute("d", "M " + x1 + " " + y1 + " L " + bend + " " + y1 + " L " + bend + " " + y2 + " L " + x2 + " " + y2);
       path.setAttribute("class", "gantt-dependency-path" + (isRelated ? " is-related" : ""));
       path.setAttribute("marker-end", "url(#" + (isRelated ? "gantt-dependency-arrow-related" : "gantt-dependency-arrow") + ")");
+      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = predecessorKey + " → " + subjectKey + " · " + (edge.dependencyType || "Dependency");
+      path.appendChild(title);
       svg.appendChild(path);
     });
     return svg;
@@ -1406,7 +1409,7 @@
     addAction("+", "zoom-in");
     addAction("Fit project", "fit-project");
     addAction("Critical path", "critical-path", state.gantt.criticalPath);
-    addAction("Show dependencies", "dependencies", state.gantt.showDependencies);
+    addAction(state.gantt.showDependencies ? "Hide dependencies" : "Show dependencies", "dependencies", state.gantt.showDependencies);
     toolbarTop.appendChild(actions);
     toolbar.appendChild(toolbarTop);
 
@@ -1420,6 +1423,12 @@
       presets.appendChild(button);
     });
     toolbar.appendChild(presets);
+    const dependencyHint = node("p", null, "gantt-dependency-hint muted");
+    dependencyHint.appendChild(node("strong", "Dependency lines: "));
+    dependencyHint.appendChild(document.createTextNode(state.gantt.showDependencies
+      ? "predecessor → successor. Select a row to inspect its impact."
+      : "hidden. Use Show dependencies to display predecessor → successor."));
+    toolbar.appendChild(dependencyHint);
 
     const filters = node("div", null, "gantt-filters");
     const phase = node("select");
@@ -1648,13 +1657,14 @@
     cpmSection.appendChild(node("p", "Calculated from analysis-eligible dependencies and working calendar. Does not perform resource leveling.", "muted"));
     cpmSection.appendChild(cpmFields);
 
-    const dependencies = appendDetailSection(panel, "DEPENDENCIES");
+    const dependencies = appendDetailSection(panel, "DEPENDENCY IMPACT");
+    dependencies.appendChild(node("p", "Arrows read from predecessor → successor.", "muted"));
     const edges = (dependencyView && dependencyView.edges || []).filter(edge => edge.includedInAnalysis !== false && ((edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)) === row.key || (edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)) === row.key));
     const blockedBy = edges.filter(edge => (edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)) === row.key);
     const blocking = edges.filter(edge => (edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)) === row.key);
     const dependencyFields = node("div", null, "gantt-detail-fields");
-    appendDetailField(dependencyFields, "Blocked by", blockedBy.length ? blockedBy.map(edge => edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)).join(", ") : "None recorded");
-    appendDetailField(dependencyFields, "Blocking", blocking.length ? blocking.map(edge => edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)).join(", ") : "None recorded");
+    appendDetailField(dependencyFields, "Depends on", blockedBy.length ? blockedBy.map(edge => edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId)).join(", ") : "None recorded");
+    appendDetailField(dependencyFields, "Affects", blocking.length ? blocking.map(edge => edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId)).join(", ") : "None recorded");
     dependencies.appendChild(dependencyFields);
     edges.forEach(edge => {
       const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
