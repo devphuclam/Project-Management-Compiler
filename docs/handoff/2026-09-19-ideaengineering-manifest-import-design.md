@@ -174,11 +174,10 @@ Fresh artifact-reconciliation verification recorded for 2026-09-20:
 
 ## Git and local workspace notes
 
-The final micro-pass is isolated in the managed worktree for
-`codex/feature003-final-micro-pass`. The compiler main baseline before this
-pass was `d4acdda85a39b5543253e63cc292bf8d3fdd6338`; final integration is
-complete at `a99a5e0de2d4f8f019f07747084f7fb83846ed1f` after the post-pass
-analyze/converge, code review, and fresh verification gates.
+The final micro-pass was developed in the managed worktree for the historical
+branch `codex/feature003-final-micro-pass`. That branch name is provenance only;
+the current integrated revision is intentionally resolved from `main` history
+after the post-pass analyze/converge, code review, and fresh verification gates.
 The main checkout and the separately checked-out IDEAEngineering source repository
 must remain untouched by implementation.
 
