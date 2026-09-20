@@ -12,7 +12,9 @@ internal static class ExecutiveProgressXlsxTests
         {
             Analysis = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult().Analysis with
             {
-                Alerts = Array.Empty<ProjectManagementCompiler.Domain.Alert>()
+                Alerts = Array.Empty<ProjectManagementCompiler.Domain.Alert>(),
+                CpmNodes = Array.Empty<ProjectManagementCompiler.Domain.CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
             }
         };
         var report = new ExecutiveProgressReportProjector().Build(result);
@@ -96,13 +98,23 @@ internal static class ExecutiveProgressXlsxTests
             "Default reader-facing text must wrap so long work-package and delivery-card descriptions are not clipped.");
     }
 
+    public static void ExecutiveWorkbookIdentifiesOfficialAuthority()
+    {
+        var report = new ExecutiveProgressReportProjector().Build(ExecutiveProgressTestFixtures.BuildOfficialFixtureResult());
+        var overview = ExecutiveProgressTestFixtures.WorksheetText(new ExecutiveProgressXlsxExporter().Export(report), 1);
+
+        TestAssert.Contains("Nguồn chính thức", overview, "Every executive export must identify its official authority mode in the reader-facing provenance line.");
+    }
+
     public static void ExecutiveWorkbookHasExplicitEmptyAttentionStateAndBoundedOverview()
     {
         var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult() with
         {
             Analysis = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult().Analysis with
             {
-                Alerts = Array.Empty<ProjectManagementCompiler.Domain.Alert>()
+                Alerts = Array.Empty<ProjectManagementCompiler.Domain.Alert>(),
+                CpmNodes = Array.Empty<ProjectManagementCompiler.Domain.CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
             }
         };
         var report = new ExecutiveProgressReportProjector().Build(result);
@@ -137,6 +149,18 @@ internal static class ExecutiveProgressXlsxTests
         TestAssert.Contains("Planning card", details, "The detail sheet must contain delivery-card rows.");
         TestAssert.Equal(1, CountOccurrences(details, "P01-A"), "A raw delivery-card ID must appear only in the final reference field.");
         TestAssert.False(details.Contains("PMC_", StringComparison.Ordinal), "The detail sheet must not expose technical preview markers.");
+    }
+
+    public static void ExecutiveWorkbookConnectsTimelineRowsToWeeklyAxis()
+    {
+        var report = new ExecutiveProgressReportProjector().Build(ExecutiveProgressTestFixtures.BuildOfficialFixtureResult());
+        var bytes = new ExecutiveProgressXlsxExporter().Export(report);
+        var overview = ExecutiveProgressTestFixtures.WorksheetText(bytes, 1);
+        var schedule = ExecutiveProgressTestFixtures.WorksheetText(bytes, 2);
+
+        TestAssert.Contains("■", overview, "Overview phase rows must connect to the weekly axis with visible plan markers.");
+        TestAssert.Contains("◆", overview, "Overview milestone rows must connect to the weekly axis with visible milestone markers.");
+        TestAssert.Contains("■", schedule, "Work-package schedule rows must connect to the shared weekly axis with visible plan markers.");
     }
 
     public static void ExecutiveWorkbookKeepsReportingMarkerVisibleOutsidePlanningBounds()

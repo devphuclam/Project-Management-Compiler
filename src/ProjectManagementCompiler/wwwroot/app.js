@@ -27,7 +27,7 @@
 
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "dashboard", gantt: createGanttState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "dashboard", gantt: createGanttState() };
   const byId = (id) => document.getElementById(id);
 
   // Presentation-only labels. The canonical model and source role codes stay untouched.
@@ -114,8 +114,8 @@
     const button = byId("export-executive-button");
     const note = byId("export-availability");
     if (!button) return;
-    const classification = String(state.manifest && (state.manifest.classification
-      || state.manifest.metadata && state.manifest.metadata.classification) || "").toUpperCase();
+    const classification = String(state.officialManifest && (state.officialManifest.classification
+      || state.officialManifest.metadata && state.officialManifest.metadata.classification) || "").toUpperCase();
     const officialAvailable = classification === "OFFICIAL_COMMIT";
     button.disabled = !officialAvailable;
     button.setAttribute("aria-disabled", officialAvailable ? "false" : "true");
@@ -760,6 +760,7 @@
 
   function returnToOfficialSource() {
     state.xlsxPreview = null;
+    state.manifest = state.officialManifest;
     setExecutionPanelAvailability(true);
     renderSummary(currentSummary());
     renderActiveView();
@@ -2616,8 +2617,8 @@
       metadata: snapshot && snapshot.metadata || null,
       diagnostics: response && response.diagnostics || snapshot && snapshot.diagnostics || []
     };
-    setExportAvailability();
     if (!snapshot || !snapshot.views) {
+      setExportAvailability();
       const diagnostics = state.manifest.diagnostics || [];
       const note = byId("manifest-import-note");
       if (note) note.textContent = "Import failed; the last valid official snapshot remains unchanged. " + (diagnostics.length ? diagnostics.map(item => item.code).join(", ") : "Inspect the latest import attempt.");
@@ -2634,6 +2635,11 @@
       }
       return false;
     }
+
+    if (response.classification === "OFFICIAL_COMMIT") {
+      state.officialManifest = state.manifest;
+    }
+    setExportAvailability();
 
     const canonical = snapshot.project || {};
     state.xlsxPreview = null;

@@ -158,6 +158,7 @@ public sealed class ExecutiveProgressXlsxExporter
 
     private static void WriteOverview(XmlWriter writer, ExecutiveProgressReport report)
     {
+        var axis = BuildTimelineAxis(report.OverviewTimeline, report);
         var rows = new List<Row>
         {
             Row.Of(Cell.Text("Báo cáo tiến độ", TitleStyle)),
@@ -189,14 +190,19 @@ public sealed class ExecutiveProgressXlsxExporter
                 Cell.Text("Đầu mối", HeaderStyle)),
         };
 
+        rows.AddRange(TimelineAxisRows(axis, fixedColumnCount: 5));
         rows.AddRange(report.OverviewTimeline.Select(row => Row.Of(
-            Cell.Text(row.DisplayName, row.IsCurrent ? PlanStyle : DefaultStyle),
-            Cell.Text(FormatDate(row.PlannedStart), PlanStyle),
-            Cell.Text(FormatDate(row.PlannedFinish), PlanStyle),
-            Cell.Text(row.StateLabel, StateStyle(row.StateLabel)),
-            Cell.Text(row.OwnerLabel))));
+            new[]
+            {
+                Cell.Text(row.DisplayName, row.IsCurrent ? PlanStyle : DefaultStyle),
+                Cell.Text(FormatDate(row.PlannedStart), PlanStyle),
+                Cell.Text(FormatDate(row.PlannedFinish), PlanStyle),
+                Cell.Text(row.StateLabel, StateStyle(row.StateLabel)),
+                Cell.Text(row.OwnerLabel)
+            }
+            .Concat(TimelineCells(row, axis))
+            .ToArray())));
 
-        rows.AddRange(WeeklyAxis(report));
         rows.Add(Row.Blank());
         rows.Add(Row.Of(Cell.Text("Ngày báo cáo", MarkerStyle), Cell.Text(FormatDate(report.SourceReportingDate), MarkerStyle)));
         rows.Add(Row.Of(Cell.Text("Nội dung cần xin ý kiến", HeaderStyle)));
@@ -215,11 +221,17 @@ public sealed class ExecutiveProgressXlsxExporter
                 Cell.Text(item.DueLabel))));
         }
 
-        WriteWorksheet(writer, rows, new[] { 30d, 18d, 18d, 34d, 24d }, freezeRows: 6, freezeColumns: 1);
+        WriteWorksheet(
+            writer,
+            rows,
+            new[] { 30d, 18d, 18d, 34d, 24d }.Concat(axis.WeekStarts.Select(_ => 8d)).ToArray(),
+            freezeRows: 22 + (axis.WeekStarts.Count > 0 ? 2 : 0),
+            freezeColumns: 1);
     }
 
     private static void WriteSchedule(XmlWriter writer, ExecutiveProgressReport report)
     {
+        var axis = BuildTimelineAxis(report.WorkPackageSchedule, report);
         var rows = new List<Row>
         {
             Row.Of(Cell.Text("Lịch trình", TitleStyle)),
@@ -233,22 +245,32 @@ public sealed class ExecutiveProgressXlsxExporter
                 Cell.Text("Tình trạng", HeaderStyle),
                 Cell.Text("Đầu mối", HeaderStyle))
         };
+        rows.AddRange(TimelineAxisRows(axis, fixedColumnCount: 6));
         rows.AddRange(report.WorkPackageSchedule.Select(row => Row.Of(
-            Cell.Text(row.PhaseDisplayName ?? "Chưa xác định"),
-            Cell.Text(row.DisplayName),
-            Cell.Text(FormatDate(row.PlannedStart), PlanStyle),
-            Cell.Text(FormatDate(row.PlannedFinish), PlanStyle),
-            Cell.Text(row.StateLabel, StateStyle(row.StateLabel)),
-            Cell.Text(row.OwnerLabel, row.OwnerLabel == "Chưa xác định đầu mối" ? UnknownStyle : DefaultStyle))));
+            new[]
+            {
+                Cell.Text(row.PhaseDisplayName ?? "Chưa xác định"),
+                Cell.Text(row.DisplayName),
+                Cell.Text(FormatDate(row.PlannedStart), PlanStyle),
+                Cell.Text(FormatDate(row.PlannedFinish), PlanStyle),
+                Cell.Text(row.StateLabel, StateStyle(row.StateLabel)),
+                Cell.Text(row.OwnerLabel, row.OwnerLabel == "Chưa xác định đầu mối" ? UnknownStyle : DefaultStyle)
+            }
+            .Concat(TimelineCells(row, axis))
+            .ToArray())));
         if (report.WorkPackageSchedule.Count == 0)
         {
             rows.Add(Row.Of(Cell.Text("Chưa có dữ liệu gói công việc", UnknownStyle)));
         }
 
-        rows.AddRange(WeeklyAxis(report));
         rows.Add(Row.Blank());
         rows.Add(Row.Of(Cell.Text("Ngày báo cáo", MarkerStyle), Cell.Text(FormatDate(report.SourceReportingDate), MarkerStyle)));
-        WriteWorksheet(writer, rows, new[] { 24d, 32d, 18d, 18d, 22d, 28d }, freezeRows: 4, freezeColumns: 2);
+        WriteWorksheet(
+            writer,
+            rows,
+            new[] { 24d, 32d, 18d, 18d, 22d, 28d }.Concat(axis.WeekStarts.Select(_ => 8d)).ToArray(),
+            freezeRows: 4 + (axis.WeekStarts.Count > 0 ? 2 : 0),
+            freezeColumns: 2);
     }
 
     private static void WriteAttention(XmlWriter writer, ExecutiveProgressReport report)
@@ -566,20 +588,20 @@ public sealed class ExecutiveProgressXlsxExporter
 
     private static string BuildProvenance(ExecutiveProgressReport report) =>
         report.AnalysisAsOfDate == report.SourceReportingDate
-            ? $"Nguồn IDEAEngineering · dữ liệu cập nhật đến {FormatDate(report.SourceReportingDate)}"
-            : $"Nguồn IDEAEngineering · dữ liệu cập nhật đến {FormatDate(report.SourceReportingDate)} · phân tích đến {FormatDate(report.AnalysisAsOfDate)}";
+            ? $"Nguồn chính thức IDEAEngineering · dữ liệu cập nhật đến {FormatDate(report.SourceReportingDate)}"
+            : $"Nguồn chính thức IDEAEngineering · dữ liệu cập nhật đến {FormatDate(report.SourceReportingDate)} · phân tích đến {FormatDate(report.AnalysisAsOfDate)}";
 
-    private static IReadOnlyList<Row> WeeklyAxis(ExecutiveProgressReport report)
+    private static TimelineAxis BuildTimelineAxis(IEnumerable<ExecutiveScheduleRow> rows, ExecutiveProgressReport report)
     {
-        var dates = report.OverviewTimeline
+        var dates = rows
             .SelectMany(row => new[] { row.PlannedStart, row.PlannedFinish })
-            .Concat(new[] { report.PlanningStart, report.PlanningFinish, report.SourceReportingDate })
+            .Concat(new DateOnly?[] { report.PlanningStart, report.PlanningFinish, report.SourceReportingDate })
             .Where(date => date is not null)
             .Select(date => date!.Value)
             .ToArray();
         if (dates.Length == 0)
         {
-            return Array.Empty<Row>();
+            return new TimelineAxis(Array.Empty<DateOnly>(), report.SourceReportingDate);
         }
 
         var start = dates.Min();
@@ -596,31 +618,82 @@ public sealed class ExecutiveProgressXlsxExporter
             lastWeek = finish.AddDays(-6);
         }
 
-        var monthCells = new List<CellValue>();
-        var monthCursor = new DateOnly(weekStart.Year, weekStart.Month, 1);
-        var lastMonth = new DateOnly(lastWeek.Year, lastWeek.Month, 1);
-        while (monthCursor <= lastMonth)
-        {
-            monthCells.Add(Cell.Text($"Tháng {monthCursor:MM/yyyy}", PlanStyle));
-            monthCursor = monthCursor.AddMonths(1);
-        }
-
-        var weekCells = new List<CellValue>();
+        var weekStarts = new List<DateOnly>();
         for (var cursor = weekStart; cursor <= lastWeek; cursor = cursor.AddDays(7))
         {
-            var weekNumber = ISOWeek.GetWeekOfYear(cursor.ToDateTime(TimeOnly.MinValue));
-            var marker = report.SourceReportingDate >= cursor && report.SourceReportingDate <= cursor.AddDays(6)
-                ? " · Ngày báo cáo"
-                : string.Empty;
-            weekCells.Add(Cell.Text($"W{weekNumber:00}{marker}", marker.Length == 0 ? DefaultStyle : MarkerStyle));
+            weekStarts.Add(cursor);
         }
 
+        return new TimelineAxis(weekStarts, report.SourceReportingDate);
+    }
+
+    private static IReadOnlyList<Row> TimelineAxisRows(TimelineAxis axis, int fixedColumnCount)
+    {
+        if (axis.WeekStarts.Count == 0)
+        {
+            return Array.Empty<Row>();
+        }
+
+        var monthCells = axis.WeekStarts
+            .Select((week, index) =>
+            {
+                var previous = index == 0 ? (DateOnly?)null : axis.WeekStarts[index - 1];
+                var isFirstWeekOfMonth = previous is null || previous.Value.Month != week.Month || previous.Value.Year != week.Year;
+                return Cell.Text(isFirstWeekOfMonth ? $"Tháng {week:MM/yyyy}" : string.Empty, isFirstWeekOfMonth ? PlanStyle : DefaultStyle);
+            })
+            .ToArray();
+        var weekCells = axis.WeekStarts
+            .Select(week =>
+            {
+                var weekNumber = ISOWeek.GetWeekOfYear(week.ToDateTime(TimeOnly.MinValue));
+                var marker = axis.ReportingDate >= week && axis.ReportingDate <= week.AddDays(6)
+                    ? " · Ngày báo cáo"
+                    : string.Empty;
+                return Cell.Text($"W{weekNumber:00}{marker}", marker.Length > 0 ? MarkerStyle : DefaultStyle);
+            })
+            .ToArray();
+
+        var monthPrefix = new[] { Cell.Text("Tháng", HeaderStyle) }
+            .Concat(Enumerable.Repeat(Cell.Text(string.Empty), fixedColumnCount - 1));
+        var weekPrefix = new[] { Cell.Text("Tuần ISO", HeaderStyle) }
+            .Concat(Enumerable.Repeat(Cell.Text(string.Empty), fixedColumnCount - 1));
         return
         [
-            Row.Of(new[] { Cell.Text("Tháng", HeaderStyle) }.Concat(monthCells).ToArray()),
-            Row.Of(new[] { Cell.Text("Tuần ISO", HeaderStyle) }.Concat(weekCells).ToArray())
+            Row.Of(monthPrefix.Concat(monthCells).ToArray()),
+            Row.Of(weekPrefix.Concat(weekCells).ToArray())
         ];
     }
+
+    private static IReadOnlyList<CellValue> TimelineCells(ExecutiveScheduleRow row, TimelineAxis axis)
+    {
+        if (axis.WeekStarts.Count == 0 || row.PlannedStart is null && row.PlannedFinish is null)
+        {
+            return Array.Empty<CellValue>();
+        }
+
+        var start = row.PlannedStart ?? row.PlannedFinish!.Value;
+        var finish = row.PlannedFinish ?? row.PlannedStart!.Value;
+        if (finish < start)
+        {
+            (start, finish) = (finish, start);
+        }
+
+        return axis.WeekStarts
+            .Select(week =>
+            {
+                var weekFinish = week.AddDays(6);
+                var visible = row.Kind == ExecutiveScheduleRowKind.Milestone
+                    ? start >= week && start <= weekFinish
+                    : start <= weekFinish && finish >= week;
+                return Cell.Text(visible ? row.Kind == ExecutiveScheduleRowKind.Milestone ? "◆" : "■" : string.Empty, visible ? TimelineStyle(row) : DefaultStyle);
+            })
+            .ToArray();
+    }
+
+    private static int TimelineStyle(ExecutiveScheduleRow row) =>
+        row.Kind == ExecutiveScheduleRowKind.Milestone || row.IsCurrent ? MarkerStyle : PlanStyle;
+
+    private sealed record TimelineAxis(IReadOnlyList<DateOnly> WeekStarts, DateOnly ReportingDate);
 
     private static string BuildCounts(ExecutiveProgressSummary progress) =>
         $"Hoàn thành: {progress.CompletedCount} · Đang thực hiện: {progress.InProgressCount} · Chưa bắt đầu: {progress.NotStartedCount} · Chưa cập nhật: {progress.UnknownCount}";

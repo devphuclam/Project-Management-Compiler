@@ -41,7 +41,9 @@ internal static class ExecutiveProgressProjectionTests
         {
             Analysis = result.Analysis with
             {
-                Alerts = Array.Empty<Alert>()
+                Alerts = Array.Empty<Alert>(),
+                CpmNodes = Array.Empty<CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
             }
         };
         var baseline = BuildReport(result);
@@ -122,6 +124,63 @@ internal static class ExecutiveProgressProjectionTests
         TestAssert.Equal("P01-A", card.ReferenceCode, "The short raw card identity must remain available only as the final detail field.");
     }
 
+    public static void ProjectionCleansOnlyIdentityPrefixesAndPreservesMeaningfulBracketText()
+    {
+        var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult();
+        var phase = result.Project.Phases[0] with { Name = "[Important] Planning package PH0" };
+        var card = result.Project.DeliveryCards.Single(item => item.Id == "P01-A") with
+        {
+            Name = "[PH1][P01-A] Tạo loại tài liệu"
+        };
+        var report = new ExecutiveProgressReportProjector().Build(result with
+        {
+            Project = result.Project with
+            {
+                Phases = result.Project.Phases.Select(item => item.Id == phase.Id ? phase : item).ToArray(),
+                DeliveryCards = result.Project.DeliveryCards.Select(item => item.Id == card.Id ? card : item).ToArray()
+            }
+        });
+
+        TestAssert.Equal("[Important] Planning package PH0", report.CurrentPhase, "Meaningful bracketed source text must not be mistaken for an identity prefix.");
+        TestAssert.Equal("Tạo loại tài liệu", report.DeliveryCardDetails.Single(item => item.ReferenceCode == "P01-A").Description, "Known identity prefixes must be removed without losing the card meaning.");
+    }
+
+    public static void ProjectionDeduplicatesAttentionByWorkItemAndIncludesCriticalOwnerlessWork()
+    {
+        var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult();
+        var report = new ExecutiveProgressReportProjector().Build(result with
+        {
+            Project = result.Project with
+            {
+                Assignments = result.Project.Assignments
+                    .Where(assignment => !string.Equals(assignment.WorkItemId, "P01-A", StringComparison.OrdinalIgnoreCase))
+                    .ToArray()
+            },
+            Analysis = result.Analysis with
+            {
+                Alerts =
+                [
+                    new Alert { WorkItemId = "P01-A", AlertCode = "BLOCKED", Severity = WarningSeverity.Error, Message = "blocked", DerivedAt = new DateOnly(2026, 9, 19) },
+                    new Alert { WorkItemId = "P01-A", AlertCode = "OVERDUE", Severity = WarningSeverity.Warning, Message = "late", DerivedAt = new DateOnly(2026, 9, 19) },
+                    new Alert { WorkItemId = "P01-A", AlertCode = "AT_RISK", Severity = WarningSeverity.Warning, Message = "risk", DerivedAt = new DateOnly(2026, 9, 19) }
+                ],
+                CpmNodes =
+                [
+                    new CpmNodeMetric { NodeId = "P02-A", NodeKind = "DeliveryCard", IsCritical = true }
+                ],
+                CriticalPathIds = ["P02-A"]
+            }
+        });
+
+        var blocked = report.AllAttention.Where(item => item.DeduplicationKey == "work-item:P01-A").ToArray();
+        TestAssert.Equal(1, blocked.Length, $"Multiple alert categories and missing-owner evidence for one work item must produce one attention item. Actual keys: {string.Join('|', report.AllAttention.Select(item => item.DeduplicationKey))}");
+        TestAssert.Equal(ExecutiveAttentionCategory.Blocked, blocked[0].Category, "A duplicate work item must retain its highest-priority attention category.");
+
+        var criticalOwnerless = report.AllAttention.SingleOrDefault(item => item.DeduplicationKey == "work-item:P02-A");
+        TestAssert.True(criticalOwnerless is not null, "Critical delivery-card work without an owner must qualify as missing-owner attention even without an alert.");
+        TestAssert.Equal(ExecutiveAttentionCategory.MissingOwner, criticalOwnerless!.Category, "Critical ownerless work must use the MissingOwner category.");
+    }
+
     public static void ProjectionRanksActionableAttentionWithSourceBackedConsequences()
     {
         var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult(new DateOnly(2026, 9, 19));
@@ -167,7 +226,12 @@ internal static class ExecutiveProgressProjectionTests
         var report = new ProjectManagementCompiler.Management.ExecutiveProgressReportProjector().Build(result with
         {
             Project = result.Project with { ManagementEvidence = evidence },
-            Analysis = result.Analysis with { Alerts = alerts }
+            Analysis = result.Analysis with
+            {
+                Alerts = alerts,
+                CpmNodes = Array.Empty<CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
+            }
         });
 
         TestAssert.Equal("Blocked|Overdue|DecisionBeforeNextMilestone|AtRisk|PendingAction", string.Join('|', report.AllAttention.Select(item => item.Category)), "Attention must use the normative category priority.");

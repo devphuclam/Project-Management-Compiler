@@ -292,6 +292,12 @@ public sealed class ExecutiveProgressReportProjector
         var candidates = new List<AttentionCandidate>();
         var cardsById = project.DeliveryCards.ToDictionary(card => card.Id, StringComparer.OrdinalIgnoreCase);
         var validEvidence = ValidEvidence(project);
+        var criticalCardIds = analysis.CpmNodes
+            .Where(node => node.IsCritical
+                && string.Equals(CanonicalWorkItemKey.NormalizeKind(node.NodeKind), "DeliveryCard", StringComparison.OrdinalIgnoreCase))
+            .Select(node => node.NodeId)
+            .Concat(analysis.CriticalPathIds.Where(cardsById.ContainsKey))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var sourceOrder = 0;
 
         foreach (var alert in analysis.Alerts
@@ -333,7 +339,7 @@ public sealed class ExecutiveProgressReportProjector
                 DueDate = dueDate,
                 DueLabel = FormatDate(dueDate),
                 OverviewEligible = true,
-                DeduplicationKey = $"alert:{alert.AlertCode}:{alert.WorkItemId}",
+                DeduplicationKey = $"work-item:{alert.WorkItemId}",
                 SourceOrder = sourceOrder++
             });
 
@@ -348,10 +354,34 @@ public sealed class ExecutiveProgressReportProjector
                     DueDate = dueDate,
                     DueLabel = FormatDate(dueDate),
                     OverviewEligible = true,
-                    DeduplicationKey = $"missing-owner:{alert.WorkItemId}",
+                    DeduplicationKey = $"work-item:{alert.WorkItemId}",
                     SourceOrder = sourceOrder++
                 });
             }
+        }
+
+        foreach (var card in project.DeliveryCards
+                     .Where(card => criticalCardIds.Contains(card.Id))
+                     .OrderBy(card => card.Id, StringComparer.Ordinal))
+        {
+            var owner = ResolveDeliveryCardOwner(project, card.Id);
+            if (owner != "Chưa xác định đầu mối")
+            {
+                continue;
+            }
+
+            candidates.Add(new AttentionCandidate
+            {
+                Category = ExecutiveAttentionCategory.MissingOwner,
+                Action = $"Xử lý hạng mục “{CleanCardDescription(card.Name, card.Id)}”.",
+                Impact = "Hạng mục quan trọng chưa xác định đầu mối.",
+                OwnerLabel = owner,
+                DueDate = card.PlannedFinish,
+                DueLabel = FormatDate(card.PlannedFinish),
+                OverviewEligible = true,
+                DeduplicationKey = $"work-item:{card.Id}",
+                SourceOrder = sourceOrder++
+            });
         }
 
         foreach (var (observation, index) in validEvidence.Select((observation, index) => (observation, index)))
@@ -823,6 +853,12 @@ public sealed class ExecutiveProgressReportProjector
                 break;
             }
 
+            var prefix = cleaned[1..closing].Trim();
+            if (!LooksLikeIdentityPrefix(prefix, exactId))
+            {
+                break;
+            }
+
             cleaned = cleaned[(closing + 1)..].Trim();
         }
 
@@ -841,6 +877,33 @@ public sealed class ExecutiveProgressReportProjector
         }
 
         return string.IsNullOrWhiteSpace(cleaned) ? "Chưa cập nhật" : cleaned;
+    }
+
+    private static bool LooksLikeIdentityPrefix(string value, string? exactId)
+    {
+        if (!string.IsNullOrWhiteSpace(exactId)
+            && string.Equals(value, exactId.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var normalized = value.Trim();
+        if (normalized.StartsWith("G-", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[2..];
+        }
+
+        var letterCount = 0;
+        while (letterCount < normalized.Length
+            && letterCount < 4
+            && char.IsLetter(normalized[letterCount]))
+        {
+            letterCount++;
+        }
+
+        return letterCount > 0
+            && letterCount < normalized.Length
+            && char.IsDigit(normalized[letterCount]);
     }
 
     private static string CleanCardDescription(string? value, string cardId)

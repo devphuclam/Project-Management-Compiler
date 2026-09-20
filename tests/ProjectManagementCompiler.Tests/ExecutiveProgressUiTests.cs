@@ -27,6 +27,15 @@ internal static class ExecutiveProgressUiTests
         TestAssert.False(app.Contains("/api/exports/cario-preview.xlsx", StringComparison.Ordinal), "The executive action must not redirect to the technical preview export.");
     }
 
+    public static void UiKeepsOfficialExportAvailableWhilePreviewIsActive()
+    {
+        var app = Read("app.js");
+
+        TestAssert.Contains("officialManifest", app, "The UI must retain the last official manifest separately from a candidate preview.");
+        TestAssert.Contains("state.officialManifest", app, "Executive export availability must be based on the retained official snapshot, not the active preview classification.");
+        TestAssert.Contains("response.classification === \"OFFICIAL_COMMIT\"", app, "Only a successful official import may replace the retained official manifest.");
+    }
+
     public static void UiExportActionsRemainResponsiveAndAccessible()
     {
         var styles = Read("styles.css");
