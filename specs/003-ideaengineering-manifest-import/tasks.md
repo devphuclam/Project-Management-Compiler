@@ -207,13 +207,13 @@ boundary.
 pre-implementation converge pass. These tasks are executed through the Phase 9
 TDD groups; they do not authorize implementation before the artifact gate.
 
-- [X] T073 [US5] Neutralize the legacy overlay after schema 1.0 migration and remove every effective resolver/analysis/dashboard/alert/Gantt fallback from `CanonicalJsonSerializer`, `ExecutionTruthResolver`, and related projections per FR-043 (contradicts).
-- [X] T074 [US5] Add semantic v2 validation for import metadata, source execution, proposal targets/lifecycle, evidence, and authority combinations in `CanonicalProjectValidator` per FR-044 (partial).
-- [X] T075 [US1] Replace cached working-tree manifest/bytes and comparable `git-state-unavailable` values with independent pre/post reads that fail closed per FR-045 and FR-046 (partial).
-- [X] T076 [US1] Add pre-body Git tree mode/blob-size checks, symlink rejection, and hard application ceilings that cannot be bypassed by caller limits per FR-047 (missing).
-- [X] T077 [US4] Validate controlled proposal evidence fields before lifecycle readiness so malformed non-empty evidence cannot produce `READY_FOR_REVIEW` per FR-048 (partial).
-- [X] T078 [US4] Make `CompilerApplicationState` the only mutable proposal owner and hydrate it on canonical reopen/save/list, including migrated proposals, per FR-049 and SC-016 (partial).
-- [X] T079 [US2] Replace manifest-workflow UI wording that says manual/record/calculated with source/proposal/source-forecast wording per FR-050 and SC-017 (partial).
+- [X] T073 [US5] Neutralize the legacy overlay after schema 1.0 migration and remove every effective resolver/analysis/dashboard/alert/Gantt fallback from `CanonicalJsonSerializer`, `ExecutionTruthResolver`, and related projections per FR-043; acceptance: reopened schema 1.0 records are preserved only as proposals, the overlay is empty/neutralized, and resolver, metrics, alerts, dashboard, effort, and Gantt `ACTUAL` projections do not change because of the migrated overlay.
+- [X] T074 [US5] Add semantic v2 validation for import metadata, source execution, proposal targets/lifecycle, evidence, and authority combinations in `CanonicalProjectValidator` per FR-044; acceptance: deserialize-successful tampering returns fail-closed diagnostics, does not become authoritative, and does not replace the prior valid state.
+- [X] T075 [US1] Replace cached working-tree manifest/bytes and comparable `git-state-unavailable` values with independent pre/post reads that fail closed per FR-045 and FR-046; acceptance: mutation of the manifest, declaration, declared file, HEAD, or status rejects the preview with `PMC-SNAPSHOT-002`, and two unavailable Git-state reads can never compare equal as stable.
+- [X] T076 [US1] Add pre-body Git tree mode/blob-size checks, symlink rejection, and hard application ceilings that cannot be bypassed by caller limits per FR-047; acceptance: tree mode and declared blob size are checked before body reads, mode `120000` is rejected, caller limits cannot exceed hard ceilings, and an allowed regular blob remains readable.
+- [X] T077 [US4] Validate controlled proposal evidence fields before lifecycle readiness so malformed non-empty evidence cannot produce `READY_FOR_REVIEW` per FR-048; acceptance: every malformed item is diagnosed and rejected atomically, valid controlled evidence can qualify a complete proposal, and official source execution remains unchanged.
+- [X] T078 [US4] Make `CompilerApplicationState` the only mutable proposal owner and hydrate it on canonical reopen/save/list, including migrated proposals, per FR-049 and SC-016; acceptance: create, update, migration, save, reopen, list, and stale-base evaluation observe one retained proposal set and preserve the same semantic proposal identity across round-trip.
+- [X] T079 [US2] Replace manifest-workflow UI wording that says manual/record/calculated with source/proposal/source-forecast wording per FR-050 and SC-017; acceptance: the manifest workflow uses `Source execution`, proposal-action wording, and `Source forecast`, with no layout or product-surface redesign.
 
 ## Phase 11: Final correctness micro-pass
 
@@ -328,6 +328,96 @@ green run, and related regression run before it is marked complete.
   artifacts, run analyze, run converge, re-run analyze if converge changes
   tasks, then begin implementation. TDD is required inside each hardening group;
   it does not replace Spec Kit.
+
+## Requirement traceability
+
+The matrix below makes the semantic coverage already present in the task text
+explicit. Acceptance details remain on the referenced task rows; a task may cover
+more than one requirement.
+
+| Requirement | Task IDs |
+|---|---|
+| FR-001 | T005, T041 |
+| FR-002 | T005, T009 |
+| FR-003 | T009, T010 |
+| FR-004 | T005, T009, T020, T022 |
+| FR-005 | T005, T008, T020, T022 |
+| FR-006 | T021, T024 |
+| FR-007 | T006, T011 |
+| FR-008 | T006, T011 |
+| FR-009 | T010, T016 |
+| FR-010 | T001, T009, T012 |
+| FR-011 | T006, T011, T016 |
+| FR-012 | T006, T007, T011, T016, T018, T043 |
+| FR-013 | T001, T012, T035, T036 |
+| FR-014 | T012, T020, T022 |
+| FR-015 | T014, T016, T017 |
+| FR-016 | T014, T016 |
+| FR-017 | T014, T016 |
+| FR-018 | T007, T014, T016 |
+| FR-019 | T007, T014, T016 |
+| FR-020 | T015, T017, T039 |
+| FR-021 | T014, T017 |
+| FR-022 | T007, T011, T043 |
+| FR-023 | T015, T018 |
+| FR-024 | T015, T017, T026, T028 |
+| FR-025 | T015, T029, T031 |
+| FR-026 | T026, T028 |
+| FR-027 | T026, T028 |
+| FR-028 | T026, T029, T040 |
+| FR-029 | T026, T028, T060, T061, T087, T088 |
+| FR-030 | T031, T034, T036 |
+| FR-031 | T015, T028, T030, T042 |
+| FR-032 | T023, T024, T039 |
+| FR-033 | T038, T039, T041 |
+| FR-034 | T039 |
+| FR-035 | T014, T017, T039 |
+| FR-036 | T033, T035, T052, T053 |
+| FR-037 | T034, T036 |
+| FR-038 | T012, T023, T024 |
+| FR-039 | T038, T041 |
+| FR-040 | T003, T006, T043 |
+| FR-041 | T003, T031, T034, T049 |
+| FR-042 | T009, T041, T084 |
+| FR-043 | T052, T053, T073 |
+| FR-044 | T054, T055, T074, T091, T092 |
+| FR-045 | T020, T022, T056, T057, T075 |
+| FR-046 | T020, T022, T056, T057, T075 |
+| FR-047 | T058, T059, T076, T085, T086 |
+| FR-048 | T060, T061, T077, T087, T088 |
+| FR-049 | T062, T063, T078, T093, T094 |
+| FR-050 | T064, T065, T079 |
+| FR-051 | T083, T084 |
+| FR-052 | T085, T086 |
+| FR-053 | T087, T088 |
+| FR-054 | T089, T090 |
+| FR-055 | T091, T092 |
+| FR-056 | T093, T094 |
+| FR-057 | T080, T082, T096, T098 |
+| SC-001 | T007, T011, T013, T043 |
+| SC-002 | T006, T043 |
+| SC-003 | T007, T014, T016, T019 |
+| SC-004 | T005, T006, T009, T010, T020, T043 |
+| SC-005 | T038, T039, T041 |
+| SC-006 | T015, T017, T029 |
+| SC-007 | T033, T035, T037, T052, T053 |
+| SC-008 | T021, T023, T024, T025 |
+| SC-009 | T049, T071, T098 |
+| SC-010 | T013, T019, T037, T045, T071, T084 |
+| SC-011 | T052, T053 |
+| SC-012 | T054, T055, T091, T092 |
+| SC-013 | T020, T022, T056, T057 |
+| SC-014 | T058, T059, T085, T086 |
+| SC-015 | T060, T061, T088 |
+| SC-016 | T062, T063, T093, T094 |
+| SC-017 | T064, T065 |
+| SC-018 | T083, T084 |
+| SC-019 | T085, T086 |
+| SC-020 | T087, T088 |
+| SC-021 | T089, T090 |
+| SC-022 | T091, T092 |
+| SC-023 | T093, T094 |
+| SC-024 | T080, T082, T098 |
 
 ## TDD checkpoints
 

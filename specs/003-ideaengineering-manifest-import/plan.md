@@ -45,9 +45,11 @@ not deserialize-only. Git and working-tree readers use bounded metadata/body
 capture and independent pre/post source reads. Legacy schema `1.0` overlays are
 compatibility input only and are neutralized after migration.
 
-**Performance Goals**: Bounded source reads, deterministic results, and a normal
-accepted source import completing within the existing local smoke-test budget; no
-unbounded repository scan or schema evaluation.
+**Performance Goals**: Bounded source reads, deterministic results, and the accepted
+source import completing within 10 seconds on the supported Windows developer
+workstation under normal local conditions. This is an engineering target rather than
+a user-visible SLA; no read may exceed its configured or hard application ceiling,
+and no repository scan or schema evaluation may be unbounded.
 
 **Constraints**: Manifest is the only discovery entry point. Every read is bounded,
 repository-relative, and tied to one commit or one stable working-tree capture.
@@ -98,32 +100,46 @@ src/ProjectManagementCompiler/
 │   ├── ProjectCompiler.cs
 │   ├── CompilerApplicationState.cs
 │   └── ManifestImport/
+│       ├── IIdeaEngineeringManifestImporter.cs
+│       ├── IdeaEngineeringManifestImporter.cs
+│       ├── ManifestImportApplicationService.cs
+│       └── ExecutionProposalService.cs
 ├── Domain/
 │   ├── CanonicalProject.cs
 │   ├── ExecutionEntities.cs
 │   ├── ManifestImportEntities.cs
 │   ├── ProposalEntities.cs
 │   └── Diagnostics.cs
+├── Management/
+│   ├── ExecutionTruthResolver.cs
+│   ├── ManagementMetricsAnalyzer.cs
+│   └── IdeaEngineeringReadinessAdapter.cs
 ├── Sources/
 │   ├── LocalRepositorySourceAdapter.cs
 │   ├── ManifestGitObjectReader.cs
 │   └── ManifestWorkingTreeReader.cs
 ├── Extraction/
-│   ├── ManifestAuthorityResolver.cs
+│   ├── AuthorityResolution.cs
 │   ├── BoundedJsonSchemaValidator.cs
-│   └── IdeaEngineeringManifestImporter.cs
+│   ├── IdeaPlanningDiscovery.cs
+│   ├── ManifestContractParser.cs
+│   ├── ManifestExecutionAdapter.cs
+│   └── ManifestFixtureCatalogueValidator.cs
 ├── Outputs/
 │   ├── CanonicalJsonSerializer.cs
-│   └── ExecutionProposalExporter.cs
+│   └── CanonicalProjectValidator.cs
 └── wwwroot/
     ├── app.js
     └── styles.css
 
 tests/ProjectManagementCompiler.Tests/
 ├── ManifestImportTests.cs
-├── ManifestFixtureTests.cs
+├── ManifestExecutionTests.cs
+├── ManifestHardeningTests.cs
+├── SourceCaptureTests.cs
 ├── ProposalTests.cs
 ├── CanonicalMigrationTests.cs
+├── CanonicalValidationTests.cs
 └── Program.cs
 
 tests/fixtures/ideaengineering-manifest/
