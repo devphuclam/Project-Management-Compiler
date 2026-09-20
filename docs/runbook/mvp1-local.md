@@ -1,4 +1,4 @@
-# Run the local Project Management Compiler (MVP1 + MVP2.1 readiness)
+# Run the local Project Management Compiler (MVP1 + MVP2.1 readiness + executive report)
 
 Project Management Compiler is a dependency-free .NET 10 local application.
 It reads only the allow-listed planning documents from an IDEAEngineering-shaped
@@ -30,7 +30,8 @@ long `dotnet` command:
 .\scripts\run-project.ps1
 ```
 
-The current hardening closeout registers and executes 186 custom-runner tests;
+The current hardening closeout registers and executes the full custom-runner
+regression suite;
 the verification scripts also cover the launcher, web/API flow, JSON/XLSX
 outputs, and browser-source safety assertions.
 
@@ -106,15 +107,34 @@ conflicts remain visible and do not become an effective value.
    such as `2026-09-25`, and apply the update. The baseline PLAN dates remain
    unchanged; the ACTUAL and ALERT lanes are recalculated. Enter `P06` as
    `Not started` afterward to see the dependent `AT_RISK` alert.
-5. Use **Save project JSON** to download
+5. Use **Save JSON** to download
    `<ProjectName>_project.json`. Use the **Reopen
    saved canonical JSON** control to validate and recalculate that snapshot
    without re-reading the source directory.
-6. Use **Export Excel · CARIO + Gantt** to download
+6. Use **Xuất dữ liệu CARIO + Gantt** to download
    `<ProjectName>_CARIO_GANTT.xlsx`. It is a human-assisted fill file, not a
    claimed native CARIO import. The default route exports the official source
    snapshot when one is loaded; a preview must be requested explicitly through
    `GET /api/exports/cario-preview.xlsx`.
+
+### Báo cáo tiến độ gửi quản lý
+
+Sau khi import thành công **Official Git commit**, dùng nút **Xuất báo cáo
+tiến độ** ở header. Đây là bản trình bày dành cho người quản lý, không phải
+file kỹ thuật để import ngược vào Compiler:
+
+- file có tên `<ProjectName>_BaoCaoTienDo_<YYYY-MM-DD>.xlsx`, ngày lấy từ
+  `statusDate` của Execution Register;
+- `Tổng quan` trả lời nhanh dự án đang ở đâu, mốc kế tiếp, điều kiện tiến độ,
+  readiness, % có bằng chứng và tối đa năm việc cần chú ý;
+- `Lịch trình` chỉ hiển thị phase, milestone và work package theo trục tháng / tuần;
+- `Vấn đề cần xử lý` giữ toàn bộ danh sách hành động đã xếp hạng;
+- `Chi tiết công việc` mới đi xuống delivery card khi người đọc cần kiểm tra.
+
+Nếu chưa có official snapshot, nút này bị khóa. Working-tree preview, candidate
+preview, proposal và XLSX preview không được dùng làm báo cáo chính thức.
+File báo cáo tiến độ không phải input hợp lệ của **Import XLSX preview** và
+không thay thế file **CARIO + Gantt** kỹ thuật.
 
 ### Read-only XLSX preview workflow
 
@@ -171,6 +191,8 @@ Use the Gantt tab as a management timeline rather than a task table:
 - `GET /api/views` and `GET /api/views/{dashboard|wbs|gantt|kanban|dependencies|cpm}`
 - `GET /api/warnings`
 - `GET /api/exports/project.json` (download name: `<ProjectName>_project.json`)
+- `GET /api/exports/executive-progress.xlsx` (official snapshot only; download
+  name: `<ProjectName>_BaoCaoTienDo_<YYYY-MM-DD>.xlsx`)
 - `GET /api/exports/cario.xlsx` (official/source snapshot; download name:
   `<ProjectName>_CARIO_GANTT.xlsx`)
 - `GET /api/exports/cario-preview.xlsx` (explicit non-authoritative preview;

@@ -161,6 +161,27 @@ internal static class CarioXlsxTests
         TestAssert.Contains("PMC_PROJECT_NAME", projectInfo, "The preview marker must carry the project name.");
     }
 
+    public static void ExistingTechnicalExportContractIsCharacterizedBeforeExecutiveExport()
+    {
+        var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult();
+        var digest = result.SemanticDigest;
+        var proposalCount = result.Project.ExecutionProposals.Count;
+        var bytes = new ProjectCompiler().ExportCarioXlsx(result);
+
+        ExecutiveProgressTestFixtures.AssertHasSheetNames(
+            bytes,
+            "01_TASKS",
+            "02_ASSIGNMENTS",
+            "03_CHILDREN_MILESTONES",
+            "04_DEPENDENCIES",
+            "05_PROJECT_INFO",
+            "06_IMPORT_WARNINGS",
+            "07_GANTT");
+        TestAssert.Contains("PMC_EXPORT_KIND", ExecutiveProgressTestFixtures.WorksheetText(bytes, 5), "The existing technical export must retain its preview marker.");
+        TestAssert.Equal(digest, result.SemanticDigest, "Technical export characterization must preserve the semantic digest.");
+        TestAssert.Equal(proposalCount, result.Project.ExecutionProposals.Count, "Technical export characterization must preserve proposal state.");
+    }
+
     private static string LoadXml(ZipArchive archive, string entryName)
     {
         using var stream = archive.GetEntry(entryName)!.Open();

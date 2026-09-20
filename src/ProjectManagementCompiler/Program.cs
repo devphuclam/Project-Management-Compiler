@@ -482,6 +482,40 @@ app.MapGet("/api/exports/cario.xlsx", (IProjectCompiler compiler, CompilerApplic
     return Results.File(compiler.ExportCarioXlsx(current), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
 });
 
+app.MapGet("/api/exports/executive-progress.xlsx", (IProjectCompiler compiler, CompilerApplicationState state) =>
+{
+    var current = state.CurrentOfficialResult;
+    if (current is null)
+    {
+        var anyStateLoaded = state.Current is not null
+            || state.ActivePreview is not null
+            || state.ActiveXlsxPreview is not null;
+        var code = anyStateLoaded ? "NO_OFFICIAL_SNAPSHOT" : "NO_PROJECT";
+        var message = anyStateLoaded
+            ? "An official manifest snapshot is required for the management report."
+            : "No compiled project is loaded.";
+        return Results.NotFound(new ApiErrorResponse { Code = code, Message = message, Phase = "executive-export" });
+    }
+
+    try
+    {
+        var bytes = compiler.ExportExecutiveProgressXlsx(current);
+        var reportingDate = current.Project.ImportMetadata!.RegisterStatusDate!.Value;
+        var fileName = $"{SanitizeFileName(current.Project.Project.Name)}_BaoCaoTienDo_{reportingDate:yyyy-MM-dd}.xlsx";
+        return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+    }
+    catch (ProjectCompilationException exception)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse
+        {
+            Code = exception.Diagnostics.FirstOrDefault()?.Code ?? "EXECUTIVE_EXPORT_INCOMPLETE_OFFICIAL",
+            Message = exception.Message,
+            Phase = "executive-export",
+            Diagnostics = exception.Diagnostics
+        });
+    }
+});
+
 app.MapGet("/api/exports/cario-preview.xlsx", (IProjectCompiler compiler, CompilerApplicationState state) =>
 {
     var preview = WorkbookExportSelection.ResolvePreview(state);

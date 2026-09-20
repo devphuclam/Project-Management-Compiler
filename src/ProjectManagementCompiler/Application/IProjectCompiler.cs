@@ -11,6 +11,7 @@ public interface IProjectCompiler
     ExecutionApplicationResult ApplyExecutionUpdate(CompilationResult current, ExecutionUpdate update, DateOnly? asOfDate = null);
     string SaveJson(CompilationResult result);
     byte[] ExportCarioXlsx(CompilationResult result);
+    byte[] ExportExecutiveProgressXlsx(CompilationResult result);
     CompilationResult BuildImportedResult(IdeaEngineeringSnapshot snapshot, DateOnly? asOfDate = null, CarioMappingConfiguration? mapping = null);
 }
 

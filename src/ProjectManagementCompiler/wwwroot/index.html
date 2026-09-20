@@ -18,9 +18,13 @@
       </div>
     </div>
     <div class="header-actions">
-      <button id="refresh-button" class="secondary">Refresh</button>
-      <button id="save-json-button" class="secondary">Save JSON</button>
-      <button id="export-xlsx-button" class="primary">Export Excel · CARIO + Gantt</button>
+      <div class="export-action-group">
+        <button id="export-executive-button" class="primary" type="button" disabled aria-describedby="export-availability">Xuất báo cáo tiến độ</button>
+        <span id="export-availability" class="export-availability" role="status">Cần import source commit chính thức trước khi xuất báo cáo tiến độ.</span>
+      </div>
+      <button id="export-xlsx-button" class="secondary" type="button">Xuất dữ liệu CARIO + Gantt</button>
+      <button id="refresh-button" class="secondary" type="button">Refresh</button>
+      <button id="save-json-button" class="secondary" type="button">Save JSON</button>
     </div>
   </header>
 

@@ -16,6 +16,8 @@ public sealed class ProjectCompiler : IProjectCompiler
     private readonly ManagementViewProjector viewProjector;
     private readonly CarioMappingProjector carioMappingProjector;
     private readonly CarioXlsxExporter carioXlsxExporter;
+    private readonly ExecutiveProgressReportProjector executiveProgressReportProjector;
+    private readonly ExecutiveProgressXlsxExporter executiveProgressXlsxExporter;
     private readonly CanonicalJsonSerializer jsonSerializer;
     private readonly ExecutionOverlayUpdater executionUpdater;
     private readonly IManagementEvidenceSourceAdapter managementEvidenceAdapter;
@@ -29,6 +31,8 @@ public sealed class ProjectCompiler : IProjectCompiler
         ManagementViewProjector? viewProjector = null,
         CarioMappingProjector? carioMappingProjector = null,
         CarioXlsxExporter? carioXlsxExporter = null,
+        ExecutiveProgressReportProjector? executiveProgressReportProjector = null,
+        ExecutiveProgressXlsxExporter? executiveProgressXlsxExporter = null,
         CanonicalJsonSerializer? jsonSerializer = null,
         ExecutionOverlayUpdater? executionUpdater = null,
         IManagementEvidenceSourceAdapter? managementEvidenceAdapter = null,
@@ -41,6 +45,8 @@ public sealed class ProjectCompiler : IProjectCompiler
         this.viewProjector = viewProjector ?? new ManagementViewProjector();
         this.carioMappingProjector = carioMappingProjector ?? new CarioMappingProjector();
         this.carioXlsxExporter = carioXlsxExporter ?? new CarioXlsxExporter();
+        this.executiveProgressReportProjector = executiveProgressReportProjector ?? new ExecutiveProgressReportProjector();
+        this.executiveProgressXlsxExporter = executiveProgressXlsxExporter ?? new ExecutiveProgressXlsxExporter();
         this.jsonSerializer = jsonSerializer ?? new CanonicalJsonSerializer();
         this.executionUpdater = executionUpdater ?? new ExecutionOverlayUpdater();
         this.managementEvidenceAdapter = managementEvidenceAdapter ?? new IdeaEngineeringReadinessAdapter();
@@ -215,6 +221,34 @@ public sealed class ProjectCompiler : IProjectCompiler
             Gantt = result.Views.Gantt
         };
         return carioXlsxExporter.ExportWithGantt(result.Cario, gantt);
+    }
+
+    public byte[] ExportExecutiveProgressXlsx(CompilationResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var metadata = result.Project.ImportMetadata;
+        if (metadata is null
+            || metadata.Classification != ManifestImportClassification.OfficialCommit
+            || metadata.RegisterStatusDate is null
+            || metadata.RegisterStatusDate.Value == DateOnly.MinValue
+            || result.Analysis is null
+            || result.Analysis.AsOfDate is null
+            || result.Views is null)
+        {
+            throw new ProjectCompilationException(
+                "executive-export",
+                [new ImportWarning
+                {
+                    Id = "EXECUTIVE_EXPORT_INCOMPLETE_OFFICIAL",
+                    Code = "EXECUTIVE_EXPORT_INCOMPLETE_OFFICIAL",
+                    Severity = WarningSeverity.Error,
+                    Message = "An official manifest snapshot with a valid source reporting date, analysis as-of date, and compiled management views is required for the management report."
+                }]);
+        }
+
+        var report = executiveProgressReportProjector.Build(result);
+        return executiveProgressXlsxExporter.Export(report);
     }
 
     public CompilationResult BuildImportedResult(

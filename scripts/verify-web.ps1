@@ -77,8 +77,43 @@ function Invoke-XlsxPreviewUpload {
     }
 }
 
+function Invoke-BinaryDownload {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Uri,
+        [Parameter(Mandatory)]
+        [string] $FilePath
+    )
+
+    $client = [System.Net.Http.HttpClient]::new()
+    $response = $null
+    try {
+        $response = $client.GetAsync($Uri).GetAwaiter().GetResult()
+        $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+        [IO.File]::WriteAllBytes($FilePath, $bytes)
+        if (-not $response.IsSuccessStatusCode) {
+            throw "Binary download returned HTTP $([int]$response.StatusCode)."
+        }
+
+        [PSCustomObject]@{
+            StatusCode = [int]$response.StatusCode
+            ContentType = if ($response.Content.Headers.ContentType) { $response.Content.Headers.ContentType.ToString() } else { '' }
+            ContentDisposition = if ($response.Content.Headers.ContentDisposition) { $response.Content.Headers.ContentDisposition.ToString() } else { '' }
+        }
+    }
+    finally {
+        if ($response) {
+            $response.Dispose()
+        }
+        $client.Dispose()
+    }
+}
+
 $process = Start-Process -FilePath 'dotnet' -ArgumentList @('exec', ('"{0}"' -f $appDll)) -WorkingDirectory $appWorkingDirectory -WindowStyle Hidden -PassThru
 $temporaryXlsx = $null
+$temporaryExecutiveXlsx = $null
+$executiveArchive = $null
+$executiveFileStream = $null
 try {
     $health = $null
     for ($attempt = 0; $attempt -lt 40 -and $null -eq $health; $attempt++) {
@@ -351,12 +386,66 @@ try {
 
     $officialSnapshot = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
     Assert-Condition ($officialSnapshot.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Official snapshot inspection returned a different snapshot.'
+    $officialDigestBeforeExecutiveExport = [string]$officialSnapshot.semanticDigest
+    $officialExecutionBeforeExecutiveExport = ($officialSnapshot.sourceExecution | ConvertTo-Json -Depth 30 -Compress)
     $officialExport = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/manifest-import/exports/official.json' -TimeoutSec 30
     $officialExportText = [string]$officialExport.Content
     Assert-Condition ([string]$officialExport.Headers['Content-Disposition'] -match 'manifest-official\.json') 'Official manifest export must use an authority-specific filename.'
     Assert-Condition ($officialExportText.Contains('"schema":"2.0"', [StringComparison]::Ordinal)) 'Official manifest export must use canonical schema 2.0.'
     Assert-Condition (-not $officialExportText.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Official manifest export must not expose the local source root.'
     Assert-Condition (-not ($officialExportText -match '"content"\s*:')) 'Official manifest export must not expose raw source bodies.'
+
+    $temporaryExecutiveXlsx = [IO.Path]::Combine([IO.Path]::GetTempPath(), ('pmc-executive-verify-{0}.xlsx' -f [Guid]::NewGuid().ToString('N')))
+    $executiveDownload = Invoke-BinaryDownload -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -FilePath $temporaryExecutiveXlsx
+    $executiveDisposition = [string]$executiveDownload.ContentDisposition
+    $executiveContentType = [string]$executiveDownload.ContentType
+    Assert-Condition ($executiveDisposition -match 'BaoCaoTienDo_2026-09-19\.xlsx') 'Executive report filename must use the safe project name and source reporting date.'
+    Assert-Condition ($executiveContentType -like 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet*') 'Executive report must return the XLSX content type.'
+    $executiveFileStream = [IO.File]::OpenRead($temporaryExecutiveXlsx)
+    $executiveArchive = [IO.Compression.ZipArchive]::new($executiveFileStream, [IO.Compression.ZipArchiveMode]::Read)
+    $executiveEntryNames = @($executiveArchive.Entries | ForEach-Object FullName)
+    foreach ($required in @(
+        '[Content_Types].xml',
+        '_rels/.rels',
+        'xl/workbook.xml',
+        'xl/_rels/workbook.xml.rels',
+        'xl/worksheets/sheet1.xml',
+        'xl/worksheets/sheet2.xml',
+        'xl/worksheets/sheet3.xml',
+        'xl/worksheets/sheet4.xml',
+        'xl/styles.xml'
+    )) {
+        Assert-Condition ($executiveEntryNames -contains $required) "Executive XLSX package is missing '$required'."
+    }
+    $executiveWorkbookReader = [IO.StreamReader]::new($executiveArchive.GetEntry('xl/workbook.xml').Open())
+    try {
+        $executiveWorkbookXml = [xml]$executiveWorkbookReader.ReadToEnd()
+    }
+    finally {
+        $executiveWorkbookReader.Dispose()
+    }
+    $executiveSheetNames = @($executiveWorkbookXml.SelectNodes("//*[local-name()='sheet']") | ForEach-Object { $_.name })
+    Assert-Condition (([string]::Join(',', $executiveSheetNames)) -eq 'Tổng quan,Lịch trình,Vấn đề cần xử lý,Chi tiết công việc') 'Executive workbook must use the four approved reader-facing sheets.'
+    $executiveOverviewXml = [xml]([IO.StreamReader]::new($executiveArchive.GetEntry('xl/worksheets/sheet1.xml').Open())).ReadToEnd()
+    Assert-Condition (-not $executiveOverviewXml.OuterXml.Contains('CARIO', [StringComparison]::OrdinalIgnoreCase) -and -not $executiveOverviewXml.OuterXml.Contains('PMC_', [StringComparison]::Ordinal)) 'Executive workbook must not contain technical CARIO/provenance markers.'
+    $executiveArchive.Dispose()
+    $executiveArchive = $null
+    $executiveFileStream.Dispose()
+    $executiveFileStream = $null
+    $officialAfterExecutiveExport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    Assert-Condition ($officialAfterExecutiveExport.semanticDigest -eq $officialDigestBeforeExecutiveExport) 'Executive export must not mutate the official semantic digest.'
+    Assert-Condition (($officialAfterExecutiveExport.sourceExecution | ConvertTo-Json -Depth 30 -Compress) -eq $officialExecutionBeforeExecutiveExport) 'Executive export must not mutate official source execution.'
+
+    $workingTreePreview = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
+        repositoryRoot = $sourceRoot
+        manifestPath = 'planning/project-management-compiler-manifest.json'
+        mode = 'UNCOMMITTED_PREVIEW'
+    }
+    Assert-Condition ($workingTreePreview.classification -eq 'UNCOMMITTED_PREVIEW') 'Working-tree manifest import must remain an explicit non-authoritative preview.'
+    $executiveAfterPreview = Invoke-BinaryDownload -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -FilePath $temporaryExecutiveXlsx
+    Assert-Condition ([string]$executiveAfterPreview.ContentDisposition -match 'BaoCaoTienDo_2026-09-19\.xlsx') 'Executive export must continue using the official source date while a working-tree preview is active.'
+    $officialAfterPreview = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    Assert-Condition ($officialAfterPreview.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId -and $officialAfterPreview.semanticDigest -eq $officialDigestBeforeExecutiveExport) 'Working-tree preview must not replace the official executive export state.'
 
     $failedManifestImport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
         repositoryRoot = $sourceRoot
@@ -578,6 +667,15 @@ try {
     } | ConvertTo-Json -Compress
 }
 finally {
+    if ($executiveArchive) {
+        $executiveArchive.Dispose()
+    }
+    if ($executiveFileStream) {
+        $executiveFileStream.Dispose()
+    }
+    if ($temporaryExecutiveXlsx -and (Test-Path -LiteralPath $temporaryExecutiveXlsx)) {
+        Remove-Item -LiteralPath $temporaryExecutiveXlsx -Force
+    }
     if ($archive) {
         $archive.Dispose()
     }

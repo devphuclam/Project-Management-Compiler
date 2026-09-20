@@ -110,6 +110,22 @@
     byId("connection-status").textContent = message;
   }
 
+  function setExportAvailability() {
+    const button = byId("export-executive-button");
+    const note = byId("export-availability");
+    if (!button) return;
+    const classification = String(state.manifest && (state.manifest.classification
+      || state.manifest.metadata && state.manifest.metadata.classification) || "").toUpperCase();
+    const officialAvailable = classification === "OFFICIAL_COMMIT";
+    button.disabled = !officialAvailable;
+    button.setAttribute("aria-disabled", officialAvailable ? "false" : "true");
+    if (note) {
+      note.textContent = officialAvailable
+        ? "Official source snapshot loaded · file uses the source reporting date."
+        : "Cần import source commit chính thức trước khi xuất báo cáo tiến độ.";
+    }
+  }
+
   function setSourceIntakeCollapsed(collapsed) {
     const panel = byId("source-intake-panel");
     const body = byId("source-intake-body");
@@ -2585,6 +2601,7 @@
     state.managementControl = summary.managementControl || summary.views && summary.views.managementControl;
     state.warnings = summary.warnings || [];
     state.manifest = null;
+    setExportAvailability();
     setSourceIntakeCollapsed(true);
     setExecutionPanelOpen(false, false);
     renderSummary(summary);
@@ -2599,6 +2616,7 @@
       metadata: snapshot && snapshot.metadata || null,
       diagnostics: response && response.diagnostics || snapshot && snapshot.diagnostics || []
     };
+    setExportAvailability();
     if (!snapshot || !snapshot.views) {
       const diagnostics = state.manifest.diagnostics || [];
       const note = byId("manifest-import-note");
@@ -2878,7 +2896,9 @@
   byId("reopen-button").addEventListener("click", reopenJson);
   byId("execution-form").addEventListener("submit", applyExecution);
   byId("save-json-button").addEventListener("click", () => { window.location.href = "/api/exports/project.json"; });
+  byId("export-executive-button").addEventListener("click", () => { window.location.href = "/api/exports/executive-progress.xlsx"; });
   byId("export-xlsx-button").addEventListener("click", () => { window.location.href = "/api/exports/cario.xlsx"; });
+  setExportAvailability();
   if (!byId("as-of-date").value) {
     const now = new Date();
     const localDate = [

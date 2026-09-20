@@ -33,6 +33,18 @@ internal static class XlsxPreviewImporterTests
         TestAssert.Equal("50%", XlsxPreviewTestFixtures.PreviewImportView.ReadString(plan, "RecordedPercent"), "Preview must preserve the exported recorded percentage.");
     }
 
+    public static void ExistingTechnicalPreviewContractIsCharacterizedBeforeExecutiveExport()
+    {
+        var package = XlsxPreviewTestFixtures.ValidWorkbookBytes();
+        var result = XlsxPreviewTestFixtures.Import(package);
+
+        TestAssert.True(result.IsValid, "The existing CARIO + Gantt preview contract must remain accepted before executive export work.");
+        TestAssert.Contains("PMC_EXPORT_KIND", ExecutiveProgressTestFixtures.ReadEntry(package, "xl/worksheets/sheet5.xml"), "The technical preview marker must remain present.");
+        TestAssert.Equal("P01-A", XlsxPreviewTestFixtures.PreviewImportView.ReadEnumerable(result.Preview, "Tasks")
+            .Select(task => XlsxPreviewTestFixtures.PreviewImportView.ReadString(task, "TaskId"))
+            .First(), "The existing preview task identity must remain stable.");
+    }
+
     public static void TypedGanttIdentityAllowsSameRawIdAcrossKinds()
     {
         var result = XlsxPreviewTestFixtures.Import(XlsxPreviewTestFixtures.TypedGanttKindsReuseRawIdWorkbookBytes());

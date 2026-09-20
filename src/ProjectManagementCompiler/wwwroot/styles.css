@@ -42,6 +42,8 @@ button { cursor: pointer; transition: border-color .18s ease, background .18s ea
 .app-header-copy { min-width: 0; }
 .header-description { margin: 8px 0 4px; max-width: 600px; color: #c7d2e2; font-size: 15px; }
 .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.export-action-group { display: grid; gap: 3px; min-width: 220px; }
+.export-availability { color: var(--muted); font-size: 10px; line-height: 1.25; }
 .page { max-width: 1380px; margin: 0 auto; padding: 30px 30px 68px; display: grid; gap: 24px; }
 .page > * { min-width: 0; }
 .panel, .summary-card { background: rgba(16, 23, 36, .88); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
@@ -79,6 +81,7 @@ button.primary { background: var(--accent-strong); color: #06251f; font-weight: 
 button.primary:hover { background: var(--accent); transform: translateY(-1px); box-shadow: 0 10px 22px rgba(51, 199, 183, .22); }
 button.secondary { background: rgba(21, 31, 46, .9); border-color: var(--line); }
 button.secondary:hover, .tab:hover { border-color: var(--accent); color: var(--accent); background: rgba(112, 224, 209, .08); }
+button:disabled { cursor: not-allowed; opacity: .52; transform: none !important; box-shadow: none !important; }
 .compact-action { padding: 6px 9px; font-size: 12px; }
 .error { margin: 16px 0 0; padding: 11px 13px; border: 1px solid rgba(255, 125, 147, .45); border-radius: 9px; color: #ffd5dc; background: rgba(92, 15, 35, .52); white-space: pre-wrap; }
 .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
