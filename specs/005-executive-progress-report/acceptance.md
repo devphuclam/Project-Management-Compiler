@@ -1,6 +1,6 @@
 # Feature 005 acceptance evidence
 
-Date: 2026-09-20
+Date: 2026-09-21
 
 ## Real IDEAEngineering export
 
@@ -11,7 +11,7 @@ The accepted source was imported from the exact official commit:
 ```
 
 The web acceptance gate generated the executive workbook successfully. The
-observed download was 14,212 bytes and returned `200 OK` with the XLSX content
+observed download was 15,264 bytes and returned `200 OK` with the XLSX content
 type. The response filename ended with:
 
 ```text
@@ -37,12 +37,15 @@ for all four sheets. Exporting the workbook through Excel's fixed-format print
 path produced five landscape pages. Rendered pages 1-5 were inspected: the
 overview, schedule, action list, and two detail pages kept primary text inside
 their cells after default reader-text wrapping; no clipped primary cell was
-observed. The report marker remains visible when the source reporting date is
-outside the planning bounds through the dedicated boundary regressions.
+observed. The overview timeline now connects each supported phase and milestone
+row to the shared weekly axis with visible `■` plan and `◆` milestone markers;
+the axis remains weekly rather than one column per day. The report marker
+remains visible when the source reporting date is outside the planning bounds
+through the dedicated boundary regressions.
 
 The timed acceptance was performed after the official snapshot was loaded:
-the executive endpoint returned the 14,212-byte workbook in 146 ms in the
-direct acceptance run, below the five-second budget. The reviewer was the
+the executive endpoint returned the 15,264-byte workbook below the five-second
+budget in the direct acceptance run. The reviewer was the
 Codex acceptance pass (package assertions plus rendered-page inspection); the
 overview exposes current phase, next milestone, schedule condition, evidence-
 safe progress, and decision/action attention without requiring technical IDs.
@@ -94,13 +97,13 @@ git diff --check
 Results:
 
 - direct solution build: `0 Warning(s)`, `0 Error(s)`, exit `0`;
-- executable runner: `273 PASS`, `0 FAIL`, exit `0`;
-- full `scripts/verify.ps1`: exit `0`; build `0/0`, executable runner `273/0`, launcher pass, web smoke `SecurityChecks=PASS`;
+- executable runner: `278 PASS`, `0 FAIL`, exit `0`;
+- full `scripts/verify.ps1`: exit `0`; build `0/0`, executable runner `278/0`, launcher pass, web smoke `SecurityChecks=PASS`;
 - web smoke: exit `0`, `SecurityChecks=PASS`, official import shape `6 / 35 / 53 / 7`, technical workbook `7` sheets, executive workbook `4` sheets;
 - `git diff --check`: exit `0` (Git emitted only the repository's existing LF/CRLF advisory warnings).
 
-The remaining gates are post-implementation Spec Kit analyze/converge and
-repository code review before integration.
+The final post-implementation Spec Kit analyze/converge and repository code
+review gates are also complete; no remediation task was required.
 
 ## Post-implementation Spec Kit analyze
 
@@ -122,7 +125,8 @@ The strictly read-only analyze pass found `0` actionable findings:
 - no unresolved clarification/action markers or constitution conflicts were
   found.
 
-No remediation edit was required after this analysis.
+No remediation edit was required after this analysis. The final pass after the
+connected timeline and review fixes remained at `0` actionable findings.
 
 ## Post-implementation Spec Kit converge
 
@@ -131,3 +135,16 @@ requirements/success criteria, plan decisions, constitution constraints,
 implementation paths, and task list. Result: **converged**. No missing,
 partial, contradicting, or unrequested finding required a new task, so the
 append-only convergence phase was not added.
+
+## Final code-review and verification gate
+
+The repository code-review workflow reviewed `main...HEAD` in the dedicated
+worktree at commit `c949ac9` and found no remaining correctness, standards, or
+Feature 005 specification issue. The two reported duplication smells were
+reviewer judgement calls only and were left unchanged because the feature is
+dependency-free and the requested scope does not include a shared workbook
+writer refactor.
+
+The review fixes were implemented test-first: each regression was observed RED
+before the smallest production fix, then the focused and related runner was
+green. The final executable runner is `278 PASS`, `0 FAIL`, exit `0`.
