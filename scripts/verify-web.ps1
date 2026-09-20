@@ -439,6 +439,9 @@ try {
     Assert-Condition ($appJs.Contains('startOfIsoWeek', [StringComparison]::Ordinal)) 'Week zoom ticks must align to ISO week starts.'
     Assert-Condition ($appJs.Contains('AS OF ', [StringComparison]::Ordinal)) 'Gantt as-of marker must use a clear uppercase analysis label.'
     Assert-Condition ($appJs.Contains('gantt-critical-bar', [StringComparison]::Ordinal)) 'Critical-path mode must provide a distinct bar treatment.'
+    Assert-Condition ($appJs.Contains('recordedPercent: true', [StringComparison]::Ordinal) -and $appJs.Contains('gantt-column-recorded-percent', [StringComparison]::Ordinal) -and $appJs.Contains('recordedPercentLabel', [StringComparison]::Ordinal)) 'Interactive Gantt must expose a fail-safe Recorded % column in the task list.'
+    $legacyForecastLabel = $appJs.IndexOf('appendDetailField(actualFields, "Calculated " + ["fore", "cast"].join("")', [StringComparison]::Ordinal)
+    Assert-Condition ($appJs.Contains('appendDetailField(actualFields, "Source forecast"', [StringComparison]::Ordinal) -and $legacyForecastLabel -lt 0) 'Gantt execution evidence must label the imported forecast as Source forecast.'
     Assert-Condition ($appJs.Contains('typeof value === "number"', [StringComparison]::Ordinal)) 'Gantt date formatting must accept its internal timestamp scale.'
     Assert-Condition ($appJs.Contains('minor = []', [StringComparison]::Ordinal)) 'Month zoom must not duplicate the month axis as its own detail axis.'
     Assert-Condition ($appJs.Contains('let minor = []', [StringComparison]::Ordinal)) 'Month zoom tick generation must allow an empty detail axis.'
@@ -451,7 +454,7 @@ try {
     Assert-Condition ($appJs.Contains('if (dimmed) taskRow.classList.add("gantt-dimmed")', [StringComparison]::Ordinal) -and -not $appJs.Contains('[taskRow, timelineRow].forEach(element => {', [StringComparison]::Ordinal)) 'Gantt row selection must not dim the timeline evidence rows.'
     Assert-Condition (-not $appJs.Contains('draggable', [StringComparison]::OrdinalIgnoreCase)) 'PLAN bars must not be draggable.'
     Assert-Condition (-not $indexHtml.Contains('cdn.', [StringComparison]::OrdinalIgnoreCase)) 'Gantt must not add CDN assets.'
-    $ganttStart = $appJs.IndexOf('function renderGantt', [StringComparison]::Ordinal)
+    $ganttStart = $appJs.IndexOf('function renderGantt(view', [StringComparison]::Ordinal)
     $ganttEnd = $appJs.IndexOf('function renderKanban', [StringComparison]::Ordinal)
     Assert-Condition ($ganttStart -ge 0 -and $ganttEnd -gt $ganttStart) 'Gantt renderer source boundary must be discoverable.'
     $ganttSource = $appJs.Substring($ganttStart, $ganttEnd - $ganttStart)

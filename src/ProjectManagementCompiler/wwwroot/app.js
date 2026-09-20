@@ -20,7 +20,7 @@
       dependencyFocus: "both",
       criticalPath: false,
       structureMode: false,
-      columns: { state: true, owner: false, attention: false },
+      columns: { state: true, recordedPercent: true, owner: false, attention: false },
       selectedRowKey: null
     };
   }
@@ -869,6 +869,15 @@
     return row && row.hasExecutionEvidence ? "Not recorded" : hasExecutionEvidence(currentSummary()) ? "Not recorded" : "Plan only";
   }
 
+  function recordedPercentLabel(row) {
+    const actual = row && row.actual && row.actual.actualEffortHours;
+    const remaining = row && row.actual && row.actual.remainingEffortHours;
+    if (![actual, remaining].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0)) return "Not recorded";
+    const total = actual + remaining;
+    if (total <= 0) return "Not recorded";
+    return Math.round((actual / total) * 100) + "%";
+  }
+
   function resolveWorkItemVariance(row, analysis) {
     if (!row || row.kind !== "DeliveryCard") return null;
     return (analysis && analysis.workItemVariances || []).find(item => item.workItemId === row.id) || null;
@@ -915,6 +924,7 @@
   function ganttTaskColumnDefinition() {
     const columns = ["minmax(140px, 1fr)"];
     if (state.gantt.columns.state) columns.push("72px");
+    if (state.gantt.columns.recordedPercent) columns.push("72px");
     if (state.gantt.columns.owner) columns.push("80px");
     if (state.gantt.columns.attention) columns.push("68px");
     return columns.join(" ");
@@ -923,6 +933,7 @@
   function ganttTaskPaneWidth() {
     return 328
       + (state.gantt.columns.state ? 72 : 0)
+      + (state.gantt.columns.recordedPercent ? 72 : 0)
       + (state.gantt.columns.owner ? 80 : 0)
       + (state.gantt.columns.attention ? 68 : 0);
   }
@@ -1487,6 +1498,15 @@
     if (state.gantt.criticalPath && row.isCritical) status.appendChild(node("span", "Critical", "gantt-signal critical"));
     taskRow.appendChild(status);
 
+    const recordedPercent = recordedPercentLabel(row);
+    const progress = node("div", null, "gantt-task-cell gantt-task-recorded-percent gantt-column-recorded-percent");
+    const progressValue = node("span", recordedPercent, "gantt-recorded-percent" + (recordedPercent === "Not recorded" ? " is-neutral" : ""));
+    progressValue.title = recordedPercent === "Not recorded"
+      ? "Recorded completion is shown when actual and remaining effort are both known."
+      : "Recorded completion from actual effort divided by actual plus remaining effort.";
+    progress.appendChild(progressValue);
+    taskRow.appendChild(progress);
+
     const owner = node("div", null, "gantt-task-cell gantt-task-owner gantt-column-owner");
     const ownerValue = node("span", row.ownerSummary || "Unassigned", row.primaryOwner ? "gantt-owner-code" : "muted");
     if (row.primaryOwner) ownerValue.title = row.primaryOwner.label;
@@ -1711,7 +1731,7 @@
     taskIdLabel.appendChild(taskIdOption);
     taskIdLabel.appendChild(node("span", "Task / ID"));
     columnMenu.appendChild(taskIdLabel);
-    [["state", "State"], ["owner", "Primary owner"], ["attention", "Attention"]].forEach(([column, label]) => {
+    [["state", "State"], ["recordedPercent", "Recorded %"], ["owner", "Primary owner"], ["attention", "Attention"]].forEach(([column, label]) => {
       const wrapper = node("label", null, "gantt-menu-option");
       const input = node("input");
       input.type = "checkbox";
@@ -2019,7 +2039,7 @@
     appendDetailField(actualFields, "Actual finish", sourceRecord ? displayDate(sourceRecord.actualFinish) : row.actual && row.actual.isOpenEnded ? "Open through as-of" : row.actual ? displayDate(row.actual.finish) : "Not recorded");
     appendDetailField(actualFields, "Actual effort", sourceRecord ? displayOptionalNumber(sourceRecord.actualEffortHours, "h") : row.actual ? displayOptionalNumber(row.actual.actualEffortHours, "h") : "Not recorded");
     appendDetailField(actualFields, "Remaining effort", sourceRecord ? displayOptionalNumber(sourceRecord.remainingEffortHours, "h") : row.actual ? displayOptionalNumber(row.actual.remainingEffortHours, "h") : "Not recorded");
-    appendDetailField(actualFields, "Calculated " + ["fore", "cast"].join(""), sourceRecord ? displayDate(sourceRecord["fore" + "castFinish"]) : "Not calculated");
+    appendDetailField(actualFields, "Source forecast", sourceRecord ? displayDate(sourceRecord.forecastFinish) : "Not recorded");
     appendDetailField(actualFields, "Blocker", sourceRecord ? (sourceRecord.blocker || "Not recorded") : "Not recorded");
     appendDetailField(actualFields, "Last update", sourceRecord && sourceRecord.lastUpdatedAt ? formatTrustTimestamp(sourceRecord.lastUpdatedAt) : row.actual && row.actual.lastUpdatedAt ? formatTrustTimestamp(row.actual.lastUpdatedAt) : "Not recorded");
     appendDetailField(actualFields, "Schedule health", row.alerts && row.alerts.length ? row.alerts.map(alert => alert.alertCode).join(", ") : "No active derived alert");
@@ -2161,11 +2181,12 @@
     canvas.classList.toggle("gantt-plan-view", state.gantt.preset === "plan");
     canvas.classList.toggle("gantt-has-selection", Boolean(state.gantt.selectedRowKey));
     canvas.classList.toggle("gantt-hide-state", !state.gantt.columns.state);
+    canvas.classList.toggle("gantt-hide-recorded-percent", !state.gantt.columns.recordedPercent);
     canvas.classList.toggle("gantt-hide-owner", !state.gantt.columns.owner);
     canvas.classList.toggle("gantt-hide-attention", !state.gantt.columns.attention);
     const headerRow = node("div", null, "gantt-header-row");
     const taskHeader = node("div", null, "gantt-task-header gantt-task-pane");
-    [["Task / ID", "gantt-column-identity"], ["State", "gantt-column-state"], ["Primary owner", "gantt-column-owner"], ["Attention", "gantt-column-attention"]]
+    [["Task / ID", "gantt-column-identity"], ["State", "gantt-column-state"], ["Recorded %", "gantt-column-recorded-percent"], ["Primary owner", "gantt-column-owner"], ["Attention", "gantt-column-attention"]]
       .forEach(([label, className]) => taskHeader.appendChild(node("span", label, className)));
     headerRow.appendChild(taskHeader);
     headerRow.appendChild(renderTimelineHeader(range, width, analysis || {}));

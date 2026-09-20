@@ -6,7 +6,7 @@ internal static class GanttUiRegressionTests
     {
         var appJs = ReadAppJs();
 
-        TestAssert.Contains("columns: { state: true, owner: false, attention: false }", appJs, "Gantt must start with the approved compact Task / ID and State columns.");
+        TestAssert.Contains("columns: { state: true, recordedPercent: true, owner: false, attention: false }", appJs, "Gantt must start with the approved compact Task / ID, State, and Recorded % columns.");
         TestAssert.Contains("data-gantt-column", appJs, "Gantt must expose a column-visibility control seam.");
         TestAssert.Contains("gantt-columns-menu", appJs, "Gantt must render metadata options in a compact Columns menu.");
         TestAssert.Contains("taskIdOption.disabled = true", appJs, "The identity column must remain visible and non-toggleable.");
