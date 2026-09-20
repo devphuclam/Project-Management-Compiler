@@ -48,7 +48,11 @@ compatibility input only and are neutralized after migration.
 **Performance Goals**: Bounded source reads and deterministic results on the
 supported Windows developer workstation. No user-visible time SLA is defined for
 this feature; correctness gates are the configured and hard application ceilings,
-and no repository scan or schema evaluation may be unbounded.
+and no repository scan or schema evaluation may be unbounded. The verification
+guardrail is measurable: the full `scripts/verify.ps1` gate must complete within
+120 seconds on the supported workstation, with the exact elapsed time recorded
+in the handoff; this is an engineering verification bound, not a product
+promise.
 
 **Constraints**: Manifest is the only discovery entry point. Every read is bounded,
 repository-relative, and tied to one commit or one stable working-tree capture.

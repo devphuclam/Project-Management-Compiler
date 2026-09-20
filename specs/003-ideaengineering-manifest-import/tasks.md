@@ -317,6 +317,9 @@ confirmed failure, smallest fix, focused green run, and related regression run.
   and source compatibility read-only checks; acceptance: every command exits
   successfully with exact test count and command output captured in
   `docs/handoff/2026-09-19-ideaengineering-manifest-import-design.md`. The
+  timed full `scripts/verify.ps1` gate must also complete within 120 seconds on
+  the supported workstation, with elapsed time recorded in that handoff. This
+  is an engineering verification bound, not a user-visible SLA. The
   verifier-discovered typed Gantt identity collision is covered by the
   red/green regression `TypedGanttIdentityAllowsSameRawIdAcrossKinds`; the
   preview identity key is `Type + ID + Lane`, preserving the existing typed-ID

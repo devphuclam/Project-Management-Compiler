@@ -158,6 +158,8 @@ Fresh artifact-reconciliation verification recorded for 2026-09-20:
 - `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1`
   with `IDEAENGINEERING_ROOT` set to the local IDEAEngineering checkout: PASS,
   including build, 252-test suite, launcher, and web gates;
+- timed `scripts/verify.ps1` gate: `VerifyExit=0`, `ElapsedSeconds=79.42`,
+  `ThresholdSeconds=120`;
 - `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File
   .\scripts\verify-launcher.ps1`: `PASS LauncherContract`;
 - `node --check .\src\ProjectManagementCompiler\wwwroot\app.js`: PASS;

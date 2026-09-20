@@ -48,7 +48,7 @@
 - Modify: `specs/003-ideaengineering-manifest-import/plan.md`
 
 - [X] Mark superseded hardening and integration tasks as historical records or consolidate their current acceptance text without deleting audit traceability.
-- [X] Add a measurable performance verification task and name the artifact that records exact commands and outputs for SC-024.
+- [X] Add a measurable performance verification task and name the artifact that records exact commands, elapsed time, and outputs for SC-024.
 - [X] Recalculate requirement traceability and ensure every current FR/SC still has a task.
 
 ### Task 4: Spec Kit analysis and integration verification
