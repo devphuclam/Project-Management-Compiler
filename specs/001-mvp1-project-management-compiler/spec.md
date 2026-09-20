@@ -139,15 +139,17 @@ people or organization values.
 **Why this priority**: CARIO is the first required enterprise-compatible output,
 but the source does not prove a native import contract.
 
-**Independent test**: Generate the fixture workbook, inspect its six worksheet
-parts and headers, and verify that unresolved mappings are blank in task rows and
-explicit in `06_IMPORT_WARNINGS`.
+**Independent test**: Generate the fixture workbook, inspect the six CARIO
+worksheet parts plus the daily `07_GANTT` sheet, and verify that unresolved
+mappings are blank in task rows and explicit in `06_IMPORT_WARNINGS`.
 
 **Acceptance scenarios**:
 
-1. **Given** a valid canonical snapshot, **when** the user selects CARIO export,
-   **then** `<ProjectName>_CARIO.xlsx` contains exactly the six documented
-   worksheets.
+1. **Given** a valid canonical snapshot, **when** the user selects the workbook
+   export, **then** `<ProjectName>_CARIO_GANTT.xlsx` contains the six documented
+   CARIO worksheets and a daily visual `07_GANTT` worksheet. An explicit preview
+   export uses a separate preview filename and never replaces the official
+   snapshot.
 2. **Given** `LEAD` and `QLHT` logical roles without identity configuration,
    **when** assignments are exported, **then** no employee is fabricated and
    each unresolved mapping is visible in the assignment and warning sheets.
@@ -157,6 +159,12 @@ explicit in `06_IMPORT_WARNINGS`.
 4. **Given** a work package with child delivery cards, **when** the workbook is
    opened, **then** parent/child and milestone relationships are preserved and
    parent effort is not counted again as a child task.
+5. **Given** a freshly generated seven-sheet workbook with the required
+   `PMC_EXPORT_KIND=CARIO_GANTT`, `PMC_EXPORT_CONTRACT_VERSION=1.0`, project ID,
+   and project name markers, **when** the user selects `XLSX Preview`, **then**
+   the compiler shows the task table and daily Gantt as `Read-only` and
+   `Non-authoritative` without replacing the official source snapshot or
+   proposal state. Arbitrary Excel or an altered package is rejected.
 
 ### User Story 4 — Persist and reopen a canonical snapshot (Priority: P2)
 
@@ -323,9 +331,10 @@ configuration; assert structured diagnostics and safe behavior.
 - **FR-031**: Missing mappings MUST remain unresolved and MUST appear in
   `06_IMPORT_WARNINGS`.
 - **FR-032**: The system MUST generate a human-assisted workbook named
-  `<ProjectName>_CARIO.xlsx` with `01_TASKS`, `02_ASSIGNMENTS`,
-  `03_CHILDREN_MILESTONES`, `04_DEPENDENCIES`, `05_PROJECT_INFO`, and
-  `06_IMPORT_WARNINGS`.
+  `<ProjectName>_CARIO_GANTT.xlsx` with the six CARIO sheets `01_TASKS`,
+  `02_ASSIGNMENTS`, `03_CHILDREN_MILESTONES`, `04_DEPENDENCIES`,
+  `05_PROJECT_INFO`, and `06_IMPORT_WARNINGS`, plus `07_GANTT` with a daily
+  axis and distinct PLAN, ACTUAL, ALERT, and MILESTONE lanes.
 - **FR-033**: The workbook MUST preserve enough task, date, hierarchy, milestone,
   dependency, estimate, role, and provenance data for manual CARIO Create Task
   entry.
@@ -333,6 +342,16 @@ configuration; assert structured diagnostics and safe behavior.
   implement CARIO API/browser automation.
 - **FR-035**: XLSX generation MUST use only already-available platform capabilities
   and MUST NOT require Office COM or a third-party Excel library.
+- **FR-035A**: XLSX preview import MUST accept only a fresh compiler-generated
+  seven-sheet CARIO plus Gantt package with the exact provenance markers and
+  contract version; it MUST reject arbitrary Excel, altered package structure,
+  malformed required values, unsupported relationships, and packages above the
+  application safety ceilings.
+- **FR-035B**: A valid XLSX preview MUST remain an in-memory, read-only,
+  non-authoritative projection. It MUST NOT become canonical project data,
+  source execution evidence, analysis, alerts, proposals, or the official
+  workbook export; official manifest import and application restart MUST clear
+  the preview.
 
 ### Persistence and UI
 
@@ -496,8 +515,13 @@ configuration; assert structured diagnostics and safe behavior.
   the canonical JSON.
 - **SC-005**: Missing concrete role and organization mappings remain blank and
   appear as explicit workbook warnings.
-- **SC-006**: All six workbook sheets are generated and contain expected headers,
-  UTF-8 text, relationships, and warning rows without Office installed.
+- **SC-006**: The six CARIO workbook sheets plus the daily `07_GANTT` sheet are
+  generated with expected headers, lanes, styles, UTF-8 text, relationships,
+  and warning rows without Office installed.
+- **SC-006A**: A fresh marked workbook can be previewed with its project
+  identity, task rows, daily axis, and PLAN/ACTUAL/ALERT/MILESTONE values intact;
+  the preview is explicitly read-only/non-authoritative, and malformed or
+  unmarked packages fail closed without changing official state.
 - **SC-007**: Re-running extraction against the same fixture yields equivalent
   canonical output and view summaries.
 - **SC-008**: The application runs locally through the documented loopback

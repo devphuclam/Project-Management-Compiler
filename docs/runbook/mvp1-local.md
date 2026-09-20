@@ -110,9 +110,35 @@ conflicts remain visible and do not become an effective value.
    `<ProjectName>_project.json`. Use the **Reopen
    saved canonical JSON** control to validate and recalculate that snapshot
    without re-reading the source directory.
-6. Use **Export CARIO XLSX** to download
-   `<ProjectName>_CARIO.xlsx`. It is a human-assisted fill file, not a claimed
-   native CARIO import.
+6. Use **Export Excel · CARIO + Gantt** to download
+   `<ProjectName>_CARIO_GANTT.xlsx`. It is a human-assisted fill file, not a
+   claimed native CARIO import. The default route exports the official source
+   snapshot when one is loaded; a preview must be requested explicitly through
+   `GET /api/exports/cario-preview.xlsx`.
+
+### Read-only XLSX preview workflow
+
+The workbook can be inspected inside the compiler only through the explicit
+preview path. This is a presentation aid, not a way to import arbitrary Excel
+or to turn spreadsheet values into source truth:
+
+1. Export a fresh `<ProjectName>_CARIO_GANTT.xlsx` from this application after
+   the provenance-marker version is installed.
+2. In the source-intake panel choose **Import XLSX preview** and select that
+   file. The importer requires the seven compiler-generated sheets and the
+   four `PMC_*` marker rows in `05_PROJECT_INFO`.
+3. Confirm the page shows **XLSX Preview**, **Read-only**, and
+   **Non-authoritative**, then review the task table and daily Gantt. PLAN,
+   ACTUAL, ALERT, MILESTONE, `Recorded %`, and `Not recorded` values are
+   displayed exactly as exported.
+4. Proposal/execution controls are unavailable in preview mode. Choose
+   **Official source** to return to the manifest-backed views or **Clear
+   preview** to remove the temporary preview.
+
+The preview is held in memory only. A new official manifest import clears it,
+and restart does not restore it. Invalid, altered, unmarked, externally linked,
+or oversized workbooks return `422 INVALID_XLSX_PREVIEW` and leave the current
+official result and any existing valid preview unchanged.
 
 ### Gantt review controls
 
@@ -145,14 +171,26 @@ Use the Gantt tab as a management timeline rather than a task table:
 - `GET /api/views` and `GET /api/views/{dashboard|wbs|gantt|kanban|dependencies|cpm}`
 - `GET /api/warnings`
 - `GET /api/exports/project.json` (download name: `<ProjectName>_project.json`)
-- `GET /api/exports/cario.xlsx`
+- `GET /api/exports/cario.xlsx` (official/source snapshot; download name:
+  `<ProjectName>_CARIO_GANTT.xlsx`)
+- `GET /api/exports/cario-preview.xlsx` (explicit non-authoritative preview;
+  download name: `<ProjectName>_CARIO_GANTT_PREVIEW.xlsx`)
+- `POST /api/xlsx-preview` (multipart field `file`; explicit read-only import)
+- `GET /api/xlsx-preview` (active temporary preview)
+- `DELETE /api/xlsx-preview` (clear the temporary preview)
 
 The persisted JSON contains safe source metadata, provenance, the immutable
 baseline, and the execution overlay, but not captured source text or absolute
-local paths. The workbook contains exactly these sheets:
+local paths. The workbook contains the six CARIO sheets plus a visual Gantt
+sheet:
 
 `01_TASKS`, `02_ASSIGNMENTS`, `03_CHILDREN_MILESTONES`, `04_DEPENDENCIES`,
-`05_PROJECT_INFO`, and `06_IMPORT_WARNINGS`.
+`05_PROJECT_INFO`, `06_IMPORT_WARNINGS`, and `07_GANTT`.
+
+`07_GANTT` uses one daily column per calendar day, freezes the identity
+columns, shades weekends, marks the as-of date, and keeps PLAN, ACTUAL, ALERT,
+and MILESTONE lanes distinct. `Recorded %` is populated only when actual and
+remaining effort are both recorded; otherwise it remains `Not recorded`.
 
 Generated JSON/XLSX files, `bin/`, `obj/`, and temporary verification files are
 not repository inputs and must not be committed.

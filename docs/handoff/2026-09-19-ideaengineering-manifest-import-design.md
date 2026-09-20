@@ -143,8 +143,8 @@ Fresh local verification recorded for this pass:
 - `dotnet build tests/ProjectManagementCompiler.Tests/ProjectManagementCompiler.Tests.csproj --no-restore`: 0 warnings, 0 errors;
 - `scripts/test.ps1`: 234 PASS, 0 FAIL;
 - `scripts/verify.ps1`: PASS, including launcher and web gates;
-- `scripts/verify-web.ps1`: PASS, loopback health, 53 cards, six XLSX sheets,
-  and security checks;
+- `scripts/verify-web.ps1`: PASS, loopback health, 53 cards, six CARIO XLSX
+  sheets plus the daily Gantt sheet, and security checks;
 - `scripts/verify-launcher.ps1`: `PASS LauncherContract`;
 - `node --check src/ProjectManagementCompiler/wwwroot/app.js`: PASS;
 - `git diff --check` and changed-code safety scan: PASS.

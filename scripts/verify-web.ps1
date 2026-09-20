@@ -51,6 +51,32 @@ function Invoke-JsonApi {
     Invoke-RestMethod @parameters
 }
 
+function Invoke-XlsxPreviewUpload {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Uri,
+        [Parameter(Mandatory)]
+        [string] $FilePath
+    )
+
+    $client = [System.Net.Http.HttpClient]::new()
+    $multipart = [System.Net.Http.MultipartFormDataContent]::new()
+    $fileContent = [System.Net.Http.ByteArrayContent]::new([IO.File]::ReadAllBytes($FilePath))
+    try {
+        $multipart.Add($fileContent, 'file', [IO.Path]::GetFileName($FilePath))
+        $response = $client.PostAsync($Uri, $multipart).GetAwaiter().GetResult()
+        [PSCustomObject]@{
+            StatusCode = [int]$response.StatusCode
+            Body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        }
+    }
+    finally {
+        $fileContent.Dispose()
+        $multipart.Dispose()
+        $client.Dispose()
+    }
+}
+
 $process = Start-Process -FilePath 'dotnet' -ArgumentList @('exec', ('"{0}"' -f $appDll)) -WorkingDirectory $appWorkingDirectory -WindowStyle Hidden -PassThru
 $temporaryXlsx = $null
 try {
@@ -174,7 +200,9 @@ try {
             'xl/worksheets/sheet3.xml',
             'xl/worksheets/sheet4.xml',
             'xl/worksheets/sheet5.xml',
-            'xl/worksheets/sheet6.xml'
+            'xl/worksheets/sheet6.xml',
+            'xl/worksheets/sheet7.xml',
+            'xl/styles.xml'
         )) {
             Assert-Condition ($entryNames -contains $required) "XLSX package is missing '$required'."
         }
@@ -189,7 +217,7 @@ try {
         }
 
         $sheetNames = @($workbookXml.SelectNodes("//*[local-name()='sheet']") | ForEach-Object { $_.name })
-        Assert-Condition (([string]::Join(',', $sheetNames)) -eq '01_TASKS,02_ASSIGNMENTS,03_CHILDREN_MILESTONES,04_DEPENDENCIES,05_PROJECT_INFO,06_IMPORT_WARNINGS') 'XLSX worksheet names are not the exact six-sheet contract.'
+        Assert-Condition (([string]::Join(',', $sheetNames)) -eq '01_TASKS,02_ASSIGNMENTS,03_CHILDREN_MILESTONES,04_DEPENDENCIES,05_PROJECT_INFO,06_IMPORT_WARNINGS,07_GANTT') 'XLSX worksheet names are not the six-CARIO-plus-Gantt contract.'
 
         $taskEntry = $archive.GetEntry('xl/worksheets/sheet1.xml')
         $taskReader = [IO.StreamReader]::new($taskEntry.Open())
@@ -233,11 +261,50 @@ try {
         $p04TaskRowText = [string]::Join('|', @($p04TaskRow[0].SelectNodes(".//*[local-name()='t']") | ForEach-Object { $_.'#text' }))
         Assert-Condition ($p04TaskRowText.Contains('2026-09-23', [StringComparison]::Ordinal)) 'CARIO task sheet must retain the real-shaped P04 baseline date.'
         Assert-Condition (-not $p04TaskRowText.Contains('2026-09-25', [StringComparison]::Ordinal)) 'CARIO planned-date cells must not be overwritten by P04 actual start.'
+
+        $ganttEntry = $archive.GetEntry('xl/worksheets/sheet7.xml')
+        $ganttReader = [IO.StreamReader]::new($ganttEntry.Open())
+        try {
+            $ganttXml = [xml] $ganttReader.ReadToEnd()
+        }
+        finally {
+            $ganttReader.Dispose()
+        }
+        Assert-Condition ($ganttXml.OuterXml.Contains('Recorded %', [StringComparison]::Ordinal) -and $ganttXml.OuterXml.Contains('Not recorded', [StringComparison]::Ordinal)) 'Gantt export must expose a fail-safe recorded percentage column.'
+        Assert-Condition ($ganttXml.OuterXml.Contains('2026-09-18', [StringComparison]::Ordinal) -and $ganttXml.OuterXml.Contains('2026-09-19', [StringComparison]::Ordinal)) 'Gantt export must expose adjacent daily axis columns.'
+        Assert-Condition ($ganttXml.OuterXml.Contains('PLAN', [StringComparison]::Ordinal) -and $ganttXml.OuterXml.Contains('ACTUAL', [StringComparison]::Ordinal) -and $ganttXml.OuterXml.Contains('ALERT', [StringComparison]::Ordinal)) 'Gantt export must preserve the distinct management lanes.'
+        Assert-Condition ($ganttXml.OuterXml.Contains('xSplit="15"', [StringComparison]::Ordinal) -and $ganttXml.OuterXml.Contains('ySplit="5"', [StringComparison]::Ordinal)) 'Gantt export must freeze identity and header regions.'
     }
     finally {
         $archive.Dispose()
         $fileStream.Dispose()
     }
+
+    $previewUpload = Invoke-XlsxPreviewUpload -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -FilePath $temporaryXlsx
+    Assert-Condition ($previewUpload.StatusCode -eq 200) "XLSX preview upload must return 200; got $($previewUpload.StatusCode)."
+    $previewPayload = $previewUpload.Body | ConvertFrom-Json
+    Assert-Condition ($previewPayload.readOnly -eq $true -and $previewPayload.authoritative -eq $false) 'XLSX preview must be explicitly read-only and non-authoritative.'
+    Assert-Condition ($previewPayload.projectId -eq $summary.project.id -and $previewPayload.contractVersion -eq '1.0') 'XLSX preview must preserve the exported project identity and contract version.'
+    Assert-Condition (@($previewPayload.dateAxis).Count -gt 0 -and @($previewPayload.tasks).Count -gt 0) 'XLSX preview must expose the daily axis and task rows.'
+
+    $activePreview = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    Assert-Condition ($activePreview.snapshotId -eq $previewPayload.snapshotId) 'XLSX preview GET must return the active uploaded snapshot.'
+
+    $clearPreviewResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -Method Delete -TimeoutSec 30
+    Assert-Condition ([int]$clearPreviewResponse.StatusCode -eq 204) 'XLSX preview clear must return 204.'
+    $emptyPreviewStatus = $null
+    try {
+        Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30 | Out-Null
+    }
+    catch {
+        if ($_.Exception.Response) {
+            $emptyPreviewStatus = [int]$_.Exception.Response.StatusCode
+        }
+        else {
+            throw
+        }
+    }
+    Assert-Condition ($emptyPreviewStatus -eq 404) 'Cleared XLSX preview must return NO_ACTIVE_XLSX_PREVIEW.'
 
     $sourceRoot = $null
     $sourceSearch = [IO.DirectoryInfo]$repositoryRoot

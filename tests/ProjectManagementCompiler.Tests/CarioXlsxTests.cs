@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using ProjectManagementCompiler.Application;
 using ProjectManagementCompiler.Domain;
 using ProjectManagementCompiler.Extraction;
 using ProjectManagementCompiler.Management;
@@ -140,6 +141,24 @@ internal static class CarioXlsxTests
         var second = new CarioXlsxExporter().Export(model);
 
         TestAssert.True(first.SequenceEqual(second), "The same canonical model must produce deterministic CARIO package bytes.");
+    }
+
+    public static void CarioXlsxGanttWorkbookContainsPreviewProvenanceMarkers()
+    {
+        var result = new ProjectCompiler().CompileAsync(new CompilationRequest
+        {
+            SourcePath = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering"),
+            AsOfDate = new DateOnly(2026, 9, 28)
+        }).GetAwaiter().GetResult();
+        var bytes = new ProjectCompiler().ExportCarioXlsx(result);
+
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var projectInfo = LoadXml(archive, "xl/worksheets/sheet5.xml");
+        TestAssert.Contains("PMC_EXPORT_KIND", projectInfo, "The seven-sheet CARIO + Gantt export must identify its producer.");
+        TestAssert.Contains("CARIO_GANTT", projectInfo, "The preview marker must identify the Gantt workbook contract.");
+        TestAssert.Contains("PMC_EXPORT_CONTRACT_VERSION", projectInfo, "The preview marker must identify the contract version.");
+        TestAssert.Contains("PMC_PROJECT_ID", projectInfo, "The preview marker must carry the project ID.");
+        TestAssert.Contains("PMC_PROJECT_NAME", projectInfo, "The preview marker must carry the project name.");
     }
 
     private static string LoadXml(ZipArchive archive, string entryName)

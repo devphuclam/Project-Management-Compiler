@@ -25,6 +25,7 @@ builder.Services.AddSingleton<IManifestSourceReader, ManifestSourceReader>();
 builder.Services.AddSingleton<IIdeaEngineeringManifestImporter, IdeaEngineeringManifestImporter>();
 builder.Services.AddSingleton<ManifestImportApplicationService>();
 builder.Services.AddSingleton<ExecutionProposalService>();
+builder.Services.AddSingleton<XlsxPreviewImporter>();
 
 var app = builder.Build();
 app.Use(async (context, next) =>
@@ -123,6 +124,87 @@ app.MapGet("/api/manifest-import/official/latest/preview", (CompilerApplicationS
 app.MapDelete("/api/manifest-import/preview", (ManifestImportApplicationService service) =>
 {
     service.ClearPreview();
+    return Results.NoContent();
+});
+
+app.MapPost("/api/xlsx-preview", async (
+    HttpRequest request,
+    XlsxPreviewImporter importer,
+    CompilerApplicationState state,
+    CancellationToken cancellationToken) =>
+{
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new ApiErrorResponse
+        {
+            Code = "INVALID_XLSX_PREVIEW_REQUEST",
+            Message = "The preview upload must be multipart/form-data with a file field named 'file'.",
+            Phase = "xlsx-preview"
+        });
+    }
+
+    try
+    {
+        var form = await request.ReadFormAsync(cancellationToken);
+        var file = form.Files.GetFile("file");
+        if (file is null)
+        {
+            return Results.BadRequest(new ApiErrorResponse
+            {
+                Code = "INVALID_XLSX_PREVIEW_REQUEST",
+                Message = "The preview upload must include a file field named 'file'.",
+                Phase = "xlsx-preview"
+            });
+        }
+
+        if (file.Length > MaximumRequestBodyBytes)
+        {
+            return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+        }
+
+        await using var input = file.OpenReadStream();
+        using var buffer = new MemoryStream();
+        await input.CopyToAsync(buffer, cancellationToken);
+        var result = importer.Import(file.FileName, buffer.ToArray());
+        if (!result.IsValid)
+        {
+            return Results.UnprocessableEntity(ToXlsxPreviewError(result));
+        }
+
+        state.SetXlsxPreview(result.Preview!);
+        return Results.Ok(result.Preview);
+    }
+    catch (OperationCanceledException)
+    {
+        throw;
+    }
+    catch (InvalidDataException exception)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse
+        {
+            Code = "INVALID_XLSX_PREVIEW",
+            Message = exception.Message,
+            Phase = "xlsx-preview"
+        });
+    }
+});
+
+app.MapGet("/api/xlsx-preview", (CompilerApplicationState state) =>
+{
+    var preview = state.ActiveXlsxPreview;
+    return preview is null
+        ? Results.NotFound(new ApiErrorResponse
+        {
+            Code = "NO_ACTIVE_XLSX_PREVIEW",
+            Message = "No XLSX preview is active.",
+            Phase = "xlsx-preview"
+        })
+        : Results.Ok(preview);
+});
+
+app.MapDelete("/api/xlsx-preview", (CompilerApplicationState state) =>
+{
+    state.ClearXlsxPreview();
     return Results.NoContent();
 });
 
@@ -386,14 +468,35 @@ app.MapGet("/api/exports/project.json", (IProjectCompiler compiler, CompilerAppl
 
 app.MapGet("/api/exports/cario.xlsx", (IProjectCompiler compiler, CompilerApplicationState state) =>
 {
-    var current = state.Current;
+    var current = WorkbookExportSelection.ResolveOfficial(state);
     if (current is null)
     {
-        return Results.NotFound(new ApiErrorResponse { Code = "NO_PROJECT", Message = "No compiled project is loaded.", Phase = "export" });
+        var code = state.Current is null ? "NO_PROJECT" : "NO_OFFICIAL_SNAPSHOT";
+        var message = state.Current is null
+            ? "No compiled project is loaded."
+            : "The active workbook export is limited to the official source snapshot; import an official commit first.";
+        return Results.NotFound(new ApiErrorResponse { Code = code, Message = message, Phase = "export" });
     }
 
-    var fileName = $"{SanitizeFileName(current.Project.Project.Name)}_CARIO.xlsx";
+    var fileName = $"{SanitizeFileName(current.Project.Project.Name)}_CARIO_GANTT.xlsx";
     return Results.File(compiler.ExportCarioXlsx(current), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+});
+
+app.MapGet("/api/exports/cario-preview.xlsx", (IProjectCompiler compiler, CompilerApplicationState state) =>
+{
+    var preview = WorkbookExportSelection.ResolvePreview(state);
+    if (preview is null)
+    {
+        return Results.NotFound(new ApiErrorResponse
+        {
+            Code = "NO_ACTIVE_PREVIEW",
+            Message = "No non-authoritative preview is available for export.",
+            Phase = "export"
+        });
+    }
+
+    var fileName = $"{SanitizeFileName(preview.Project.Project.Name)}_CARIO_GANTT_PREVIEW.xlsx";
+    return Results.File(compiler.ExportCarioXlsx(preview), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
 });
 
 app.MapFallbackToFile("index.html");
@@ -495,6 +598,22 @@ static ApiErrorResponse ToError(ProjectCompilationException exception) => new()
     Message = exception.Message,
     Phase = exception.Phase,
     Diagnostics = exception.Diagnostics
+};
+
+static ApiErrorResponse ToXlsxPreviewError(XlsxPreviewImportResult result) => new()
+{
+    Code = "INVALID_XLSX_PREVIEW",
+    Message = "The selected workbook did not satisfy the PMC preview contract.",
+    Phase = "xlsx-preview",
+    Diagnostics = result.Diagnostics
+        .Select(diagnostic => new ImportWarning
+        {
+            Id = diagnostic.Code,
+            Code = diagnostic.Code,
+            Severity = WarningSeverity.Error,
+            Message = diagnostic.Message
+        })
+        .ToArray()
 };
 
 static string SanitizeFileName(string value)

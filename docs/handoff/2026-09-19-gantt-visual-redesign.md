@@ -37,7 +37,7 @@ Verified commands:
 - `.\scripts\test.ps1`
 - `.\scripts\verify.ps1`
 
-The final verification reports a clean build with zero warnings/errors, all tests passing, `Health: ok`, 53 cards, six XLSX sheets, and `SecurityChecks: PASS`. Browser verification used the public real-shaped fixture at a 1280-pixel desktop viewport; default, selected P04, Columns, downstream disclosure, close, and console-error states were checked. No browser warnings or errors were recorded.
+The final verification reports a clean build with zero warnings/errors, all tests passing, `Health: ok`, 53 cards, six CARIO XLSX sheets plus the daily Gantt sheet, and `SecurityChecks: PASS`. Browser verification used the public real-shaped fixture at a 1280-pixel desktop viewport; default, selected P04, Columns, downstream disclosure, close, and console-error states were checked. No browser warnings or errors were recorded.
 
 ## Git rollout
 

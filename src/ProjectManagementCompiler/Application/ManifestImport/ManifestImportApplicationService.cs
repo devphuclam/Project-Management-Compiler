@@ -36,4 +36,6 @@ public sealed class ManifestImportApplicationService
     }
 
     public void ClearPreview() => state.ClearActivePreview();
+
+    public void ClearXlsxPreview() => state.ClearXlsxPreview();
 }

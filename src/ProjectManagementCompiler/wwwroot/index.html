@@ -20,7 +20,7 @@
     <div class="header-actions">
       <button id="refresh-button" class="secondary">Refresh</button>
       <button id="save-json-button" class="secondary">Save JSON</button>
-      <button id="export-xlsx-button" class="primary">Export XLSX</button>
+      <button id="export-xlsx-button" class="primary">Export Excel · CARIO + Gantt</button>
     </div>
   </header>
 
@@ -81,6 +81,28 @@
             </div>
           </div>
           <p id="manifest-import-note" class="manifest-import-note" role="status">Official source metadata will appear above the management views after import.</p>
+        </section>
+        <div class="intake-divider" aria-hidden="true"></div>
+        <section class="xlsx-preview-import-block" aria-labelledby="xlsx-preview-import-heading">
+          <div class="manifest-import-heading">
+            <div>
+              <p class="eyebrow">OUTPUT INSPECTION</p>
+              <h3 id="xlsx-preview-import-heading">Import an exported workbook</h3>
+              <p class="muted">Open a fresh PMC CARIO + Gantt workbook as a temporary, read-only preview. It never becomes source truth.</p>
+            </div>
+            <span class="local-only">No source write</span>
+          </div>
+          <div class="controls-grid xlsx-preview-controls">
+            <label class="wide">
+              XLSX preview file
+              <input id="xlsx-preview-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <small>Only the seven-sheet workbook exported by this compiler is accepted.</small>
+            </label>
+            <div class="control-submit">
+              <button id="xlsx-preview-import-button" class="secondary" type="button">Import XLSX preview</button>
+            </div>
+          </div>
+          <p id="xlsx-preview-note" class="manifest-import-note" role="status">Preview data is session-only and cannot create execution proposals.</p>
         </section>
         <div class="intake-divider" aria-hidden="true"></div>
         <div class="legacy-intake-heading">

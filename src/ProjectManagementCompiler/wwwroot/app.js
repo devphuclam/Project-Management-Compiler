@@ -27,7 +27,7 @@
 
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, latestAttempt: null, activeProposal: null, activeView: "dashboard", gantt: createGanttState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "dashboard", gantt: createGanttState() };
   const byId = (id) => document.getElementById(id);
 
   // Presentation-only labels. The canonical model and source role codes stay untouched.
@@ -501,8 +501,12 @@
 
   function updateWorkspaceMode() {
     const page = document.querySelector(".page");
-    if (page) page.classList.toggle("is-gantt-focus", state.activeView === "gantt");
+    if (page) {
+      page.classList.toggle("is-gantt-focus", state.activeView === "gantt" && !state.xlsxPreview);
+      page.classList.toggle("is-xlsx-preview", Boolean(state.xlsxPreview));
+    }
     document.body.classList.toggle("is-gantt-focus", state.activeView === "gantt");
+    document.body.classList.toggle("is-xlsx-preview", Boolean(state.xlsxPreview));
   }
 
   function activateView(view) {
@@ -657,6 +661,106 @@
     table.appendChild(body);
     wrap.appendChild(table);
     return wrap;
+  }
+
+  function setExecutionPanelAvailability(available) {
+    const panel = byId("execution-panel");
+    if (!panel) return;
+    panel.hidden = !available;
+    panel.classList.toggle("is-preview-disabled", !available);
+    if (!available) setExecutionPanelOpen(false, false);
+  }
+
+  function renderXlsxPreviewSummary(preview) {
+    const panel = byId("summary-panel");
+    if (!panel) return;
+    clear(panel);
+    panel.className = "summary-region xlsx-preview-summary";
+    const previewReadOnly = preview.readOnly === true;
+    const previewAuthoritative = preview.authoritative === true;
+    const banner = node("section", null, "xlsx-preview-banner");
+    banner.appendChild(node("p", "XLSX PREVIEW", "eyebrow"));
+    banner.appendChild(node("h2", preview.projectName || "Exported workbook"));
+    banner.appendChild(node("p", "This is a temporary projection of a compiler export. It is " + (previewReadOnly ? "read-only" : "not read-only") + " and " + (previewAuthoritative ? "authoritative" : "non-authoritative") + ".", "muted"));
+    const badges = node("div", null, "xlsx-preview-badges");
+    badges.appendChild(node("span", previewReadOnly ? "Read-only" : "Writable", "preview-badge"));
+    badges.appendChild(node("span", previewAuthoritative ? "Authoritative" : "Non-authoritative", "preview-badge"));
+    badges.appendChild(node("span", "Contract " + (preview.contractVersion || "Unknown"), "preview-badge"));
+    banner.appendChild(badges);
+    const actions = node("div", null, "xlsx-preview-actions");
+    const official = node("button", "Official source", "secondary");
+    official.type = "button";
+    official.addEventListener("click", returnToOfficialSource);
+    const clearPreview = node("button", "Clear preview", "secondary");
+    clearPreview.type = "button";
+    clearPreview.addEventListener("click", clearXlsxPreview);
+    actions.appendChild(official);
+    actions.appendChild(clearPreview);
+    banner.appendChild(actions);
+    panel.appendChild(banner);
+  }
+
+  function renderXlsxPreviewSurface(preview) {
+    const section = node("section", null, "xlsx-preview-surface");
+    const heading = node("div", null, "xlsx-preview-surface-heading");
+    heading.appendChild(node("p", "EXPORTED MANAGEMENT ARTIFACT", "eyebrow"));
+    heading.appendChild(node("h2", "Daily Gantt preview"));
+    heading.appendChild(node("p", (preview.fileName || "Workbook") + " · " + (preview.sourceIdentity || "Source identity not recorded") + " · as of " + (preview.asOfDate || "Not recorded"), "muted"));
+    section.appendChild(heading);
+
+    const tasks = (preview.tasks || []).map(task => [
+      task.taskId,
+      task.workItemType,
+      task.title,
+      task.plannedStart || "Not recorded",
+      task.deadline || "Not recorded",
+      task.initialState || "Not recorded",
+      task.sourceReference || "No source reference"
+    ]);
+    const taskCard = node("section", null, "xlsx-preview-card");
+    taskCard.appendChild(node("h3", "Exported task table", null));
+    taskCard.appendChild(renderTable(["Task ID", "Type", "Task", "Plan start", "Deadline", "Status", "Source reference"], tasks));
+    section.appendChild(taskCard);
+
+    const rows = preview.ganttRows || [];
+    const dateAxis = preview.dateAxis || [];
+    const ganttHeaders = ["Lane", "ID", "Name", "Status", "Recorded %", "Evidence"].concat(dateAxis);
+    const ganttRows = rows.map(row => [
+      row.lane,
+      row.id,
+      row.name,
+      row.status || "Not recorded",
+      row.recordedPercent || "Not recorded",
+      row.evidence || "Not recorded"
+    ].concat(row.dailyCells || []));
+    const ganttCard = node("section", null, "xlsx-preview-card xlsx-preview-gantt-card");
+    ganttCard.appendChild(node("div", null, "xlsx-preview-card-heading"));
+    ganttCard.lastChild.appendChild(node("h3", "Daily Gantt", null));
+    ganttCard.lastChild.appendChild(node("span", "Displayed values are imported cells; no schedule is recalculated.", "muted"));
+    ganttCard.appendChild(renderTable(ganttHeaders, ganttRows));
+    section.appendChild(ganttCard);
+    return section;
+  }
+
+  function returnToOfficialSource() {
+    state.xlsxPreview = null;
+    setExecutionPanelAvailability(true);
+    renderSummary(currentSummary());
+    renderActiveView();
+    setStatus("Official source mode restored.");
+  }
+
+  async function clearXlsxPreview() {
+    try {
+      await request("/api/xlsx-preview", { method: "DELETE" });
+      state.xlsxPreview = null;
+      setExecutionPanelAvailability(true);
+      renderSummary(currentSummary());
+      renderActiveView();
+      setStatus("XLSX preview cleared.");
+    } catch (error) {
+      showError(error);
+    }
   }
 
   function renderDashboard(view) {
@@ -2424,6 +2528,11 @@
     updateWorkspaceMode();
     const content = byId("view-content");
     clear(content);
+    if (state.xlsxPreview) {
+      updateActiveTab(null);
+      content.appendChild(renderXlsxPreviewSurface(state.xlsxPreview));
+      return;
+    }
     if (!state.views || !state.project) {
       content.appendChild(node("div", "Views will appear here after analysis.", "empty-state"));
       return;
@@ -2446,6 +2555,8 @@
   }
 
   function applySummary(summary) {
+    state.xlsxPreview = null;
+    setExecutionPanelAvailability(true);
     state.project = { project: summary.project, baseline: summary.baseline, analysis: summary.analysis };
     state.sources = summary.sources || [];
     state.sourceExecution = null;
@@ -2486,6 +2597,8 @@
     }
 
     const canonical = snapshot.project || {};
+    state.xlsxPreview = null;
+    setExecutionPanelAvailability(true);
     const summary = {
       project: snapshot.projectSummary || canonical.project,
       baseline: snapshot.baseline || canonical.baseline,
@@ -2546,6 +2659,37 @@
       showError(error);
       setStatus("Manifest import failed.");
       setSourceIntakeCollapsed(false);
+    }
+  }
+
+  async function importXlsxPreview() {
+    showError(null);
+    const input = byId("xlsx-preview-file");
+    const file = input && input.files && input.files[0];
+    if (!file) {
+      showError(new Error("Choose a compiler-exported .xlsx workbook first."));
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showError(new Error("The selected XLSX workbook exceeds the 8 MiB local limit."));
+      return;
+    }
+
+    try {
+      setStatus("Validating exported workbook…");
+      const form = new FormData();
+      form.append("file", file, file.name);
+      const preview = await request("/api/xlsx-preview", { method: "POST", body: form });
+      state.xlsxPreview = preview;
+      setExecutionPanelAvailability(false);
+      renderXlsxPreviewSummary(preview);
+      renderActiveView();
+      const note = byId("xlsx-preview-note");
+      if (note) note.textContent = "XLSX Preview active · Read-only · Non-authoritative. Official source and proposals are unchanged.";
+      setStatus("Loaded read-only XLSX preview for " + (preview.projectName || "exported workbook") + ".");
+    } catch (error) {
+      showError(error);
+      setStatus("XLSX preview import failed; the last valid state was retained.");
     }
   }
 
@@ -2708,6 +2852,7 @@
   });
   byId("analyze-button").addEventListener("click", analyze);
   byId("manifest-import-button").addEventListener("click", importManifest);
+  byId("xlsx-preview-import-button").addEventListener("click", importXlsxPreview);
   byId("refresh-button").addEventListener("click", refresh);
   byId("reopen-button").addEventListener("click", reopenJson);
   byId("execution-form").addEventListener("submit", applyExecution);

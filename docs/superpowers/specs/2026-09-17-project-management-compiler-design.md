@@ -579,7 +579,8 @@ Project-management domain logic never contains an employee ID, department name,
 team name, or priority value. Missing values remain blank in the workbook and
 produce warnings.
 
-The workbook is `<ProjectName>_CARIO.xlsx` with these sheets:
+The application workbook is `<ProjectName>_CARIO_GANTT.xlsx`: it keeps the six
+CARIO sheets below and appends a read-only daily Gantt sheet.
 
 1. `01_TASKS` — 53 delivery-card rows plus 7 milestone/decision rows, with work
    item type, task ID, phase, work package, Vietnamese task name, planned dates,
@@ -596,14 +597,18 @@ The workbook is `<ProjectName>_CARIO.xlsx` with these sheets:
    reserve, WIP policy, and status/forecast data states.
 6. `06_IMPORT_WARNINGS` — warning ID, severity, code, message, affected item,
    and source reference.
+7. `07_GANTT` — frozen identity columns followed by daily calendar columns;
+   distinct PLAN, ACTUAL, ALERT, and MILESTONE lanes, with `Not recorded` when
+   controlled effort evidence is insufficient for a percentage.
 
 The XLSX adapter uses only `System.IO.Compression` and Open XML worksheet parts
 needed by these sheets: `[Content_Types].xml`, `_rels/.rels`,
-`xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, six
-`xl/worksheets/sheet*.xml` parts, and simple styles/inline strings as selected by
-the writer. It is not a general Excel library and does not require Microsoft
-Excel or Office COM. Tests open the ZIP structurally, resolve relationships,
-parse worksheet XML, verify names, dates, numbers, and Vietnamese Unicode.
+`xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, seven
+`xl/worksheets/sheet*.xml` parts, `xl/styles.xml`, and simple inline strings as
+selected by the writer. It is not a general Excel library and does not require
+Microsoft Excel or Office COM. Tests open the ZIP structurally, resolve
+relationships, parse worksheet XML, verify names, dates, numbers, styles, and
+Vietnamese Unicode.
 
 ## 9. Canonical JSON persistence and reopen
 
@@ -721,7 +726,7 @@ Tests cross the deepest useful interfaces:
 | Policy | WIP=1 is imported as project policy, not a global constant |
 | CARIO | Role meanings and logical role assignments are preserved; missing concrete mappings warn |
 | JSON | Schema version, deliberate field names, provenance, and deterministic equivalent reruns |
-| XLSX | Required ZIP/XML parts and relationships resolve; all six sheets, headers, dates, numbers, UTF-8 Vietnamese text, and warnings are exported |
+| XLSX | Required ZIP/XML parts and relationships resolve; six CARIO sheets plus the daily Gantt sheet, headers, dates, lanes, styles, numbers, UTF-8 Vietnamese text, and warnings are exported |
 | Reopen | Generated canonical JSON reopens without source extraction and produces equivalent views/exports |
 | Regression | Expected fixture summary and canonical snapshot digest remain stable unless the fixture contract changes |
 

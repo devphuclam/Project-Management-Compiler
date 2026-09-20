@@ -191,7 +191,30 @@ public sealed class ProjectCompiler : IProjectCompiler
     public byte[] ExportCarioXlsx(CompilationResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return carioXlsxExporter.Export(result.Cario);
+        var asOfDate = result.Analysis.AsOfDate
+            ?? throw new InvalidOperationException("A compiled result must have an analysis as-of date before it can be exported.");
+        var metadata = result.Project.ImportMetadata;
+        var sourceIdentity = metadata?.SourceIdentity
+            ?? string.Join(",", result.Project.Sources
+                .Select(source => source.ResolvedRef)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal));
+        var gantt = new GanttXlsxModel
+        {
+            ProjectName = result.Project.Project.Name,
+            SnapshotScope = metadata?.Classification switch
+            {
+                ManifestImportClassification.OfficialCommit => "Official source commit",
+                ManifestImportClassification.CandidatePreview or ManifestImportClassification.UncommittedPreview => "Non-authoritative preview",
+                _ => "Compiled source snapshot"
+            },
+            SourceIdentity = sourceIdentity,
+            SnapshotId = metadata?.SnapshotId ?? string.Empty,
+            AsOfDate = asOfDate,
+            Wbs = result.Views.Wbs,
+            Gantt = result.Views.Gantt
+        };
+        return carioXlsxExporter.ExportWithGantt(result.Cario, gantt);
     }
 
     public CompilationResult BuildImportedResult(

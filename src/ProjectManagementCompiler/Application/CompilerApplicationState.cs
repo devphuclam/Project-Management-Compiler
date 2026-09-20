@@ -11,6 +11,7 @@ public sealed class CompilerApplicationState
     private IdeaEngineeringSnapshot? currentOfficialSnapshot;
     private CompilationResult? activePreviewResult;
     private IdeaEngineeringSnapshot? activePreview;
+    private XlsxPreviewModel? activeXlsxPreview;
     private ManifestImportAttempt? latestImportAttempt;
     private IReadOnlyList<ExecutionProposal> proposals = Array.Empty<ExecutionProposal>();
 
@@ -65,6 +66,17 @@ public sealed class CompilerApplicationState
             lock (gate)
             {
                 return activePreview;
+            }
+        }
+    }
+
+    public XlsxPreviewModel? ActiveXlsxPreview
+    {
+        get
+        {
+            lock (gate)
+            {
+                return activeXlsxPreview;
             }
         }
     }
@@ -133,6 +145,7 @@ public sealed class CompilerApplicationState
             switch (result.Classification)
             {
                 case ManifestImportClassification.OfficialCommit:
+                    activeXlsxPreview = null;
                     var importedProject = compiledSnapshot?.Project ?? result.Snapshot.Project;
                     var importedProposals = OrderedProposals(importedProject.ExecutionProposals);
                     var retained = proposals.Count == 0
@@ -165,6 +178,23 @@ public sealed class CompilerApplicationState
         {
             activePreview = null;
             activePreviewResult = null;
+        }
+    }
+
+    public void SetXlsxPreview(XlsxPreviewModel preview)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        lock (gate)
+        {
+            activeXlsxPreview = preview;
+        }
+    }
+
+    public void ClearXlsxPreview()
+    {
+        lock (gate)
+        {
+            activeXlsxPreview = null;
         }
     }
 
