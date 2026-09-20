@@ -1,10 +1,10 @@
 # Feature Specification: IDEAEngineering Manifest Import
 
-**Feature Branch**: `codex/ideaengineering-manifest-import`
+**Feature Branch**: `main` (integrated baseline)
 
 **Created**: 2026-09-19
 
-**Status**: Approved for implementation
+**Status**: Implemented; artifact-reconciled and locally verified
 
 **Input**: Import the official IDEAEngineering project-management source
 package through its manifest at accepted commit
@@ -387,7 +387,8 @@ executable after an independent audit.
 
 ### Measurable Outcomes
 
-- **SC-001**: Importing accepted commit `0cf89de…` produces exactly 6 phases,
+- **SC-001**: Importing accepted commit
+  `0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4` produces exactly 6 phases,
   35 Work Packages, 53 Delivery Cards, 7 gates/milestones, 512 planned hours,
   88 reserve hours, and 600 total capacity hours.
 - **SC-002**: All seven fixture-catalogue cases produce exactly their declared
@@ -400,8 +401,10 @@ executable after an independent audit.
 - **SC-005**: A user can identify official versus preview mode, repository,
   commit, contract, validation result, warning count, and import time from the
   primary application surface without opening a source file.
-- **SC-006**: Official analysis remains byte-for-byte semantically unchanged
-  after creating, editing, previewing, or exporting a local proposal.
+- **SC-006**: The canonical semantic digest of official analysis remains
+  identical before and after creating, editing, previewing, or exporting a
+  local proposal. Verification compares the canonical digest, not raw JSON
+  byte formatting.
 - **SC-007**: A legacy schema `1.0` snapshot reopens with all former manual
   execution records preserved as proposals and none presented as source
   actuals.
@@ -450,9 +453,10 @@ executable after an independent audit.
 - **SC-023**: An official-import → schema-1.0-reopen → proposal-update →
   save/reopen session keeps state and canonical projections coherent, does not
   promote the reopened legacy document, and does not mutate source execution.
-- **SC-024**: The final micro-pass artifacts and handoff report the real .NET 10,
-  dependency-free implementation and exact executed verification commands
-  without stale pre-implementation or remote-CI claims.
+- **SC-024**: The final micro-pass artifacts and
+  `docs/handoff/2026-09-19-ideaengineering-manifest-import-design.md` report
+  the real .NET 10, dependency-free implementation and exact executed
+  verification commands without stale pre-implementation or remote-CI claims.
 
 ## Assumptions
 

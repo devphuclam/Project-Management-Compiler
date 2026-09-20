@@ -374,17 +374,17 @@ public sealed class XlsxPreviewImporter
 
             var id = RequiredCell(row, 2, "PMC-XLSX-IDENTITY", "07_GANTT ID");
             var lane = RequiredCell(row, 4, "PMC-XLSX-VALUE", "07_GANTT Lane");
+            var type = RequiredCell(row, 1, "PMC-XLSX-VALUE", "07_GANTT Type");
             if (lane is not ("PLAN" or "ACTUAL" or "ALERT" or "MILESTONE"))
             {
                 throw Invalid("PMC-XLSX-VALUE", $"Gantt row '{id}' has unsupported lane '{lane}'.");
             }
 
-            if (!identities.Add(id + "|" + lane))
+            if (!identities.Add(type + "|" + id + "|" + lane))
             {
-                throw Invalid("PMC-XLSX-IDENTITY", $"Gantt identity '{id}' is duplicated in lane '{lane}'.");
+                throw Invalid("PMC-XLSX-IDENTITY", $"Gantt identity '{type}:{id}' is duplicated in lane '{lane}'.");
             }
 
-            var type = RequiredCell(row, 1, "PMC-XLSX-VALUE", "07_GANTT Type");
             if (type is "DeliveryCard" or "Milestone")
             {
                 if (!taskIds.Contains(id))

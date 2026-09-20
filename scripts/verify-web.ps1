@@ -183,8 +183,7 @@ try {
     Assert-Condition ($reopened.views.managementControl.currentGate.executionState -eq 'NOT-RUN' -and $reopened.views.managementControl.currentGate.outcome -eq 'NOT-APPLICABLE') 'API reopen did not preserve separate gate evidence.'
     Assert-Condition ($reopened.analysis.executionStatus.overdue -eq 0 -and $reopened.analysis.executionStatus.atRisk -eq 0) 'Planning-only API reopen must not fabricate execution alerts.'
 
-    $temporaryFile = New-TemporaryFile
-    $temporaryXlsx = $temporaryFile.FullName
+    $temporaryXlsx = [IO.Path]::Combine([IO.Path]::GetTempPath(), ('pmc-verify-{0}.xlsx' -f [Guid]::NewGuid().ToString('N')))
     Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/exports/cario.xlsx' -OutFile $temporaryXlsx -TimeoutSec 30
     $fileStream = [IO.File]::OpenRead($temporaryXlsx)
     $archive = [IO.Compression.ZipArchive]::new($fileStream, [IO.Compression.ZipArchiveMode]::Read)
@@ -307,13 +306,19 @@ try {
     Assert-Condition ($emptyPreviewStatus -eq 404) 'Cleared XLSX preview must return NO_ACTIVE_XLSX_PREVIEW.'
 
     $sourceRoot = $null
-    $sourceSearch = [IO.DirectoryInfo]$repositoryRoot
-    for ($depth = 0; $depth -lt 8 -and $null -eq $sourceRoot -and $null -ne $sourceSearch; $depth++) {
-        $candidate = Join-Path $sourceSearch.FullName 'IDEAEngineering'
-        if (Test-Path -LiteralPath (Join-Path $candidate '.git') -PathType Container) {
-            $sourceRoot = [IO.Path]::GetFullPath($candidate)
+    $configuredSourceRoot = [Environment]::GetEnvironmentVariable('IDEAENGINEERING_ROOT')
+    if (-not [string]::IsNullOrWhiteSpace($configuredSourceRoot) -and (Test-Path -LiteralPath (Join-Path $configuredSourceRoot '.git') -PathType Container)) {
+        $sourceRoot = [IO.Path]::GetFullPath($configuredSourceRoot)
+    }
+    if ($null -eq $sourceRoot) {
+        $sourceSearch = [IO.DirectoryInfo]$repositoryRoot
+        for ($depth = 0; $depth -lt 8 -and $null -eq $sourceRoot -and $null -ne $sourceSearch; $depth++) {
+            $candidate = Join-Path $sourceSearch.FullName 'IDEAEngineering'
+            if (Test-Path -LiteralPath (Join-Path $candidate '.git') -PathType Container) {
+                $sourceRoot = [IO.Path]::GetFullPath($candidate)
+            }
+            $sourceSearch = $sourceSearch.Parent
         }
-        $sourceSearch = $sourceSearch.Parent
     }
     Assert-Condition ($null -ne $sourceRoot) 'Accepted IDEAEngineering checkout was not found beside the product repository.'
     $sourceRemote = (& git -C $sourceRoot remote get-url origin 2>$null | Out-String).Trim()

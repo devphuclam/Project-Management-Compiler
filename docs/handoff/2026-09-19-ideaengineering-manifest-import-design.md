@@ -4,11 +4,10 @@
 
 The original Feature 003 importer is implemented behind the public
 `IIdeaEngineeringManifestImporter.ImportAsync` seam and verified against the
-accepted source commit. MVP2.2 correctness/hardening has already been merged to
-compiler `main` at the prior verified baseline. This handoff now records the
-separate final correctness micro-pass on branch
-`codex/feature003-final-micro-pass`; its implementation starts only after this
-pass's Spec Kit artifact gate. The executable quickstart is in
+accepted source commit. MVP2.2 correctness/hardening and the final correctness
+micro-pass are implemented in the integrated compiler baseline. The historical
+branch name `codex/feature003-final-micro-pass` is retained below only as
+provenance; current integration targets `main`. The executable quickstart is in
 `specs/003-ideaengineering-manifest-import/quickstart.md`.
 
 The design increment is:
@@ -132,22 +131,44 @@ automatic fallback, do not mutate the IDEAEngineering checkout, and do not
 promote proposal or readiness evidence into source execution.
 
 The original implementation, MVP2.2 hardening, and final micro-pass were
-completed locally; this handoff does not claim remote CI. The final micro-pass
-artifact gate, TDD regressions, post-implementation analyze/converge, review,
-and fresh verification are green on the dedicated branch. The implementation
-was then fast-forward integrated into compiler `main` at
-`a99a5e0de2d4f8f019f07747084f7fb83846ed1f`.
+completed locally; this handoff does not claim remote CI. The historical
+implementation branch name is retained only as provenance. The current
+artifact-reconciliation verification is recorded below; the exact integrated
+revision must be read from the current `main` history rather than copied into
+this document, so the handoff cannot become stale after a fast-forward push.
 
-Fresh local verification recorded for this pass:
+Fresh artifact-reconciliation verification recorded for 2026-09-20:
 
-- `dotnet build tests/ProjectManagementCompiler.Tests/ProjectManagementCompiler.Tests.csproj --no-restore`: 0 warnings, 0 errors;
-- `scripts/test.ps1`: 234 PASS, 0 FAIL;
-- `scripts/verify.ps1`: PASS, including launcher and web gates;
-- `scripts/verify-web.ps1`: PASS, loopback health, 53 cards, six CARIO XLSX
-  sheets plus the daily Gantt sheet, and security checks;
-- `scripts/verify-launcher.ps1`: `PASS LauncherContract`;
-- `node --check src/ProjectManagementCompiler/wwwroot/app.js`: PASS;
-- `git diff --check` and changed-code safety scan: PASS.
+- Spec Kit prerequisite (PowerShell): PASS; `FEATURE_DIR` resolved to this
+  feature and all required design documents were available;
+- read-only Spec Kit analyze: 57 functional requirements + 24 success criteria
+  = 81 requirements, 81 traceability rows, 0 unmapped requirements, 99 tasks,
+  99 checked, 0 unchecked, 0 unknown task references, and 0 placeholder tokens;
+  no Critical/High finding remained;
+- `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File
+  .\scripts\test.ps1` with `IDEAENGINEERING_ROOT` set to the local
+  IDEAEngineering checkout: `TestExit=0`, 252 PASS, 0 FAIL;
+- `dotnet build .\tests\ProjectManagementCompiler.Tests\ProjectManagementCompiler.Tests.csproj
+  --no-restore`: 0 warnings, 0 errors;
+- `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File
+  .\scripts\verify-web.ps1` with `IDEAENGINEERING_ROOT` set to the local
+  IDEAEngineering checkout: PASS; loopback health, project
+  `IE-PROD-ROADMAP-001`, 53 cards, official manifest commit, 7 sheets, and
+  security checks;
+- `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1`
+  with `IDEAENGINEERING_ROOT` set to the local IDEAEngineering checkout: PASS,
+  including build, 252-test suite, launcher, and web gates;
+- `pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File
+  .\scripts\verify-launcher.ps1`: `PASS LauncherContract`;
+- `node --check .\src\ProjectManagementCompiler\wwwroot\app.js`: PASS;
+- `git diff --check`: PASS (only normal LF/CRLF conversion warnings);
+- changed-code safety scan: PASS; no IDEAEngineering source-repository change,
+  raw source body, absolute local path, credential, package, database,
+  connector, Docker, or UI redesign change was introduced;
+- Spec Kit converge: repository Bash prerequisite was unavailable because
+  `.specify/scripts/bash/check-prerequisites.sh` is absent; the repository's
+  equivalent PowerShell prerequisite passed, all 99 task rows were already
+  complete, and no convergence task was appended.
 
 ## Git and local workspace notes
 

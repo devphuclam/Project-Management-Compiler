@@ -1,6 +1,6 @@
 # Implementation Plan: IDEAEngineering Manifest Import
 
-**Branch**: `codex/feature003-final-micro-pass` | **Date**: 2026-09-19 | **Spec**: [spec.md](./spec.md)
+**Branch**: `main` (integrated baseline) | **Date**: 2026-09-19 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/003-ideaengineering-manifest-import/spec.md`
 
@@ -45,10 +45,9 @@ not deserialize-only. Git and working-tree readers use bounded metadata/body
 capture and independent pre/post source reads. Legacy schema `1.0` overlays are
 compatibility input only and are neutralized after migration.
 
-**Performance Goals**: Bounded source reads, deterministic results, and the accepted
-source import completing within 10 seconds on the supported Windows developer
-workstation under normal local conditions. This is an engineering target rather than
-a user-visible SLA; no read may exceed its configured or hard application ceiling,
+**Performance Goals**: Bounded source reads and deterministic results on the
+supported Windows developer workstation. No user-visible time SLA is defined for
+this feature; correctness gates are the configured and hard application ceilings,
 and no repository scan or schema evaluation may be unbounded.
 
 **Constraints**: Manifest is the only discovery entry point. Every read is bounded,
@@ -211,12 +210,13 @@ proposals `STALE_BASE` without rebase.
 Each slice follows red/green/refactor through the public importer or application/API
 operation. The test runner is kept dependency-free.
 
-For MVP2.2 and this final correctness micro-pass, the artifact gate is deliberately
-before code: update the relevant design artifacts, run Spec Kit analyze, run Spec
-Kit converge, reconcile any appended tasks, then implement each micro-pass task
-through TDD. After implementation, run analyze and converge again before code
-review and full verification. Integration is fast-forward-only after every gate is
-green.
+For MVP2.2 and the final correctness micro-pass, the artifact gate was deliberately
+before code: the design artifacts were updated, Spec Kit analyze/converge were
+run, appended tasks were reconciled, and each code task was implemented through
+TDD. After implementation, analyze and converge were run again before code review
+and full verification. This paragraph records the historical workflow; the
+integrated baseline is now tracked on `main`. Integration remains fast-forward-only
+after every gate is green.
 
 ## Complexity Tracking
 

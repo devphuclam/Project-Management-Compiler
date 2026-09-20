@@ -33,6 +33,20 @@ internal static class XlsxPreviewImporterTests
         TestAssert.Equal("50%", XlsxPreviewTestFixtures.PreviewImportView.ReadString(plan, "RecordedPercent"), "Preview must preserve the exported recorded percentage.");
     }
 
+    public static void TypedGanttIdentityAllowsSameRawIdAcrossKinds()
+    {
+        var result = XlsxPreviewTestFixtures.Import(XlsxPreviewTestFixtures.TypedGanttKindsReuseRawIdWorkbookBytes());
+
+        TestAssert.True(result.IsValid, "Typed WorkPackage and DeliveryCard identities may reuse a raw ID in the same PLAN lane. Diagnostics: " + result.DiagnosticsText);
+        var rows = XlsxPreviewTestFixtures.PreviewImportView.ReadEnumerable(result.Preview, "GanttRows")
+            .Where(row => XlsxPreviewTestFixtures.PreviewImportView.ReadString(row, "Id") == "P01"
+                && XlsxPreviewTestFixtures.PreviewImportView.ReadString(row, "Lane") == "PLAN")
+            .Select(row => XlsxPreviewTestFixtures.PreviewImportView.ReadString(row, "Type"))
+            .ToArray();
+
+        TestAssert.Equal("WorkPackage,DeliveryCard", string.Join(',', rows), "Gantt identity uniqueness must include the typed row kind.");
+    }
+
     public static void InvalidPackagesAndContractMutationsFailClosed()
     {
         var valid = XlsxPreviewTestFixtures.ValidWorkbookBytes();

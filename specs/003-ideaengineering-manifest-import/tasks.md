@@ -9,6 +9,10 @@ description: "Implementation tasks for IDEAEngineering Manifest Import"
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`
 
+**Ledger status**: This is the historical Feature 003 implementation ledger. Every
+task marked `[X]` records work already completed and verified in the documented
+workflow; the integrated baseline is tracked on `main`.
+
 **Execution rule**: Work sequentially in this single agent. Every production behavior
 is introduced through a public-seam test (red, green, refactor). Do not modify the
 IDEAEngineering checkout.
@@ -103,7 +107,7 @@ then import a newer source revision and inspect lifecycle.
 ### Implementation
 
 - [X] T028 [US4] Implement proposal entities, validation, lifecycle/stale-base evaluation, and in-memory proposal store in `src/ProjectManagementCompiler/Domain/ProposalEntities.cs` and `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: proposals cannot mutate official source execution and incomplete completion stays `DRAFT`.
-- [X] T029 [US4] Implement explicit proposal preview projection with estimated/non-authoritative labels in `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: official analysis and digest are byte-for-byte unchanged after preview.
+- [X] T029 [US4] Implement explicit proposal preview projection with estimated/non-authoritative labels in `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: the canonical semantic digest of official analysis is unchanged after preview, independent of JSON formatting.
 - [X] T030 [US4] Add proposal routes and convert `/api/execution` into a proposal-only compatibility alias in `src/ProjectManagementCompiler/Program.cs` and `src/ProjectManagementCompiler/Application/IProjectCompiler.cs`; acceptance: responses clearly identify proposal-only behavior and no route writes source actuals.
 - [X] T031 [US4] Implement deterministic `execution-proposal.json` export with safe metadata and no raw source/absolute paths in `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: repeated export is identical for the same proposal and contains base ID/revision/evidence/diagnostics.
 - [X] T032 [US4] Run focused proposal/API/export tests through `tests/ProjectManagementCompiler.Tests/ProposalTests.cs`, `tests/ProjectManagementCompiler.Tests/CanonicalMigrationTests.cs`, and `scripts/verify-web.ps1`; acceptance: T026-T027 pass and compatibility behavior does not weaken official-authority assertions.
@@ -150,7 +154,7 @@ subagents, and collect fresh evidence before integration.
 - [X] T047 [US1] Run Spec Kit converge against implementation and append any missing work to `specs/003-ideaengineering-manifest-import/tasks.md`; acceptance: the implementation converged after reconciling stale generated file references, so no additional convergence phase was required.
 - [X] T048 [US5] Perform manual code review of `src/ProjectManagementCompiler/` and `tests/ProjectManagementCompiler.Tests/` against repository standards and spec/ADR authority, including Git argument safety, path containment, no fallback, state retention, proposal isolation, and serialization safety; acceptance: no blocking finding remains.
 - [X] T049 [US5] Run `git diff --check`, changed-file secret/absolute-path/raw-source scans, fresh `git status --short --branch`, `git diff --stat main...HEAD`, and `git log --oneline main..HEAD`; acceptance: only intended public source/docs/tests are changed and no sensitive artifact is present.
-- [X] T050 [US5] Fetch `origin/main`, fast-forward local `main` only after all checks, merge the implementation branch with `--ff-only`, push `main`, and verify remote SHA; acceptance: remote `main` points at the verified final commit with no force push.
+- [X] T050 [US5] **Historical integration record** — the original Feature 003 implementation was fast-forward integrated into `main` after its verification gates; this row is audit provenance and is not a current branch or push instruction.
 
 ## Phase 9: MVP2.2 Correctness & Hardening
 
@@ -181,8 +185,8 @@ boundary.
 
 ### Evidence and proposal ownership
 
-- [X] T060 [US4] Add failing controlled-evidence tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs` for empty/default/malformed evidence and one valid evidence record; acceptance: the MVP2.2 baseline proved malformed evidence could not qualify readiness and valid controlled evidence could, without changing official execution; the final micro-pass boundary behavior is specified by T087 (FR-048, SC-015).
-- [X] T061 [US4] Implement the MVP2.2 readiness validation in `src/ProjectManagementCompiler/Domain/ProposalEntities.cs` and `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: the baseline required identity, type, description, recording time, recorder, and safe provenance before readiness; source-compatible result/optional-locator boundary tightening is specified by T088 (FR-048).
+- [X] T060 [US4] **Historical MVP2.2 baseline record** — add controlled-evidence tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs` for empty/default/malformed evidence and one valid evidence record; acceptance: the baseline established draft-empty behavior and rejected malformed evidence without changing official execution. The current contract, including required `Result`, is covered by T087/T088 (FR-048, SC-015).
+- [X] T061 [US4] **Historical MVP2.2 baseline record** — implement readiness validation in `src/ProjectManagementCompiler/Domain/ProposalEntities.cs` and `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`; acceptance: the baseline established required identity, type, description, recording time, recorder, and safe provenance behavior. The current source-compatible `Result` and optional-locator boundary is covered by T088 (FR-048).
 - [X] T062 [US4] Add failing save/reopen/list tests in `tests/ProjectManagementCompiler.Tests/ProposalTests.cs`, `CanonicalMigrationTests.cs`, and application/API coverage; acceptance: a created proposal survives canonical save, reopen, hydration, list, and stale-base evaluation with the same semantic identity and source execution remains immutable (FR-049, SC-016).
 - [X] T063 [US4] Replace the service-owned mutable proposal dictionary with `CompilerApplicationState` ownership and canonical projection/hydration in `src/ProjectManagementCompiler/Application/CompilerApplicationState.cs`, `src/ProjectManagementCompiler/Application/ManifestImport/ExecutionProposalService.cs`, `src/ProjectManagementCompiler/Application/ProjectCompiler.cs`, and `src/ProjectManagementCompiler/Program.cs`; acceptance: create/update/list/migration/save/reopen/stale-base all use one retained set and schema 1.0 migrated proposals hydrate through the same path (FR-049).
 
@@ -198,30 +202,31 @@ boundary.
 - [X] T068 [US5] Run Spec Kit analyze again after implementation and resolve every critical/high inconsistency; acceptance: analyze reports artifact/code/task coherence and does not modify artifacts silently.
 - [X] T069 [US5] Run Spec Kit converge again after implementation and reconcile any remaining implementation gaps in `tasks.md`; acceptance: no unimplemented hardening requirement remains before review.
 - [X] T070 [US5] Perform code review against repository standards and Feature 003 authority, including fail-closed behavior, bounded reads, source immutability, proposal ownership, and UI truth; acceptance: no blocking finding remains.
-- [X] T071 [US5] Run fresh full verification: `scripts/test.ps1`, `scripts/verify.ps1`, `scripts/verify-web.ps1`, `node --check src/ProjectManagementCompiler/wwwroot/app.js`, `git diff --check`, and changed-file safety scans; acceptance: every command exits successfully with exact output recorded in the final report.
+- [X] T071 [US5] Run fresh full verification: `scripts/test.ps1`, `scripts/verify.ps1`, `scripts/verify-web.ps1`, `node --check src/ProjectManagementCompiler/wwwroot/app.js`, `git diff --check`, and changed-file safety scans; acceptance: every command exits successfully with exact output recorded in `docs/handoff/2026-09-19-ideaengineering-manifest-import-design.md`.
 - [X] T072 [US5] **Historical baseline** — only after T068-T071 are green, integrate the verified feature branch into `main` with a fast-forward-only update, push `main`, and verify the remote SHA; acceptance: no force push, no merge commit, and remote `main` equals the verified commit. This completed task records the hardening integration gate and is not a current branch-name instruction.
 
 ## Phase 10: Convergence
 
-**Purpose**: Record the remaining implementation gaps observed by the explicit
-pre-implementation converge pass. These tasks are executed through the Phase 9
-TDD groups; they do not authorize implementation before the artifact gate.
+**Purpose**: Preserve the remaining implementation gaps observed by the explicit
+pre-implementation converge pass as historical records. T073-T079 are not a
+second implementation scope and do not authorize new work; their current behavior
+is represented by the primary Phase 9 tasks they reference.
 
-- [X] T073 [US5] Neutralize the legacy overlay after schema 1.0 migration and remove every effective resolver/analysis/dashboard/alert/Gantt fallback from `CanonicalJsonSerializer`, `ExecutionTruthResolver`, and related projections per FR-043; acceptance: reopened schema 1.0 records are preserved only as proposals, the overlay is empty/neutralized, and resolver, metrics, alerts, dashboard, effort, and Gantt `ACTUAL` projections do not change because of the migrated overlay.
-- [X] T074 [US5] Add semantic v2 validation for import metadata, source execution, proposal targets/lifecycle, evidence, and authority combinations in `CanonicalProjectValidator` per FR-044; acceptance: deserialize-successful tampering returns fail-closed diagnostics, does not become authoritative, and does not replace the prior valid state.
-- [X] T075 [US1] Replace cached working-tree manifest/bytes and comparable `git-state-unavailable` values with independent pre/post reads that fail closed per FR-045 and FR-046; acceptance: mutation of the manifest, declaration, declared file, HEAD, or status rejects the preview with `PMC-SNAPSHOT-002`, and two unavailable Git-state reads can never compare equal as stable.
-- [X] T076 [US1] Add pre-body Git tree mode/blob-size checks, symlink rejection, and hard application ceilings that cannot be bypassed by caller limits per FR-047; acceptance: tree mode and declared blob size are checked before body reads, mode `120000` is rejected, caller limits cannot exceed hard ceilings, and an allowed regular blob remains readable.
-- [X] T077 [US4] Validate controlled proposal evidence fields before lifecycle readiness so malformed non-empty evidence cannot produce `READY_FOR_REVIEW` per FR-048; acceptance: every malformed item is diagnosed and rejected atomically, valid controlled evidence can qualify a complete proposal, and official source execution remains unchanged.
-- [X] T078 [US4] Make `CompilerApplicationState` the only mutable proposal owner and hydrate it on canonical reopen/save/list, including migrated proposals, per FR-049 and SC-016; acceptance: create, update, migration, save, reopen, list, and stale-base evaluation observe one retained proposal set and preserve the same semantic proposal identity across round-trip.
-- [X] T079 [US2] Replace manifest-workflow UI wording that says manual/record/calculated with source/proposal/source-forecast wording per FR-050 and SC-017; acceptance: the manifest workflow uses `Source execution`, proposal-action wording, and `Source forecast`, with no layout or product-surface redesign.
+- [X] T073 [US5] **Historical convergence record for T053** — the schema 1.0 overlay neutralization and forbidden resolver/analysis/dashboard/alert/Gantt fallbacks were closed under FR-043; no additional implementation scope remains in this convergence row.
+- [X] T074 [US5] **Historical convergence record for T055** — semantic v2 validation for metadata, source execution, proposal targets/lifecycle, evidence, and authority combinations was closed under FR-044; no additional implementation scope remains in this convergence row.
+- [X] T075 [US1] **Historical convergence record for T057** — independent working-tree pre/post reads and fail-closed Git-state handling were closed under FR-045/FR-046; no additional implementation scope remains in this convergence row.
+- [X] T076 [US1] **Historical convergence record for T059** — pre-body Git tree mode/blob-size checks, symlink rejection, and hard ceilings were closed under FR-047; no additional implementation scope remains in this convergence row.
+- [X] T077 [US4] **Historical convergence record for T061/T088** — controlled proposal evidence validation and atomic readiness boundaries were closed under FR-048/FR-053; no additional implementation scope remains in this convergence row.
+- [X] T078 [US4] **Historical convergence record for T063/T094** — single proposal ownership and canonical reopen/save/list hydration were closed under FR-049/SC-016; no additional implementation scope remains in this convergence row.
+- [X] T079 [US2] **Historical convergence record for T065** — manifest-workflow source/proposal/source-forecast wording was closed under FR-050/SC-017; no additional implementation scope remains in this convergence row.
 
 ## Phase 11: Final correctness micro-pass
 
-**Purpose**: Correct only the audited Feature 003 compatibility and semantic
-gaps that remain after MVP2.2 hardening. These tasks run on
-`codex/feature003-final-micro-pass` after the source/artifact gate. Every code
-task requires a named red regression, confirmed failure, smallest fix, focused
-green run, and related regression run before it is marked complete.
+**Purpose**: Record the audited Feature 003 compatibility and semantic
+corrections that followed MVP2.2 hardening. The historical implementation branch
+was `codex/feature003-final-micro-pass`; that name is provenance only, not a
+current branch-name instruction. Every code task required a named red regression,
+confirmed failure, smallest fix, focused green run, and related regression run.
 
 ### Artifact gate
 
@@ -229,7 +234,9 @@ green run, and related regression run before it is marked complete.
   contracts, quickstart, ADR-0006, handoff, implementation, and tests against
   the accepted IDEAEngineering source contract; acceptance: the micro-pass
   requirements are explicit and no source checkout is modified (FR-051–FR-057,
-  SC-018–SC-024).
+  SC-018–SC-024). The historical implementation branch was
+  `codex/feature003-final-micro-pass`; this is provenance only, not a current
+  branch-name instruction.
 - [X] T081 [US5] Run Spec Kit prerequisite check, analyze, and converge before
   implementation; acceptance: every Critical/High finding is resolved and any
   converged task is reconciled before code changes begin.
@@ -308,7 +315,14 @@ green run, and related regression run before it is marked complete.
 - [X] T098 [US5] Run fresh full verification including build/test, all repository
   verifier scripts, web/launcher checks, JavaScript syntax, diff/safety scans,
   and source compatibility read-only checks; acceptance: every command exits
-  successfully with exact test count and command output captured.
+  successfully with exact test count and command output captured in
+  `docs/handoff/2026-09-19-ideaengineering-manifest-import-design.md`. The
+  verifier-discovered typed Gantt identity collision is covered by the
+  red/green regression `TypedGanttIdentityAllowsSameRawIdAcrossKinds`; the
+  preview identity key is `Type + ID + Lane`, preserving the existing typed-ID
+  contract without adding product scope. The web harness uses a temporary
+  `.xlsx` filename so the fail-closed preview extension contract is exercised
+  rather than bypassed or misreported.
 - [X] T099 [US5] Only after T096-T098 are green, fetch `origin/main`, fast-forward
   `main`, merge this branch with `--ff-only`, push `main`, and verify the remote
   SHA; acceptance: no force push, no merge commit, and the final report does not

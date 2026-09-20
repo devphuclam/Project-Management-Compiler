@@ -170,6 +170,17 @@ internal static class XlsxPreviewTestFixtures
         return new CarioXlsxExporter().ExportWithGantt(cario, gantt);
     }
 
+    public static byte[] TypedGanttKindsReuseRawIdWorkbookBytes()
+    {
+        var source = ValidWorkbookBytes();
+        var tasks = ReadEntry(source, "xl/worksheets/sheet1.xml")
+            .Replace("P01-A", "P01", StringComparison.Ordinal);
+        var gantt = ReadEntry(source, "xl/worksheets/sheet7.xml")
+            .Replace("P01-A", "P01", StringComparison.Ordinal);
+        source = ReplaceEntry(source, "xl/worksheets/sheet1.xml", tasks);
+        return ReplaceEntry(source, "xl/worksheets/sheet7.xml", gantt);
+    }
+
     public static byte[] ReplaceEntry(byte[] source, string entryName, string replacement) =>
         RewriteArchive(source, (entry, content) =>
             string.Equals(entry, entryName, StringComparison.Ordinal)
@@ -255,6 +266,13 @@ internal static class XlsxPreviewTestFixtures
         }
 
         return output.ToArray();
+    }
+
+    private static string ReadEntry(byte[] source, string entryName)
+    {
+        using var archive = new ZipArchive(new MemoryStream(source), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry(entryName)!.Open());
+        return reader.ReadToEnd();
     }
 
     private static void CopyEntry(ZipArchiveEntry source, ZipArchive target)

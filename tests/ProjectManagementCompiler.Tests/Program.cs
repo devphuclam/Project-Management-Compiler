@@ -244,6 +244,7 @@ internal static class Program
         ,("ManifestWorkflowUsesAuthorityAwareExecutionLabels", GanttUiRegressionTests.ManifestWorkflowUsesAuthorityAwareExecutionLabels)
         ,("LegacyPublicExecutionUpdateDrivesLegacyAnalysisAndGantt", FinalMicroPassTests.LegacyPublicExecutionUpdateDrivesLegacyAnalysisAndGantt)
         ,("ValidWorkbookPreservesPreviewIdentityTasksAxisAndLanes", XlsxPreviewImporterTests.ValidWorkbookPreservesPreviewIdentityTasksAxisAndLanes)
+        ,("TypedGanttIdentityAllowsSameRawIdAcrossKinds", XlsxPreviewImporterTests.TypedGanttIdentityAllowsSameRawIdAcrossKinds)
         ,("InvalidPackagesAndContractMutationsFailClosed", XlsxPreviewImporterTests.InvalidPackagesAndContractMutationsFailClosed)
         ,("OversizedPackageEntryIsRejectedBeforePreview", XlsxPreviewImporterTests.OversizedPackageEntryIsRejectedBeforePreview)
         ,("AggregatePackageAndCallerLimitsCannotBypassHardCeiling", XlsxPreviewImporterTests.AggregatePackageAndCallerLimitsCannotBypassHardCeiling)
