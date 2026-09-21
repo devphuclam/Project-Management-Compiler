@@ -253,6 +253,8 @@ internal static class Program
         ,("ProjectionCleansOnlyIdentityPrefixesAndPreservesMeaningfulBracketText", ExecutiveProgressProjectionTests.ProjectionCleansOnlyIdentityPrefixesAndPreservesMeaningfulBracketText)
         ,("ProjectionDeduplicatesAttentionByWorkItemAndIncludesCriticalOwnerlessWork", ExecutiveProgressProjectionTests.ProjectionDeduplicatesAttentionByWorkItemAndIncludesCriticalOwnerlessWork)
         ,("ProjectionRanksActionableAttentionWithSourceBackedConsequences", ExecutiveProgressProjectionTests.ProjectionRanksActionableAttentionWithSourceBackedConsequences)
+        ,("DailyGanttFixtureBuildsOfficialSparseAndBoundaryEvidence", ExecutiveDailyGanttFixtureTests.DailyGanttFixtureBuildsOfficialSparseAndBoundaryEvidence)
+        ,("DailyGanttFixtureSeparatesContradictoryAndNegativeEvidenceForFailClosedTests", ExecutiveDailyGanttFixtureTests.DailyGanttFixtureSeparatesContradictoryAndNegativeEvidenceForFailClosedTests)
         ,("ExecutiveWorkbookComposerExposesNeutralDocumentLayoutContract", ExecutiveProgressXlsxTests.ExecutiveWorkbookComposerExposesNeutralDocumentLayoutContract)
         ,("ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport", ExecutiveProgressXlsxTests.ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport)
         ,("ExecutiveWorkbookUsesApprovedSheetsAndOverviewRegions", ExecutiveProgressXlsxTests.ExecutiveWorkbookUsesApprovedSheetsAndOverviewRegions)
