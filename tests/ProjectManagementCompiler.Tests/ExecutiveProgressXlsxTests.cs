@@ -6,6 +6,62 @@ namespace ProjectManagementCompiler.Tests;
 
 internal static class ExecutiveProgressXlsxTests
 {
+    public static void ExecutiveWorkbookComposerExposesNeutralDocumentLayoutContract()
+    {
+        var report = new ExecutiveProgressReportProjector().Build(ExecutiveProgressTestFixtures.BuildOfficialFixtureResult());
+        var composerType = Type.GetType("ProjectManagementCompiler.Outputs.ExecutiveProgressWorkbookComposer, ProjectManagementCompiler", throwOnError: false);
+        TestAssert.True(composerType is not null, "ExecutiveProgressWorkbookComposer must exist so composition stays separate from Open XML serialization.");
+
+        var composer = Activator.CreateInstance(composerType!, nonPublic: true);
+        TestAssert.True(composer is not null, "ExecutiveProgressWorkbookComposer must be constructible for direct workbook-composition tests.");
+        var build = composerType!.GetMethod("Build", BindingFlags.Public | BindingFlags.Instance, [typeof(ExecutiveProgressReport)]);
+        TestAssert.True(build is not null, "ExecutiveProgressWorkbookComposer must expose Build(ExecutiveProgressReport).");
+
+        var document = build!.Invoke(composer, [report]);
+        TestAssert.True(document is not null, "Workbook composition must return a neutral document rather than package bytes.");
+        TestAssert.Equal("ExecutiveWorkbookDocument", document!.GetType().Name, "The composition boundary must return ExecutiveWorkbookDocument.");
+        TestAssert.Equal(0, Convert.ToInt32(ReadRequiredProperty(document, "ActiveSheetIndex")), "The ordered document must open on its first sheet.");
+
+        var sheets = ReadCollection(document, "Sheets");
+        TestAssert.Equal(
+            "Tổng quan|Lịch trình|Vấn đề cần xử lý|Chi tiết công việc",
+            string.Join('|', sheets.Select(sheet => ReadRequiredProperty(sheet, "Name").ToString())),
+            "The foundation composer must retain the pre-feature sheet order until the approved five-sheet replacement is introduced.");
+
+        var overview = sheets[0];
+        var titleCell = ReadCollection(overview, "Rows")
+            .SelectMany(row => ReadCollection(row, "Cells"))
+            .First(cell => string.Equals(ReadRequiredProperty(cell, "Value").ToString(), "Báo cáo tiến độ", StringComparison.Ordinal));
+        TestAssert.Equal("Title", ReadRequiredProperty(titleCell, "StyleToken").ToString(), "Cells must use semantic style tokens rather than exporter-local numeric style IDs.");
+        TestAssert.True(ReadRequiredProperty(titleCell, "NumberFormat") is not null, "Every neutral cell must carry an explicit number-format token.");
+
+        var widths = ReadCollection(overview, "ColumnWidths").Select(Convert.ToDouble).ToArray();
+        TestAssert.True(widths.Length > 0 && widths.All(width => width > 0d), "The neutral worksheet must preserve positive column widths.");
+        var mergedRanges = overview.GetType().GetProperty("MergedRanges", BindingFlags.Public | BindingFlags.Instance);
+        TestAssert.True(mergedRanges is not null, "The neutral worksheet must expose typed merged ranges for title, month, and task-band composition.");
+        TestAssert.True(mergedRanges!.PropertyType.IsGenericType && mergedRanges.PropertyType.GetGenericArguments()[0].Name == "ExecutiveWorkbookRange", "Merged ranges must be represented by an ExecutiveWorkbookRange value type.");
+
+        var freezePane = ReadRequiredProperty(overview, "FreezePane");
+        TestAssert.True(Convert.ToInt32(ReadRequiredProperty(freezePane, "FrozenRows")) > 0, "The overview document must preserve a vertical freeze pane.");
+        TestAssert.True(Convert.ToInt32(ReadRequiredProperty(freezePane, "FrozenColumns")) > 0, "The overview document must preserve a horizontal freeze pane.");
+        TestAssert.False(Convert.ToBoolean(ReadRequiredProperty(overview, "ShowGridLines")), "The neutral worksheet must hide gridlines.");
+        TestAssert.Equal(100, Convert.ToInt32(ReadRequiredProperty(overview, "ZoomPercent")), "The neutral worksheet must open at 100% zoom.");
+
+        var printSettings = ReadRequiredProperty(overview, "PrintSettings");
+        TestAssert.Equal("Landscape", ReadRequiredProperty(printSettings, "Orientation").ToString(), "The neutral worksheet must retain landscape print orientation.");
+        TestAssert.Equal(1, Convert.ToInt32(ReadRequiredProperty(printSettings, "FitToWidth")), "The neutral worksheet must retain its fit-to-width setting.");
+        TestAssert.Equal(0, Convert.ToInt32(ReadRequiredProperty(printSettings, "FitToHeight")), "The neutral worksheet must retain its fit-to-height setting.");
+    }
+
+    public static void ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport()
+    {
+        var report = new ExecutiveProgressReportProjector().Build(ExecutiveProgressTestFixtures.BuildOfficialFixtureResult());
+        var first = Export(report);
+        var second = Export(report);
+
+        TestAssert.True(first.SequenceEqual(second), "The same management report must produce identical XLSX package bytes.");
+    }
+
     public static void ExecutiveWorkbookUsesApprovedSheetsAndOverviewRegions()
     {
         var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult() with
@@ -198,6 +254,22 @@ internal static class ExecutiveProgressXlsxTests
         var export = exporterType!.GetMethod("Export", BindingFlags.Public | BindingFlags.Instance, [typeof(ExecutiveProgressReport)]);
         TestAssert.True(export is not null, "ExecutiveProgressXlsxExporter must expose Export(ExecutiveProgressReport).");
         return (byte[])export!.Invoke(exporter, [report])!;
+    }
+
+    private static object ReadRequiredProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        TestAssert.True(property is not null, $"{instance.GetType().Name} must expose {propertyName}.");
+        var value = property!.GetValue(instance);
+        TestAssert.True(value is not null, $"{instance.GetType().Name}.{propertyName} must not be null.");
+        return value!;
+    }
+
+    private static object[] ReadCollection(object instance, string propertyName)
+    {
+        var value = ReadRequiredProperty(instance, propertyName);
+        TestAssert.True(value is System.Collections.IEnumerable, $"{instance.GetType().Name}.{propertyName} must be enumerable.");
+        return ((System.Collections.IEnumerable)value).Cast<object>().ToArray();
     }
 
     private static int CountRows(string worksheetText, string marker) =>
