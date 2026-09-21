@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-21
 
-**Status**: Draft for review
+**Status**: Approved
 
 **Input**: User description: "Upgrade the application's existing executive progress export so one management workbook presents the approved daily Gantt design, including evidence-backed Actual progress directly on the Gantt, a 30-day operating view, management issues, and delivery-card detail."
 
@@ -305,8 +305,8 @@ workbook contract remains unchanged.
 - **Plan Lane**: The immutable baseline date interval for a Gantt item.
 - **Actual Lane**: The evidence-backed actual date interval for a delivery card
   or explicitly labelled roll-up of known child activity.
-- **Forecast Segment**: An official future interval from the reporting boundary
-  to a recorded forecast finish; it is distinct from Actual.
+- **Forecast Segment**: An official future interval after the analysis
+  boundary through a recorded forecast finish; it is distinct from Actual.
 - **Progress Evidence**: Actual effort, remaining effort, execution state,
   actual dates, last update, and their completeness for percentage and lane
   eligibility.
