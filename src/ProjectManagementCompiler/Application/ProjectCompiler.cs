@@ -247,8 +247,55 @@ public sealed class ProjectCompiler : IProjectCompiler
                 }]);
         }
 
+        ValidateExecutiveExportEvidence(result);
         var report = executiveProgressReportProjector.Build(result);
         return executiveProgressXlsxExporter.Export(report);
+    }
+
+    private static void ValidateExecutiveExportEvidence(CompilationResult result)
+    {
+        var invalid = result.Project.SourceExecution.Records
+            .Where(record => record.RecordingState == SourceRecordingState.Recorded
+                && string.Equals(record.Entity.Kind, "DeliveryCard", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(record => record.Entity.Id, StringComparer.Ordinal)
+            .Select(record => new { Record = record, Problem = ExecutiveEvidenceProblem(record) })
+            .FirstOrDefault(candidate => candidate.Problem is not null);
+        if (invalid is null)
+        {
+            return;
+        }
+
+        throw new ProjectCompilationException(
+            "executive-export",
+            [new ImportWarning
+            {
+                Id = "EXECUTIVE_EXPORT_INVALID_OFFICIAL_EVIDENCE",
+                Code = "EXECUTIVE_EXPORT_INVALID_OFFICIAL_EVIDENCE",
+                Severity = WarningSeverity.Error,
+                Message = $"Official execution evidence for '{invalid.Record.Entity.Id}' cannot be represented truthfully: {invalid.Problem}"
+            }]);
+    }
+
+    private static string? ExecutiveEvidenceProblem(SourceExecutionRecord record)
+    {
+        if (record.ActualStart is not null
+            && record.ActualFinish is not null
+            && record.ActualFinish < record.ActualStart)
+        {
+            return "actual finish is before actual start";
+        }
+
+        if (record.ActualEffortHours is not null && record.ActualEffortHours.Value < 0m)
+        {
+            return "actual effort is negative";
+        }
+
+        if (record.RemainingEffortHours is not null && record.RemainingEffortHours.Value < 0m)
+        {
+            return "remaining effort is negative";
+        }
+
+        return null;
     }
 
     public CompilationResult BuildImportedResult(

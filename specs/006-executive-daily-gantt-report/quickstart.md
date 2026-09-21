@@ -82,11 +82,23 @@ if ([string]::IsNullOrWhiteSpace($ideaRoot) -or -not (Test-Path -LiteralPath $id
   throw 'Set IDEAENGINEERING_ROOT to an existing local IDEAEngineering checkout.'
 }
 
+# Replace this placeholder with the exact, already-approved source commit.
+$sourceCommit = '<approved-exact-40-character-SHA>'
+if ($sourceCommit -notmatch '^[0-9a-f]{40}$') {
+  throw 'Set $sourceCommit to an approved, full 40-character commit SHA.'
+}
+
+& git -C $ideaRoot cat-file -e "$sourceCommit^{commit}"
+if ($LASTEXITCODE -ne 0) {
+  throw "The approved source commit is not available locally: $sourceCommit"
+}
+
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass `
   -File .\scripts\run-project.ps1 `
   -RepositoryRoot $ideaRoot `
   -ManifestPath 'planning/project-management-compiler-manifest.json' `
   -ImportMode GIT_COMMIT `
+  -SourceCommit $sourceCommit `
   -ImportManifest
 ```
 

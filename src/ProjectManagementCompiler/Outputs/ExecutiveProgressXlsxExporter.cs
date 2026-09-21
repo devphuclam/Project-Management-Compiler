@@ -299,9 +299,10 @@ public sealed class ExecutiveProgressXlsxExporter
     {
         writer.WriteStartElement("styleSheet", SpreadsheetNamespace);
         writer.WriteStartElement("numFmts", SpreadsheetNamespace);
-        writer.WriteAttributeString("count", "2");
+        writer.WriteAttributeString("count", "3");
         WriteNumberFormat(writer, 164, "dd/MM/yyyy");
         WriteNumberFormat(writer, 165, "#,##0.00");
+        WriteNumberFormat(writer, 166, "d");
         writer.WriteEndElement();
         writer.WriteStartElement("fonts", SpreadsheetNamespace);
         writer.WriteAttributeString("count", "2");
@@ -319,9 +320,10 @@ public sealed class ExecutiveProgressXlsxExporter
         WriteFill(writer, "E7E6E6");
         writer.WriteEndElement();
         writer.WriteStartElement("borders", SpreadsheetNamespace);
-        writer.WriteAttributeString("count", "2");
-        WriteBorder(writer, false);
-        WriteBorder(writer, true);
+        writer.WriteAttributeString("count", "3");
+        WriteBorder(writer, null);
+        WriteBorder(writer, "B7C9D6");
+        WriteBorder(writer, "C00000");
         writer.WriteEndElement();
         writer.WriteStartElement("cellStyleXfs", SpreadsheetNamespace);
         writer.WriteAttributeString("count", "1");
@@ -335,13 +337,16 @@ public sealed class ExecutiveProgressXlsxExporter
         writer.WriteStartElement("cellXfs", SpreadsheetNamespace);
         var styles = Enum.GetValues<ExecutiveWorkbookStyleToken>();
         var formats = Enum.GetValues<ExecutiveWorkbookNumberFormat>();
-        writer.WriteAttributeString("count", (styles.Length * formats.Length).ToString(CultureInfo.InvariantCulture));
-        foreach (var style in styles)
+        writer.WriteAttributeString("count", (styles.Length * formats.Length * 2).ToString(CultureInfo.InvariantCulture));
+        foreach (var isReportingBoundary in new[] { false, true })
         {
-            var definition = StyleDefinitionFor(style);
-            foreach (var format in formats)
+            foreach (var style in styles)
             {
-                WriteCellFormat(writer, definition, NumberFormatId(format));
+                var definition = StyleDefinitionFor(style, isReportingBoundary);
+                foreach (var format in formats)
+                {
+                    WriteCellFormat(writer, definition, NumberFormatId(format));
+                }
             }
         }
 
@@ -413,13 +418,20 @@ public sealed class ExecutiveProgressXlsxExporter
         writer.WriteEndElement();
     }
 
-    private static void WriteBorder(XmlWriter writer, bool colored)
+    private static void WriteBorder(XmlWriter writer, string? color)
     {
         writer.WriteStartElement("border", SpreadsheetNamespace);
         foreach (var side in new[] { "left", "right", "top", "bottom" })
         {
             writer.WriteStartElement(side, SpreadsheetNamespace);
-            writer.WriteAttributeString("style", colored ? "thin" : "none");
+            writer.WriteAttributeString("style", color is null ? "none" : "thin");
+            if (color is not null)
+            {
+                writer.WriteStartElement("color", SpreadsheetNamespace);
+                writer.WriteAttributeString("rgb", color);
+                writer.WriteEndElement();
+            }
+
             writer.WriteEndElement();
         }
 
@@ -450,39 +462,49 @@ public sealed class ExecutiveProgressXlsxExporter
     private static int StyleId(ExecutiveWorkbookCell cell)
     {
         var formatCount = Enum.GetValues<ExecutiveWorkbookNumberFormat>().Length;
-        return ((int)cell.StyleToken * formatCount) + (int)cell.NumberFormat;
+        var styleCount = Enum.GetValues<ExecutiveWorkbookStyleToken>().Length;
+        var styleOffset = cell.IsReportingBoundary ? styleCount : 0;
+        return ((styleOffset + (int)cell.StyleToken) * formatCount) + (int)cell.NumberFormat;
     }
 
     private static int NumberFormatId(ExecutiveWorkbookNumberFormat format) => format switch
     {
         ExecutiveWorkbookNumberFormat.Text => 49,
         ExecutiveWorkbookNumberFormat.Date => 164,
+        ExecutiveWorkbookNumberFormat.DayOfMonth => 166,
         ExecutiveWorkbookNumberFormat.Number => 4,
         ExecutiveWorkbookNumberFormat.Percentage => 10,
         ExecutiveWorkbookNumberFormat.Hours => 165,
         _ => throw new InvalidOperationException($"Unsupported executive workbook number format '{format}'.")
     };
 
-    private static StyleDefinition StyleDefinitionFor(ExecutiveWorkbookStyleToken style) => style switch
+    private static StyleDefinition StyleDefinitionFor(ExecutiveWorkbookStyleToken style, bool isReportingBoundary)
     {
-        ExecutiveWorkbookStyleToken.Title => new StyleDefinition(1, 0, 0, false),
-        ExecutiveWorkbookStyleToken.Subtitle => new StyleDefinition(0, 6, 1, true),
-        ExecutiveWorkbookStyleToken.Header => new StyleDefinition(0, 6, 1, true),
-        ExecutiveWorkbookStyleToken.Plan => new StyleDefinition(0, 2, 1, true),
-        ExecutiveWorkbookStyleToken.ActualComplete => new StyleDefinition(0, 3, 1, true),
-        ExecutiveWorkbookStyleToken.Forecast => new StyleDefinition(0, 4, 1, true),
-        ExecutiveWorkbookStyleToken.Attention => new StyleDefinition(0, 4, 1, true),
-        ExecutiveWorkbookStyleToken.BlockedOrOverdue => new StyleDefinition(0, 5, 1, true),
-        ExecutiveWorkbookStyleToken.Unknown => new StyleDefinition(0, 6, 1, true),
-        ExecutiveWorkbookStyleToken.Weekend => new StyleDefinition(0, 6, 1, true),
-        ExecutiveWorkbookStyleToken.Milestone => new StyleDefinition(0, 2, 1, true),
-        ExecutiveWorkbookStyleToken.ReportingBoundary => new StyleDefinition(0, 2, 1, true),
-        ExecutiveWorkbookStyleToken.ProjectHierarchy => new StyleDefinition(0, 2, 1, true),
-        ExecutiveWorkbookStyleToken.PhaseHierarchy => new StyleDefinition(0, 2, 1, true),
-        ExecutiveWorkbookStyleToken.WorkPackageHierarchy => new StyleDefinition(0, 0, 0, true),
-        ExecutiveWorkbookStyleToken.DeliveryCardHierarchy => new StyleDefinition(0, 0, 0, true),
-        _ => new StyleDefinition(0, 0, 0, true)
-    };
+        var definition = style switch
+        {
+            ExecutiveWorkbookStyleToken.Title => new StyleDefinition(1, 0, 0, false),
+            ExecutiveWorkbookStyleToken.Subtitle => new StyleDefinition(0, 6, 1, true),
+            ExecutiveWorkbookStyleToken.Header => new StyleDefinition(0, 6, 1, true),
+            ExecutiveWorkbookStyleToken.Plan => new StyleDefinition(0, 2, 1, true),
+            ExecutiveWorkbookStyleToken.ActualComplete => new StyleDefinition(0, 3, 1, true),
+            ExecutiveWorkbookStyleToken.Forecast => new StyleDefinition(0, 4, 1, true),
+            ExecutiveWorkbookStyleToken.Attention => new StyleDefinition(0, 4, 1, true),
+            ExecutiveWorkbookStyleToken.BlockedOrOverdue => new StyleDefinition(0, 5, 1, true),
+            ExecutiveWorkbookStyleToken.Unknown => new StyleDefinition(0, 6, 1, true),
+            ExecutiveWorkbookStyleToken.Weekend => new StyleDefinition(0, 6, 1, true),
+            ExecutiveWorkbookStyleToken.Milestone => new StyleDefinition(0, 2, 1, true),
+            ExecutiveWorkbookStyleToken.ReportingBoundary => new StyleDefinition(0, 0, 2, true),
+            ExecutiveWorkbookStyleToken.ProjectHierarchy => new StyleDefinition(0, 2, 1, true),
+            ExecutiveWorkbookStyleToken.PhaseHierarchy => new StyleDefinition(0, 2, 1, true),
+            ExecutiveWorkbookStyleToken.WorkPackageHierarchy => new StyleDefinition(0, 0, 0, true),
+            ExecutiveWorkbookStyleToken.DeliveryCardHierarchy => new StyleDefinition(0, 0, 0, true),
+            _ => new StyleDefinition(0, 0, 0, true)
+        };
+
+        return isReportingBoundary && style != ExecutiveWorkbookStyleToken.ReportingBoundary
+            ? definition with { BorderId = 2 }
+            : definition;
+    }
 
     private static string CellAddress(int column, int row)
     {

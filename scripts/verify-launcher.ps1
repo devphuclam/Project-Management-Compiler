@@ -38,6 +38,8 @@ Assert-Condition ($runner.IndexOf('Wait-Process', [StringComparison]::Ordinal) -
 Assert-Condition ($runner.IndexOf('Stop-Process', [StringComparison]::Ordinal) -ge 0) 'Runner must clean up the child application process on launcher exit.'
 Assert-Condition (-not ($runner.IndexOf('0.0.0.0', [StringComparison]::Ordinal) -ge 0)) 'Runner must not expose the application on all interfaces.'
 Assert-Condition ($runner.IndexOf('$RepositoryRoot', [StringComparison]::Ordinal) -ge 0) 'Runner must accept a source repository root for manifest imports.'
+Assert-Condition ($runner.IndexOf('$projectRepositoryRoot', [StringComparison]::Ordinal) -ge 0) 'Runner must keep its own project root in a variable distinct from the RepositoryRoot parameter.'
+Assert-Condition (-not ($runner -match '(?im)^\s*\$repositoryRoot\s*=')) 'Runner must not overwrite the case-insensitive RepositoryRoot parameter with its own project root.'
 Assert-Condition ($runner.IndexOf('$ManifestPath', [StringComparison]::Ordinal) -ge 0) 'Runner must accept a repository-relative manifest path.'
 Assert-Condition ($runner.IndexOf('$SourceCommit', [StringComparison]::Ordinal) -ge 0) 'Runner must accept an exact source commit.'
 Assert-Condition ($runner.IndexOf('$ImportMode', [StringComparison]::Ordinal) -ge 0) 'Runner must accept an official or preview import mode.'

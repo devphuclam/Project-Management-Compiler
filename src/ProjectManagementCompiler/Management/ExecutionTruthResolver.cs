@@ -7,10 +7,13 @@ public sealed record EffectiveExecutionRecord
     public string WorkItemId { get; init; } = string.Empty;
     public bool IsRecorded { get; init; }
     public ExecutionState? ExecutionState { get; init; }
+    public SourceResultState? ResultState { get; init; }
     public DateOnly? ActualStart { get; init; }
     public DateOnly? ActualFinish { get; init; }
     public decimal? ActualEffortHours { get; init; }
     public decimal? RemainingEffortHours { get; init; }
+    public DateTimeOffset? ForecastFinish { get; init; }
+    public string? Blocker { get; init; }
     public DateTimeOffset? LastUpdatedAt { get; init; }
 }
 
@@ -33,10 +36,13 @@ public static class ExecutionTruthResolver
                     WorkItemId = cardId,
                     IsRecorded = source.RecordingState == SourceRecordingState.Recorded,
                     ExecutionState = source.ExecutionState,
+                    ResultState = source.ResultState,
                     ActualStart = source.ActualStart,
                     ActualFinish = source.ActualFinish,
                     ActualEffortHours = source.ActualEffortHours,
                     RemainingEffortHours = source.RemainingEffortHours,
+                    ForecastFinish = source.ForecastFinish,
+                    Blocker = source.Blocker,
                     LastUpdatedAt = source.LastUpdatedAt
                 };
         }
@@ -50,10 +56,13 @@ public static class ExecutionTruthResolver
                 WorkItemId = cardId,
                 IsRecorded = true,
                 ExecutionState = legacy.ExecutionState,
+                ResultState = null,
                 ActualStart = legacy.ActualStart,
                 ActualFinish = legacy.ActualFinish,
                 ActualEffortHours = legacy.ActualEffortHours,
                 RemainingEffortHours = legacy.RemainingEffortHours,
+                ForecastFinish = null,
+                Blocker = legacy.Note,
                 LastUpdatedAt = legacy.LastUpdatedAt
             };
     }

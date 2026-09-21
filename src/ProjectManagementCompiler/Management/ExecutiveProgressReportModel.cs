@@ -55,6 +55,7 @@ public sealed record ExecutiveProgressReport
     public ExecutiveCondition ReadinessCondition { get; init; } = new();
     public ExecutiveMilestoneSummary NextMilestone { get; init; } = new();
     public ExecutiveProgressSummary Progress { get; init; } = new();
+    public ExecutiveDailyGanttProjection DailyGantt { get; init; } = new();
     public IReadOnlyList<ExecutiveAttentionItem> OverviewAttention { get; init; } = Array.Empty<ExecutiveAttentionItem>();
     public IReadOnlyList<ExecutiveAttentionItem> AllAttention { get; init; } = Array.Empty<ExecutiveAttentionItem>();
     public IReadOnlyList<ExecutiveScheduleRow> OverviewTimeline { get; init; } = Array.Empty<ExecutiveScheduleRow>();
@@ -88,6 +89,10 @@ public sealed record ExecutiveProgressSummary
     public int InProgressCount { get; init; }
     public int NotStartedCount { get; init; }
     public int UnknownCount { get; init; }
+    public int RecordedCardCount { get; init; }
+    public int TotalCardCount { get; init; }
+    public int ProgressEligibleCardCount { get; init; }
+    public DateTimeOffset? LastOfficialUpdate { get; init; }
 }
 
 public sealed record ExecutiveScheduleRow
@@ -111,8 +116,17 @@ public sealed record ExecutiveDeliveryCardDetail
     public string WorkPackageName { get; init; } = string.Empty;
     public DateOnly? PlannedStart { get; init; }
     public DateOnly? PlannedFinish { get; init; }
+    public DateOnly? ActualStart { get; init; }
+    public DateOnly? ActualFinish { get; init; }
+    public DateOnly? ForecastFinish { get; init; }
+    public decimal? ActualEffortHours { get; init; }
+    public decimal? RemainingEffortHours { get; init; }
+    public int? ProgressPercent { get; init; }
+    public string ProgressLabel { get; init; } = string.Empty;
+    public string RecordingLabel { get; init; } = string.Empty;
     public string OwnerLabel { get; init; } = string.Empty;
     public string StateLabel { get; init; } = string.Empty;
+    public DateTimeOffset? LastOfficialUpdate { get; init; }
     public string ReferenceCode { get; init; } = string.Empty;
     public int SourceOrder { get; init; }
 }

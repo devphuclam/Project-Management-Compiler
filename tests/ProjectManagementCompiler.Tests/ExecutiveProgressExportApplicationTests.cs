@@ -108,6 +108,54 @@ internal static class ExecutiveProgressExportApplicationTests
         }
     }
 
+    public static void ExecutiveExportFailsClosedForInvalidEvidenceAndMissingPlanningAxis()
+    {
+        var official = ExecutiveProgressTestFixtures.BuildDailyGanttFixtureResult();
+        var contradictoryActual = official with
+        {
+            Project = official.Project with
+            {
+                SourceExecution = official.Project.SourceExecution with
+                {
+                    Records = official.Project.SourceExecution.Records
+                        .Select(record => string.Equals(record.Entity.Id, ExecutiveProgressTestFixtures.CompletedEarlyCardId, StringComparison.OrdinalIgnoreCase)
+                            ? record with { ActualFinish = new DateOnly(2026, 9, 15) }
+                            : record)
+                        .ToArray()
+                }
+            }
+        };
+        var negativeEffort = official with
+        {
+            Project = official.Project with
+            {
+                SourceExecution = official.Project.SourceExecution with
+                {
+                    Records = official.Project.SourceExecution.Records
+                        .Select(record => string.Equals(record.Entity.Id, ExecutiveProgressTestFixtures.OpenInProgressCardId, StringComparison.OrdinalIgnoreCase)
+                            ? record with { ActualEffortHours = -1m }
+                            : record)
+                        .ToArray()
+                }
+            }
+        };
+        var noPlanningAxis = official with
+        {
+            Project = official.Project with
+            {
+                Baseline = official.Project.Baseline with { PlanningStart = null, PlanningFinish = null },
+                Phases = official.Project.Phases.Select(phase => phase with { PlannedStart = null, PlannedFinish = null }).ToArray(),
+                WorkPackages = official.Project.WorkPackages.Select(workPackage => workPackage with { PlannedStart = null, PlannedFinish = null }).ToArray(),
+                DeliveryCards = official.Project.DeliveryCards.Select(card => card with { PlannedStart = null, PlannedFinish = null }).ToArray(),
+                Milestones = official.Project.Milestones.Select(milestone => milestone with { PlannedDate = null }).ToArray()
+            }
+        };
+
+        AssertExportRejected(contradictoryActual, "EXECUTIVE_EXPORT_INVALID_OFFICIAL_EVIDENCE", "Actual finish before actual start");
+        AssertExportRejected(negativeEffort, "EXECUTIVE_EXPORT_INVALID_OFFICIAL_EVIDENCE", "negative official effort");
+        AssertExportRejected(noPlanningAxis, "EXECUTIVE_EXPORT_INCOMPLETE_OFFICIAL", "missing truthful planning axis");
+    }
+
     public static void ExecutiveExportEndpointUsesOfficialSelectionAndDatedDownloadContract()
     {
         var program = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "Program.cs"));
@@ -125,10 +173,10 @@ internal static class ExecutiveProgressExportApplicationTests
     {
         var official = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult();
         var bytes = InvokeExport(new ProjectCompiler(), official);
-        var workbookText = string.Join('|', Enumerable.Range(1, 4).Select(sheet => ExecutiveProgressTestFixtures.WorksheetText(bytes, sheet)));
+        var workbookText = string.Join('|', Enumerable.Range(1, 5).Select(sheet => ExecutiveProgressTestFixtures.WorksheetText(bytes, sheet)));
 
         TestAssert.False(workbookText.Contains("CARIO", StringComparison.OrdinalIgnoreCase), "The executive workbook must not expose CARIO markers.");
-        TestAssert.False(workbookText.Contains("Gantt", StringComparison.OrdinalIgnoreCase), "The executive workbook must not expose technical Gantt markers.");
+        TestAssert.False(workbookText.Contains("PMC_EXPORT_KIND", StringComparison.OrdinalIgnoreCase), "The executive workbook must not expose technical preview markers.");
 
         var previewImport = new Outputs.XlsxPreviewImporter().Import("executive.xlsx", bytes);
         TestAssert.False(previewImport.IsValid, "The executive workbook must be rejected by the technical XLSX preview importer.");
@@ -161,6 +209,22 @@ internal static class ExecutiveProgressExportApplicationTests
         catch (TargetInvocationException exception) when (exception.InnerException is not null)
         {
             throw exception.InnerException;
+        }
+    }
+
+    private static void AssertExportRejected(CompilationResult result, string expectedDiagnostic, string scenario)
+    {
+        try
+        {
+            _ = InvokeExport(new ProjectCompiler(), result);
+            throw new InvalidOperationException($"Executive export must fail closed for {scenario}.");
+        }
+        catch (ProjectCompilationException exception)
+        {
+            TestAssert.Equal("executive-export", exception.Phase, $"Executive export must identify the export boundary for {scenario}.");
+            TestAssert.True(
+                exception.Diagnostics.Any(diagnostic => string.Equals(diagnostic.Code, expectedDiagnostic, StringComparison.Ordinal)),
+                $"Executive export must provide stable diagnostic '{expectedDiagnostic}' for {scenario}.");
         }
     }
 }

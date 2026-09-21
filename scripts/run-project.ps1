@@ -12,8 +12,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repositoryRoot = [IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '..'))
-$projectPath = Join-Path -Path $repositoryRoot -ChildPath 'src\ProjectManagementCompiler\ProjectManagementCompiler.csproj'
+$projectRepositoryRoot = [IO.Path]::GetFullPath((Join-Path -Path $PSScriptRoot -ChildPath '..'))
+$projectPath = Join-Path -Path $projectRepositoryRoot -ChildPath 'src\ProjectManagementCompiler\ProjectManagementCompiler.csproj'
 $appUrl = 'http://127.0.0.1:5050/'
 $healthUrl = $appUrl + 'api/health'
 $expectedBinding = $appUrl.TrimEnd('/')
@@ -40,7 +40,7 @@ try {
     $process = Start-Process `
         -FilePath $dotnetCommand.Source `
         -ArgumentList @('run', '--project', $quotedProjectPath, '--no-launch-profile') `
-        -WorkingDirectory $repositoryRoot `
+        -WorkingDirectory $projectRepositoryRoot `
         -PassThru
 
     $ready = $false
@@ -78,8 +78,11 @@ try {
         } | ConvertTo-Json -Depth 20 -Compress
         $import = Invoke-RestMethod -Uri ($appUrl + 'api/manifest-import') -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 30
         if ($null -eq $import.snapshot) {
-            $codes = @($import.diagnostics | ForEach-Object { $_.code }) -join ', '
-            throw "Manifest import did not produce a valid snapshot. Diagnostics: $codes"
+            $diagnostics = @($import.diagnostics | ForEach-Object {
+                if ([string]::IsNullOrWhiteSpace([string]$_.message)) { [string]$_.code }
+                else { "$($_.code): $($_.message)" }
+            }) -join ' | '
+            throw "Manifest import did not produce a valid snapshot. Classification: $($import.classification). Diagnostics: $diagnostics"
         }
 
         Write-Host "Manifest imported: $($import.classification)" -ForegroundColor Green

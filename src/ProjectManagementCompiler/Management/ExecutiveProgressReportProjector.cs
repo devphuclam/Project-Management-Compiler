@@ -67,6 +67,8 @@ public sealed class ExecutiveProgressReportProjector
         var workPackageSchedule = ProjectWorkPackages(project, sourceReportingDate);
         var deliveryCardDetails = ProjectDeliveryCards(project);
         var allAttention = ProjectAttention(project, result.Analysis, sourceReportingDate, nextMilestone);
+        var dailyGantt = new ExecutiveDailyGanttProjector().Build(result);
+        var dailyProject = dailyGantt.FullRows.Single(row => row.Kind == ExecutiveDailyGanttRowKind.Project);
 
         return new ExecutiveProgressReport
         {
@@ -93,7 +95,8 @@ public sealed class ExecutiveProgressReportProjector
                     PlannedDate = nextMilestone.Milestone.PlannedDate,
                     IsMissing = false
                 },
-            Progress = ProjectProgress(result.Analysis),
+            Progress = ProjectProgress(result.Analysis, dailyProject),
+            DailyGantt = dailyGantt,
             OverviewAttention = allAttention.Where(item => item.OverviewEligible).Take(5).ToArray(),
             AllAttention = allAttention,
             OverviewTimeline = overviewTimeline,
@@ -139,6 +142,19 @@ public sealed class ExecutiveProgressReportProjector
                 phases.TryGetValue(card.PhaseId, out var phase);
                 workPackages.TryGetValue(card.WorkPackageId, out var workPackage);
                 var record = ExecutionTruthResolver.ForCard(project, card.Id);
+                var isRecorded = record?.IsRecorded == true;
+                var progressEligible = isRecorded
+                    && record!.ActualEffortHours is not null
+                    && record.RemainingEffortHours is not null
+                    && record.ActualEffortHours >= 0m
+                    && record.RemainingEffortHours >= 0m
+                    && record.ActualEffortHours + record.RemainingEffortHours > 0m;
+                var progressPercent = progressEligible
+                    ? decimal.ToInt32(decimal.Round(
+                        record!.ActualEffortHours!.Value / (record.ActualEffortHours.Value + record.RemainingEffortHours!.Value) * 100m,
+                        0,
+                        MidpointRounding.AwayFromZero))
+                    : (int?)null;
                 return new ExecutiveDeliveryCardDetail
                 {
                     Description = CleanCardDescription(card.Name, card.Id),
@@ -146,8 +162,19 @@ public sealed class ExecutiveProgressReportProjector
                     WorkPackageName = workPackage is null ? "Chưa xác định" : CleanName(workPackage.Name, workPackage.Id),
                     PlannedStart = card.PlannedStart,
                     PlannedFinish = card.PlannedFinish,
+                    ActualStart = isRecorded ? record!.ActualStart : null,
+                    ActualFinish = isRecorded ? record!.ActualFinish : null,
+                    ForecastFinish = isRecorded && record!.ForecastFinish is not null
+                        ? DateOnly.FromDateTime(record.ForecastFinish.Value.Date)
+                        : null,
+                    ActualEffortHours = isRecorded ? record!.ActualEffortHours : null,
+                    RemainingEffortHours = isRecorded ? record!.RemainingEffortHours : null,
+                    ProgressPercent = progressPercent,
+                    ProgressLabel = progressPercent is null ? "Chưa đủ dữ liệu" : $"{progressPercent}%",
+                    RecordingLabel = isRecorded ? "Đã ghi nhận" : "Chưa cập nhật",
                     OwnerLabel = ResolveDeliveryCardOwner(project, card.Id),
-                    StateLabel = record?.IsRecorded == true ? ExecutionLabel(record.ExecutionState) : "Chưa cập nhật",
+                    StateLabel = isRecorded ? ExecutionLabel(record!.ExecutionState) : "Chưa cập nhật",
+                    LastOfficialUpdate = isRecorded ? record!.LastUpdatedAt : null,
                     ReferenceCode = card.Id,
                     SourceOrder = sourceOrder
                 };
@@ -787,7 +814,9 @@ public sealed class ExecutiveProgressReportProjector
             };
     }
 
-    private static ExecutiveProgressSummary ProjectProgress(ManagementAnalysis analysis)
+    private static ExecutiveProgressSummary ProjectProgress(
+        ManagementAnalysis analysis,
+        ExecutiveDailyGanttRow dailyProject)
     {
         var counts = analysis.ExecutionStatus;
         var completed = Math.Max(0, counts.Completed);
@@ -816,7 +845,11 @@ public sealed class ExecutiveProgressReportProjector
             CompletedCount = completed,
             InProgressCount = inProgress,
             NotStartedCount = notStarted,
-            UnknownCount = unknown
+            UnknownCount = unknown,
+            RecordedCardCount = dailyProject.RecordedChildCount,
+            TotalCardCount = dailyProject.TotalChildCount,
+            ProgressEligibleCardCount = dailyProject.ProgressEligibleChildCount,
+            LastOfficialUpdate = dailyProject.LastOfficialUpdate
         };
     }
 

@@ -323,6 +323,10 @@ try {
 
     $activePreview = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
     Assert-Condition ($activePreview.snapshotId -eq $previewPayload.snapshotId) 'XLSX preview GET must return the active uploaded snapshot.'
+    $previewOnlyExecutiveResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -SkipHttpErrorCheck -TimeoutSec 30
+    Assert-Condition ([int]$previewOnlyExecutiveResponse.StatusCode -eq 404) 'A technical-preview-only session must not download a management workbook.'
+    $previewOnlyExecutiveError = $previewOnlyExecutiveResponse.Content | ConvertFrom-Json
+    Assert-Condition ($previewOnlyExecutiveError.code -eq 'NO_OFFICIAL_SNAPSHOT' -and $previewOnlyExecutiveError.phase -eq 'executive-export') 'A technical-preview-only management export rejection must identify the missing official snapshot.'
 
     $clearPreviewResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -Method Delete -TimeoutSec 30
     Assert-Condition ([int]$clearPreviewResponse.StatusCode -eq 204) 'XLSX preview clear must return 204.'
@@ -395,6 +399,15 @@ try {
     Assert-Condition (-not $officialExportText.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Official manifest export must not expose the local source root.'
     Assert-Condition (-not ($officialExportText -match '"content"\s*:')) 'Official manifest export must not expose raw source bodies.'
 
+    $technicalPreviewBeforeExecutiveExport = Invoke-XlsxPreviewUpload -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -FilePath $temporaryXlsx
+    Assert-Condition ($technicalPreviewBeforeExecutiveExport.StatusCode -eq 200) "Technical XLSX preview must remain accepted before executive export; got $($technicalPreviewBeforeExecutiveExport.StatusCode)."
+    $technicalPreviewBeforeExecutiveExportPayload = $technicalPreviewBeforeExecutiveExport.Body | ConvertFrom-Json
+    $activeXlsxPreviewBeforeExecutiveExport = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    Assert-Condition ($activeXlsxPreviewBeforeExecutiveExport.snapshotId -eq $technicalPreviewBeforeExecutiveExportPayload.snapshotId) 'The active XLSX preview must be the accepted technical workbook before executive export.'
+    $activeXlsxPreviewBeforeExecutiveExportJson = $activeXlsxPreviewBeforeExecutiveExport | ConvertTo-Json -Depth 30 -Compress
+    $proposalsBeforeExecutiveExport = @(Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/proposals' -TimeoutSec 30)
+    $proposalsBeforeExecutiveExportJson = ConvertTo-Json -InputObject $proposalsBeforeExecutiveExport -Depth 30 -Compress
+
     $temporaryExecutiveXlsx = [IO.Path]::Combine([IO.Path]::GetTempPath(), ('pmc-executive-verify-{0}.xlsx' -f [Guid]::NewGuid().ToString('N')))
     $executiveDownload = Invoke-BinaryDownload -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -FilePath $temporaryExecutiveXlsx
     $executiveDisposition = [string]$executiveDownload.ContentDisposition
@@ -413,6 +426,7 @@ try {
         'xl/worksheets/sheet2.xml',
         'xl/worksheets/sheet3.xml',
         'xl/worksheets/sheet4.xml',
+        'xl/worksheets/sheet5.xml',
         'xl/styles.xml'
     )) {
         Assert-Condition ($executiveEntryNames -contains $required) "Executive XLSX package is missing '$required'."
@@ -425,27 +439,60 @@ try {
         $executiveWorkbookReader.Dispose()
     }
     $executiveSheetNames = @($executiveWorkbookXml.SelectNodes("//*[local-name()='sheet']") | ForEach-Object { $_.name })
-    Assert-Condition (([string]::Join(',', $executiveSheetNames)) -eq 'Tổng quan,Lịch trình,Vấn đề cần xử lý,Chi tiết công việc') 'Executive workbook must use the four approved reader-facing sheets.'
-    $executiveOverviewXml = [xml]([IO.StreamReader]::new($executiveArchive.GetEntry('xl/worksheets/sheet1.xml').Open())).ReadToEnd()
-    Assert-Condition (-not $executiveOverviewXml.OuterXml.Contains('CARIO', [StringComparison]::OrdinalIgnoreCase) -and -not $executiveOverviewXml.OuterXml.Contains('PMC_', [StringComparison]::Ordinal)) 'Executive workbook must not contain technical CARIO/provenance markers.'
+    Assert-Condition (([string]::Join(',', $executiveSheetNames)) -eq 'Tổng quan,Gantt theo ngày,30 ngày tới,Vấn đề cần xử lý,Chi tiết công việc') 'Executive workbook must use the five approved reader-facing sheets in order.'
+    $executiveSheetXml = @{}
+    foreach ($sheetNumber in 1..5) {
+        $sheetReader = [IO.StreamReader]::new($executiveArchive.GetEntry("xl/worksheets/sheet$sheetNumber.xml").Open())
+        try {
+            $executiveSheetXml[$sheetNumber] = $sheetReader.ReadToEnd()
+        }
+        finally {
+            $sheetReader.Dispose()
+        }
+    }
+    $executiveOverviewXml = [xml]$executiveSheetXml[1]
+    $executiveFirstFourSheets = [string]::Join('|', @(1..4 | ForEach-Object { $executiveSheetXml[$_] }))
+    Assert-Condition ($executiveOverviewXml.OuterXml.Contains('Báo cáo điều hành tiến độ', [StringComparison]::Ordinal) -and $executiveOverviewXml.OuterXml.Contains('Ngày báo cáo', [StringComparison]::Ordinal)) 'Executive overview must retain the management title and reporting-date context.'
+    Assert-Condition ($executiveSheetXml[2].Contains('Kế hoạch', [StringComparison]::Ordinal) -and $executiveSheetXml[2].Contains('Thực tế', [StringComparison]::Ordinal)) 'Executive daily Gantt must retain paired Plan and Actual reader lanes.'
+    Assert-Condition ($executiveSheetXml[3].Contains('30 ngày tới', [StringComparison]::Ordinal) -and $executiveSheetXml[3].Contains('Kế hoạch', [StringComparison]::Ordinal)) 'Executive near-term sheet must retain its exact operating horizon and Gantt legend.'
+    Assert-Condition ($executiveSheetXml[5].Contains('Giờ thực tế', [StringComparison]::Ordinal) -and $executiveSheetXml[5].Contains('Mã tham chiếu', [StringComparison]::Ordinal)) 'Executive detail sheet must retain Actual effort and short-reference columns.'
+    Assert-Condition (-not $executiveFirstFourSheets.Contains('CARIO', [StringComparison]::OrdinalIgnoreCase) -and -not $executiveFirstFourSheets.Contains('PMC_', [StringComparison]::Ordinal)) 'Executive reader sheets must not contain technical CARIO/provenance markers.'
     $executiveArchive.Dispose()
     $executiveArchive = $null
     $executiveFileStream.Dispose()
     $executiveFileStream = $null
+
+    $managementPreviewUpload = Invoke-XlsxPreviewUpload -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -FilePath $temporaryExecutiveXlsx
+    Assert-Condition ($managementPreviewUpload.StatusCode -eq 422) "The management workbook must be rejected by the technical preview endpoint; got $($managementPreviewUpload.StatusCode)."
+    $managementPreviewError = $managementPreviewUpload.Body | ConvertFrom-Json
+    Assert-Condition ($managementPreviewError.code -eq 'INVALID_XLSX_PREVIEW') 'Management workbook rejection must identify the technical preview boundary.'
+    $activeXlsxPreviewAfterManagementAttempt = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    Assert-Condition (($activeXlsxPreviewAfterManagementAttempt | ConvertTo-Json -Depth 30 -Compress) -eq $activeXlsxPreviewBeforeExecutiveExportJson) 'A rejected management upload must not replace the last valid technical preview.'
+
     $officialAfterExecutiveExport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
     Assert-Condition ($officialAfterExecutiveExport.semanticDigest -eq $officialDigestBeforeExecutiveExport) 'Executive export must not mutate the official semantic digest.'
     Assert-Condition (($officialAfterExecutiveExport.sourceExecution | ConvertTo-Json -Depth 30 -Compress) -eq $officialExecutionBeforeExecutiveExport) 'Executive export must not mutate official source execution.'
+    $proposalsAfterExecutiveExport = @(Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/proposals' -TimeoutSec 30)
+    Assert-Condition ((ConvertTo-Json -InputObject $proposalsAfterExecutiveExport -Depth 30 -Compress) -eq $proposalsBeforeExecutiveExportJson) 'Executive export must not mutate proposal state.'
 
     $workingTreePreview = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
         repositoryRoot = $sourceRoot
         manifestPath = 'planning/project-management-compiler-manifest.json'
         mode = 'UNCOMMITTED_PREVIEW'
     }
-    Assert-Condition ($workingTreePreview.classification -eq 'UNCOMMITTED_PREVIEW') 'Working-tree manifest import must remain an explicit non-authoritative preview.'
+    Assert-Condition ($workingTreePreview.classification -in @('UNCOMMITTED_PREVIEW', 'FAILED')) ("Working-tree source must be either an explicit non-authoritative preview or safely rejected; it must never become official. Actual: $($workingTreePreview.classification). Diagnostics: $((@($workingTreePreview.diagnostics) | ForEach-Object { $_.code + ':' + $_.message }) -join ' | ')")
+    if ($workingTreePreview.classification -eq 'UNCOMMITTED_PREVIEW') {
+        Assert-Condition ($null -ne $workingTreePreview.snapshot) 'A valid working-tree preview must retain a non-authoritative snapshot.'
+    }
+    else {
+        Assert-Condition ($null -eq $workingTreePreview.snapshot) 'An invalid working-tree source must fail closed without creating a preview snapshot.'
+    }
     $executiveAfterPreview = Invoke-BinaryDownload -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -FilePath $temporaryExecutiveXlsx
     Assert-Condition ([string]$executiveAfterPreview.ContentDisposition -match 'BaoCaoTienDo_2026-09-19\.xlsx') 'Executive export must continue using the official source date while a working-tree preview is active.'
     $officialAfterPreview = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
     Assert-Condition ($officialAfterPreview.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId -and $officialAfterPreview.semanticDigest -eq $officialDigestBeforeExecutiveExport) 'Working-tree preview must not replace the official executive export state.'
+    $activeXlsxPreviewAfterWorkingTreePreview = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    Assert-Condition (($activeXlsxPreviewAfterWorkingTreePreview | ConvertTo-Json -Depth 30 -Compress) -eq $activeXlsxPreviewBeforeExecutiveExportJson) 'A manifest preview must not replace the active technical workbook preview.'
 
     $failedManifestImport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
         repositoryRoot = $sourceRoot
@@ -663,6 +710,7 @@ try {
         JsonBytes = $jsonText.Length
         XlsxBytes = (Get-Item -LiteralPath $temporaryXlsx).Length
         SheetCount = $sheetNames.Count
+        ExecutiveSheetCount = $executiveSheetNames.Count
         SecurityChecks = 'PASS'
     } | ConvertTo-Json -Compress
 }

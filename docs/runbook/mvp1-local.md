@@ -121,20 +121,38 @@ conflicts remain visible and do not become an effective value.
 
 Sau khi import thành công **Official Git commit**, dùng nút **Xuất báo cáo
 tiến độ** ở header. Đây là bản trình bày dành cho người quản lý, không phải
-file kỹ thuật để import ngược vào Compiler:
+file kỹ thuật để import ngược vào Compiler. Một lần xuất tạo đúng một workbook
+với năm sheet theo thứ tự cố định:
 
 - file có tên `<ProjectName>_BaoCaoTienDo_<YYYY-MM-DD>.xlsx`, ngày lấy từ
   `statusDate` của Execution Register;
 - `Tổng quan` trả lời nhanh dự án đang ở đâu, mốc kế tiếp, điều kiện tiến độ,
-  readiness, % có bằng chứng và tối đa năm việc cần chú ý;
-- `Lịch trình` chỉ hiển thị phase, milestone và work package theo trục tháng / tuần;
+  readiness, % có bằng chứng và tối đa năm việc cần chú ý, trước khi đưa ra
+  daily Gantt rút gọn;
+- `Gantt theo ngày` giữ đầy đủ Project → Phase → Work package → Delivery card
+  → Milestone, với một ngày trên mỗi cột và hai làn liền kề `Kế hoạch` / `Thực tế`;
+- `30 ngày tới` chỉ giữ ngày báo cáo đến ngày thứ 29, ưu tiên việc quá hạn,
+  việc đang chạy, mốc, và dùng `◀` / `▶` để nói thật khi đoạn thời gian đi ra
+  ngoài cửa sổ;
 - `Vấn đề cần xử lý` giữ toàn bộ danh sách hành động đã xếp hạng;
-- `Chi tiết công việc` mới đi xuống delivery card khi người đọc cần kiểm tra.
+- `Chi tiết công việc` có đúng một dòng cho mỗi delivery card với kế hoạch,
+  Actual, forecast, effort, %, trạng thái ghi nhận, đầu mối, cập nhật cuối và
+  mã tham chiếu ngắn.
+
+Trong mọi Gantt, thanh **Kế hoạch** màu xanh là ngày baseline bất biến; thanh
+**Thực tế** màu xanh lá chỉ xuất hiện khi source đã ghi nhận ngày Actual;
+**Dự báo** màu hổ phách chỉ là forecast chính thức; quá hạn/bị chặn là cue đỏ;
+unknown là xám; milestone là hình thoi; vạch ngày báo cáo là mốc dọc. Độ dài
+thanh luôn biểu diễn **ngày**, không biểu diễn effort. `% thực tế` là số riêng
+được tính từ `giờ thực tế / (giờ thực tế + giờ còn lại)` chỉ khi cả hai giá trị
+official hợp lệ; không có hoặc zero-sum thì ghi `Chưa đủ dữ liệu`, không bịa
+0%. Thiếu ngày Actual/forecast cũng giữ trống/unknown thay vì kéo dài thanh.
 
 Nếu chưa có official snapshot, nút này bị khóa. Working-tree preview, candidate
 preview, proposal và XLSX preview không được dùng làm báo cáo chính thức.
 File báo cáo tiến độ không phải input hợp lệ của **Import XLSX preview** và
-không thay thế file **CARIO + Gantt** kỹ thuật.
+không thay thế file **CARIO + Gantt** kỹ thuật bảy sheet; hai luồng export vẫn
+tách biệt.
 
 ### Read-only XLSX preview workflow
 

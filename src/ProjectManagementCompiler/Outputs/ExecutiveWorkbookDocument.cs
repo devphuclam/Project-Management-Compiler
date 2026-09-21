@@ -134,7 +134,11 @@ internal sealed class ExecutiveWorkbookRow
 
 internal sealed class ExecutiveWorkbookCell
 {
-    public ExecutiveWorkbookCell(object value, ExecutiveWorkbookStyleToken styleToken, ExecutiveWorkbookNumberFormat numberFormat)
+    public ExecutiveWorkbookCell(
+        object value,
+        ExecutiveWorkbookStyleToken styleToken,
+        ExecutiveWorkbookNumberFormat numberFormat,
+        bool isReportingBoundary = false)
     {
         ArgumentNullException.ThrowIfNull(value);
         if (value is not string and not DateOnly and not int and not long and not decimal and not double)
@@ -155,11 +159,13 @@ internal sealed class ExecutiveWorkbookCell
         Value = value;
         StyleToken = styleToken;
         NumberFormat = numberFormat;
+        IsReportingBoundary = isReportingBoundary;
     }
 
     public object Value { get; }
     public ExecutiveWorkbookStyleToken StyleToken { get; }
     public ExecutiveWorkbookNumberFormat NumberFormat { get; }
+    public bool IsReportingBoundary { get; }
 }
 
 internal sealed class ExecutiveWorkbookRange
@@ -253,6 +259,7 @@ internal enum ExecutiveWorkbookNumberFormat
 {
     Text,
     Date,
+    DayOfMonth,
     Number,
     Percentage,
     Hours
