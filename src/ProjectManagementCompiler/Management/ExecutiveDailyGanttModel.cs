@@ -9,6 +9,15 @@ public enum ExecutiveDailyGanttRowKind
     Milestone
 }
 
+public enum ExecutiveActualPresentationKind
+{
+    RecordedInterval,
+    OpenRecordedInterval,
+    CompletionPoint,
+    EffortOnly,
+    None
+}
+
 /// <summary>
 /// One reader-facing row in a presentation-only daily Gantt projection.
 /// Delivery cards carry direct official execution facts; aggregate rows carry
@@ -27,6 +36,10 @@ public sealed record ExecutiveDailyGanttRow
     public DateOnly? ActualStart { get; init; }
     public DateOnly? ActualFinish { get; init; }
     public DateOnly? ActualDisplayThrough { get; init; }
+    public ExecutiveActualPresentationKind ActualPresentationKind { get; init; } = ExecutiveActualPresentationKind.None;
+    public string ActualEvidenceLabel { get; init; } = ReaderFacingTextPolicy.MissingEvidenceLabel;
+    public decimal? ActualEffortHours { get; init; }
+    public decimal? RemainingEffortHours { get; init; }
     public DateOnly? ForecastFinish { get; init; }
     public int? ProgressPercent { get; init; }
     public string ProgressLabel { get; init; } = "Chưa đủ dữ liệu";

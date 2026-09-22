@@ -15,10 +15,11 @@ internal sealed class ExecutiveProgressWorkbookComposer
         return new ExecutiveWorkbookDocument(
         [
             BuildOverview(report),
+            BuildOperating(report),
             BuildDailyGantt(report),
-            BuildNearTerm(report),
-            BuildAttention(report),
-            BuildDetails(report)
+            BuildWbs(report),
+            BuildDetails(report),
+            BuildMetadata(report)
         ],
         activeSheetIndex: 0);
     }
@@ -29,37 +30,35 @@ internal sealed class ExecutiveProgressWorkbookComposer
         {
             RowOf(Text("Báo cáo điều hành tiến độ", ExecutiveWorkbookStyleToken.Title)),
             RowOf(Text(report.ProjectName, ExecutiveWorkbookStyleToken.Subtitle)),
-            RowOf(Text($"Ngày báo cáo: {FormatDate(report.SourceReportingDate)}", ExecutiveWorkbookStyleToken.ReportingBoundary)),
+            RowOf(Text($"Cập nhật đến {FormatDate(report.SourceReportingDate)}", ExecutiveWorkbookStyleToken.ReportingBoundary)),
             RowOf(Text(BuildPlanningContext(report), ExecutiveWorkbookStyleToken.Subtitle)),
-            RowOf(Text(BuildProvenance(report), ExecutiveWorkbookStyleToken.Subtitle)),
             BlankRow(),
             RowOf(
-                Text("Giai đoạn hiện tại", ExecutiveWorkbookStyleToken.Header),
-                Text(string.Empty, ExecutiveWorkbookStyleToken.Header),
+                Text("Vị trí hiện tại", ExecutiveWorkbookStyleToken.Header),
+                Text("Tiến độ có bằng chứng", ExecutiveWorkbookStyleToken.Header),
+                Text("Thay đổi so với kế hoạch", ExecutiveWorkbookStyleToken.Header),
                 Text("Mốc kế tiếp", ExecutiveWorkbookStyleToken.Header),
-                Text(string.Empty, ExecutiveWorkbookStyleToken.Header),
-                Text("Tiến độ thực tế", ExecutiveWorkbookStyleToken.Header),
-                Text(string.Empty, ExecutiveWorkbookStyleToken.Header),
-                Text("Cần quyết định", ExecutiveWorkbookStyleToken.Header),
-                Text(string.Empty, ExecutiveWorkbookStyleToken.Header)),
+                Text("Cần quyết định", ExecutiveWorkbookStyleToken.Header)),
             RowOf(
                 Text(report.CurrentPhase, StyleFor(report.ScheduleCondition.Tone)),
-                Text(string.Empty, StyleFor(report.ScheduleCondition.Tone)),
-                Text(report.NextMilestone.DisplayName, report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
-                Text(string.Empty, report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
                 Text(report.Progress.Statement, report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
-                Text(string.Empty, report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
-                Text(report.ReadinessCondition.Label, StyleFor(report.ReadinessCondition.Tone)),
-                Text(string.Empty, StyleFor(report.ReadinessCondition.Tone))),
+                Text(report.ScheduleCondition.Label, StyleFor(report.ScheduleCondition.Tone)),
+                Text(report.NextMilestone.DisplayName, report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
+                Text(report.ReadinessCondition.Label, StyleFor(report.ReadinessCondition.Tone))),
             RowOf(
-                Text(report.ScheduleCondition.Detail, StyleFor(report.ScheduleCondition.Tone)),
-                Text(string.Empty, StyleFor(report.ScheduleCondition.Tone)),
-                Text(FormatDate(report.NextMilestone.PlannedDate), report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
-                Text(string.Empty, report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
                 Text(BuildProgressEvidence(report.Progress), report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
-                Text(string.Empty, report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
-                Text(report.ReadinessCondition.Detail, StyleFor(report.ReadinessCondition.Tone)),
-                Text(string.Empty, StyleFor(report.ReadinessCondition.Tone))),
+                Text(report.Progress.RecordedPercent is null ? ReaderFacingTextPolicy.MissingEvidenceLabel : $"{report.Progress.RecordedPercent}%", report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
+                Text(report.ScheduleCondition.Detail, StyleFor(report.ScheduleCondition.Tone)),
+                Text(FormatDate(report.NextMilestone.PlannedDate), report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
+                Text(report.ReadinessCondition.Detail, StyleFor(report.ReadinessCondition.Tone))),
+            BlankRow(),
+            RowOf(Text("Tiến độ giai đoạn và mốc", ExecutiveWorkbookStyleToken.Header)),
+            RowOf(
+                Text("Hạng mục", ExecutiveWorkbookStyleToken.Header),
+                Text("Kế hoạch bắt đầu", ExecutiveWorkbookStyleToken.Header),
+                Text("Kế hoạch kết thúc", ExecutiveWorkbookStyleToken.Header),
+                Text("Thực tế bắt đầu", ExecutiveWorkbookStyleToken.Header),
+                Text("Thực tế kết thúc/đến", ExecutiveWorkbookStyleToken.Header)),
             BlankRow(),
             RowOf(
                 Text("Kế hoạch", ExecutiveWorkbookStyleToken.Plan),
@@ -68,19 +67,11 @@ internal sealed class ExecutiveProgressWorkbookComposer
                 Text("Ngày báo cáo", ExecutiveWorkbookStyleToken.ReportingBoundary)),
             BlankRow()
         };
+        var scheduleRows = BuildOverviewScheduleRows(report).ToArray();
+        rows.InsertRange(11, scheduleRows);
 
         var mergedRanges = new List<ExecutiveWorkbookRange>();
-        AddReaderContextMerges(mergedRanges, DailyGanttFixedColumnCount, 2, 3, 4, 5);
-        AddOverviewSummaryMerges(mergedRanges);
-        var layout = AppendDailyGanttTable(
-            rows,
-            mergedRanges,
-            report.DailyGantt.OverviewRows,
-            report.DailyGantt.FullStart,
-            report.DailyGantt.FullFinish,
-            report.SourceReportingDate,
-            report.AnalysisAsOfDate,
-            useContinuationMarkers: false);
+        AddReaderContextMerges(mergedRanges, 8, 2, 3, 4, 9);
         rows.Add(BlankRow());
         rows.Add(RowOf(Text("Nội dung cần xin ý kiến", ExecutiveWorkbookStyleToken.Header)));
         var attention = report.OverviewAttention.Take(5).ToArray();
@@ -98,28 +89,252 @@ internal sealed class ExecutiveProgressWorkbookComposer
             rows.AddRange(attention.Select(item => RowOf(
                 Text(item.Action, ExecutiveWorkbookStyleToken.Attention),
                 Text(item.Impact, ExecutiveWorkbookStyleToken.Attention),
-                Text(item.OwnerLabel, item.OwnerLabel == "Chưa xác định đầu mối" ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+                Text(item.OwnerLabel, item.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
                 Text(item.DueLabel))));
         }
 
-        mergedRanges.Add(new ExecutiveWorkbookRange(1, 1, 1, layout.TotalColumns));
+        mergedRanges.Add(new ExecutiveWorkbookRange(1, 1, 1, DailyGanttFixedColumnCount));
         return DailyWorksheet(
             "Tổng quan",
             rows,
-            layout.TotalColumns,
+            DailyGanttFixedColumnCount,
             mergedRanges,
-            freezeRows: layout.HeaderLastRow,
-            freezeColumns: DailyGanttFixedColumnCount,
+            freezeRows: 11,
+            freezeColumns: 5,
             fitToWidth: 1);
     }
+
+    private static IEnumerable<ExecutiveWorkbookRow> BuildOverviewScheduleRows(ExecutiveProgressReport report)
+    {
+        return report.OverviewTimeline.Select(item =>
+        {
+            var actual = report.DailyGantt.FullRows.FirstOrDefault(row =>
+                row.Kind == (item.Kind == ExecutiveScheduleRowKind.Phase ? ExecutiveDailyGanttRowKind.Phase : ExecutiveDailyGanttRowKind.Milestone)
+                && string.Equals(row.DisplayName, item.DisplayName, StringComparison.Ordinal));
+            return RowOf(
+                Text(item.DisplayName, item.IsCurrent ? ExecutiveWorkbookStyleToken.ReportingBoundary : ExecutiveWorkbookStyleToken.Default),
+                DateCell(item.PlannedStart, ExecutiveWorkbookStyleToken.Plan),
+                DateCell(item.PlannedFinish, ExecutiveWorkbookStyleToken.Plan),
+                DateCell(actual?.ActualStart, ExecutiveWorkbookStyleToken.ActualComplete),
+                DateCell(actual?.ActualFinish ?? actual?.ActualDisplayThrough, ExecutiveWorkbookStyleToken.ActualComplete));
+        });
+    }
+
+    private static ExecutiveWorkbookWorksheet BuildOperating(ExecutiveProgressReport report)
+    {
+        var rows = new List<ExecutiveWorkbookRow>
+        {
+            RowOf(Text("Điều hành 30 ngày", ExecutiveWorkbookStyleToken.Title)),
+            RowOf(Text(report.ProjectName, ExecutiveWorkbookStyleToken.Subtitle)),
+            RowOf(Text($"Cửa sổ: {FormatDate(report.Metadata.SourceReportingDate)} – {FormatDate(report.OperatingItems.Count == 0 ? report.Metadata.SourceReportingDate.AddDays(29) : report.Metadata.SourceReportingDate.AddDays(29))}", ExecutiveWorkbookStyleToken.ReportingBoundary)),
+            RowOf(Text("Ưu tiên theo thứ tự: quyết định / bị chặn → quá hạn → đang thực hiện → theo kế hoạch.", ExecutiveWorkbookStyleToken.Subtitle)),
+            BlankRow(),
+            RowOf(
+                Text("Nhóm", ExecutiveWorkbookStyleToken.Header),
+                Text("Việc cần làm", ExecutiveWorkbookStyleToken.Header),
+                Text("Ảnh hưởng", ExecutiveWorkbookStyleToken.Header),
+                Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
+                Text("Cần xong trước", ExecutiveWorkbookStyleToken.Header),
+                Text("Trạng thái", ExecutiveWorkbookStyleToken.Header),
+                Text("Bối cảnh tiến độ", ExecutiveWorkbookStyleToken.Header))
+        };
+
+        rows.AddRange(report.OperatingItems.Select(item => RowOf(
+            Text(OperatingCategoryLabel(item.Category), OperatingCategoryStyle(item.Category)),
+            Text(item.Action, ExecutiveWorkbookStyleToken.Attention),
+            Text(item.Consequence, ExecutiveWorkbookStyleToken.Attention),
+            Text(item.OwnerLabel, item.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+            Text(item.RequiredDateLabel, item.RequiredDate is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
+            Text(item.StateLabel, StateStyle(item.StateLabel)),
+            Text(item.ScheduleContext, ExecutiveWorkbookStyleToken.Default))));
+        if (report.OperatingItems.Count == 0)
+        {
+            rows.Add(RowOf(Text("Không có việc cần theo dõi trong 30 ngày tới.", ExecutiveWorkbookStyleToken.Unknown)));
+        }
+
+        return new ExecutiveWorkbookWorksheet(
+            "Điều hành 30 ngày",
+            rows,
+            new[] { 20d, 44d, 36d, 22d, 18d, 18d, 34d },
+            Array.Empty<ExecutiveWorkbookRange>(),
+            new ExecutiveWorkbookPane(6, 2),
+            new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Landscape, fitToWidth: 1, fitToHeight: 0),
+            showGridLines: false,
+            zoomPercent: 100,
+            autoFilterRange: new ExecutiveWorkbookRange(6, 1, rows.Count, 7));
+    }
+
+    private static ExecutiveWorkbookWorksheet BuildWbs(ExecutiveProgressReport report)
+    {
+        const int primaryColumnCount = 8;
+        const int totalColumns = 19;
+        var rows = new List<ExecutiveWorkbookRow>
+        {
+            RowOf(Text("WBS dự án", ExecutiveWorkbookStyleToken.Title)),
+            RowOf(Text($"{report.Wbs.ProjectCount} dự án · {report.Wbs.PhaseCount} giai đoạn · {report.Wbs.WorkPackageCount} gói công việc · {report.Wbs.DeliveryCardCount} thẻ công việc", ExecutiveWorkbookStyleToken.Subtitle)),
+            BlankRow(),
+            RowOf(
+                Text("WBS", ExecutiveWorkbookStyleToken.Header),
+                Text("Mã", ExecutiveWorkbookStyleToken.Header),
+                Text("Hạng mục", ExecutiveWorkbookStyleToken.Header),
+                Text("Loại", ExecutiveWorkbookStyleToken.Header),
+                Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
+                Text("Trạng thái", ExecutiveWorkbookStyleToken.Header),
+                Text("% thực tế", ExecutiveWorkbookStyleToken.Header),
+                Text("Cần chú ý", ExecutiveWorkbookStyleToken.Header),
+                Text("Kế hoạch bắt đầu", ExecutiveWorkbookStyleToken.Header),
+                Text("Kế hoạch kết thúc", ExecutiveWorkbookStyleToken.Header),
+                Text("Thực tế bắt đầu", ExecutiveWorkbookStyleToken.Header),
+                Text("Thực tế kết thúc", ExecutiveWorkbookStyleToken.Header),
+                Text("Giờ thực tế", ExecutiveWorkbookStyleToken.Header),
+                Text("Giờ còn lại", ExecutiveWorkbookStyleToken.Header),
+                Text("Tiền nhiệm", ExecutiveWorkbookStyleToken.Header),
+                Text("Phụ thuộc", ExecutiveWorkbookStyleToken.Header),
+                Text("Tóm tắt ghi nhận", ExecutiveWorkbookStyleToken.Header),
+                Text("Nguồn tham chiếu", ExecutiveWorkbookStyleToken.Header),
+                Text("Cập nhật cuối", ExecutiveWorkbookStyleToken.Header))
+        };
+
+        foreach (var item in report.Wbs.Rows)
+        {
+            var isCard = item.Kind == ExecutiveWbsRowKind.DeliveryCard;
+            rows.Add(new ExecutiveWorkbookRow(
+                [
+                    Text(item.WbsNumber, WbsKindStyle(item.Kind)),
+                    Text(item.ReferenceCode, WbsKindStyle(item.Kind)),
+                    Text(item.DisplayName, WbsKindStyle(item.Kind)),
+                    Text(WbsKindLabel(item.Kind), WbsKindStyle(item.Kind)),
+                    Text(item.OwnerLabel, item.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+                    Text(item.StateLabel, StateStyle(item.StateLabel)),
+                    item.ProgressPercent is null ? Text(item.ProgressLabel, ExecutiveWorkbookStyleToken.Unknown) : Number(item.ProgressPercent.Value / 100m, ExecutiveWorkbookStyleToken.ActualComplete, ExecutiveWorkbookNumberFormat.Percentage),
+                    Text(item.AttentionLabel, item.AttentionLabel == "—" ? ExecutiveWorkbookStyleToken.Default : ExecutiveWorkbookStyleToken.Attention),
+                    DateCell(item.PlannedStart, ExecutiveWorkbookStyleToken.Plan),
+                    DateCell(item.PlannedFinish, ExecutiveWorkbookStyleToken.Plan),
+                    DateCell(item.ActualStart, ExecutiveWorkbookStyleToken.ActualComplete),
+                    DateCell(item.ActualFinish, ExecutiveWorkbookStyleToken.ActualComplete),
+                    HoursCell(item.ActualEffortHours),
+                    HoursCell(item.RemainingEffortHours),
+                    Text(item.PredecessorCodes.Count == 0 ? "—" : string.Join(", ", item.PredecessorCodes)),
+                    Text(item.DependencyLabel),
+                    Text(item.EvidenceSummary, item.EvidenceSummary == ReaderFacingTextPolicy.MissingEvidenceLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+                    Text(item.SourceReferenceLabel),
+                    Text(FormatUpdate(item.LastOfficialUpdate), item.LastOfficialUpdate is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default)
+                ],
+                outlineLevel: item.Depth,
+                hidden: isCard,
+                collapsed: item.Kind == ExecutiveWbsRowKind.WorkPackage));
+        }
+
+        return new ExecutiveWorkbookWorksheet(
+            "WBS",
+            rows,
+            new[] { 10d, 16d, 42d, 18d, 22d, 18d, 12d, 18d, 15d, 15d, 15d, 15d, 13d, 13d, 18d, 18d, 30d, 30d, 20d },
+            Array.Empty<ExecutiveWorkbookRange>(),
+            new ExecutiveWorkbookPane(4, primaryColumnCount),
+            new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Landscape, fitToWidth: 1, fitToHeight: 0),
+            showGridLines: false,
+            zoomPercent: 100,
+            columnGroups:
+            [
+                new ExecutiveWorkbookColumnGroup(9, 10, 1, hidden: true, collapsed: true),
+                new ExecutiveWorkbookColumnGroup(11, 14, 1, hidden: true, collapsed: true),
+                new ExecutiveWorkbookColumnGroup(15, 16, 1, hidden: true, collapsed: true),
+                new ExecutiveWorkbookColumnGroup(17, 19, 1, hidden: true, collapsed: true)
+            ],
+            autoFilterRange: new ExecutiveWorkbookRange(4, 1, rows.Count, totalColumns),
+            outlineSummaryBelow: false,
+            outlineSummaryRight: false);
+    }
+
+    private static ExecutiveWorkbookWorksheet BuildMetadata(ExecutiveProgressReport report)
+    {
+        var metadata = report.Metadata;
+        var rows = new List<ExecutiveWorkbookRow>
+        {
+            RowOf(Text("Thông tin báo cáo", ExecutiveWorkbookStyleToken.Title)),
+            RowOf(Text("Authority, nguồn và giới hạn của bản báo cáo", ExecutiveWorkbookStyleToken.Subtitle)),
+            BlankRow(),
+            RowOf(Text("Quyền hạn và nguồn", ExecutiveWorkbookStyleToken.Header), Text(string.Empty, ExecutiveWorkbookStyleToken.Header)),
+            MetadataRow("Phân loại nguồn", metadata.AuthorityLabel),
+            MetadataRow("Source identity", metadata.SourceIdentity),
+            MetadataRow("Snapshot", metadata.SnapshotId),
+            MetadataRow("Project", metadata.ProjectId),
+            MetadataRow("Baseline", metadata.BaselineId),
+            MetadataRow("Baseline version", metadata.BaselineVersion ?? ReaderFacingTextPolicy.MissingEvidenceLabel),
+            MetadataRow("Contract", metadata.ContractVersion),
+            MetadataRow("Register revision", metadata.RegisterRevision.ToString(CultureInfo.InvariantCulture)),
+            MetadataRow("Ngày báo cáo", FormatDate(metadata.SourceReportingDate)),
+            MetadataRow("Ngày phân tích đến", FormatDate(metadata.AnalysisAsOfDate)),
+            BlankRow(),
+            RowOf(Text("Khoảng kế hoạch", ExecutiveWorkbookStyleToken.Header), Text(string.Empty, ExecutiveWorkbookStyleToken.Header)),
+            MetadataRow("Bắt đầu kế hoạch", FormatDate(metadata.PlanningStart)),
+            MetadataRow("Kết thúc kế hoạch", FormatDate(metadata.PlanningFinish)),
+            BlankRow(),
+            RowOf(Text("Giới hạn sử dụng", ExecutiveWorkbookStyleToken.Header), Text(string.Empty, ExecutiveWorkbookStyleToken.Header))
+        };
+        rows.AddRange(metadata.Limitations.Select(limit => RowOf(Text("•", ExecutiveWorkbookStyleToken.Unknown), Text(limit))));
+
+        return new ExecutiveWorkbookWorksheet(
+            "Thông tin báo cáo",
+            rows,
+            new[] { 28d, 80d },
+            [
+                new ExecutiveWorkbookRange(1, 1, 1, 2),
+                new ExecutiveWorkbookRange(2, 1, 2, 2),
+                new ExecutiveWorkbookRange(4, 1, 4, 2),
+                new ExecutiveWorkbookRange(16, 1, 16, 2),
+                new ExecutiveWorkbookRange(20, 1, 20, 2)
+            ],
+            new ExecutiveWorkbookPane(4, 1),
+            new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Portrait, fitToWidth: 1, fitToHeight: 0),
+            showGridLines: false,
+            zoomPercent: 100);
+    }
+
+    private static ExecutiveWorkbookRow MetadataRow(string label, string value) =>
+        RowOf(Text(label, ExecutiveWorkbookStyleToken.Header), Text(value));
+
+    private static string WbsKindLabel(ExecutiveWbsRowKind kind) => kind switch
+    {
+        ExecutiveWbsRowKind.Project => "Dự án",
+        ExecutiveWbsRowKind.Phase => "Giai đoạn",
+        ExecutiveWbsRowKind.WorkPackage => "Gói công việc",
+        ExecutiveWbsRowKind.DeliveryCard => "Thẻ công việc",
+        _ => "Hạng mục"
+    };
+
+    private static ExecutiveWorkbookStyleToken WbsKindStyle(ExecutiveWbsRowKind kind) => kind switch
+    {
+        ExecutiveWbsRowKind.Project => ExecutiveWorkbookStyleToken.ProjectHierarchy,
+        ExecutiveWbsRowKind.Phase => ExecutiveWorkbookStyleToken.PhaseHierarchy,
+        ExecutiveWbsRowKind.WorkPackage => ExecutiveWorkbookStyleToken.WorkPackageHierarchy,
+        ExecutiveWbsRowKind.DeliveryCard => ExecutiveWorkbookStyleToken.DeliveryCardHierarchy,
+        _ => ExecutiveWorkbookStyleToken.Default
+    };
+
+    private static string OperatingCategoryLabel(ExecutiveOperatingCategory category) => category switch
+    {
+        ExecutiveOperatingCategory.DecisionOrBlocker => "Quyết định / bị chặn",
+        ExecutiveOperatingCategory.OverdueUnfinished => "Quá hạn",
+        ExecutiveOperatingCategory.Active => "Đang thực hiện",
+        ExecutiveOperatingCategory.PlannedOrMilestone => "Theo kế hoạch",
+        _ => "Theo dõi"
+    };
+
+    private static ExecutiveWorkbookStyleToken OperatingCategoryStyle(ExecutiveOperatingCategory category) => category switch
+    {
+        ExecutiveOperatingCategory.DecisionOrBlocker or ExecutiveOperatingCategory.OverdueUnfinished => ExecutiveWorkbookStyleToken.Attention,
+        ExecutiveOperatingCategory.Active => ExecutiveWorkbookStyleToken.ActualComplete,
+        _ => ExecutiveWorkbookStyleToken.Plan
+    };
 
     private static ExecutiveWorkbookWorksheet BuildDailyGantt(ExecutiveProgressReport report)
     {
         var rows = new List<ExecutiveWorkbookRow>
         {
-            RowOf(Text("Gantt theo ngày", ExecutiveWorkbookStyleToken.Title)),
+            RowOf(Text("Gantt", ExecutiveWorkbookStyleToken.Title)),
             RowOf(Text(report.ProjectName, ExecutiveWorkbookStyleToken.Subtitle)),
-            RowOf(Text(BuildProvenance(report), ExecutiveWorkbookStyleToken.Subtitle)),
+            RowOf(Text($"Cập nhật đến {FormatDate(report.SourceReportingDate)}", ExecutiveWorkbookStyleToken.ReportingBoundary)),
             RowOf(
                 Text("Kế hoạch", ExecutiveWorkbookStyleToken.Plan),
                 Text("Thực tế", ExecutiveWorkbookStyleToken.ActualComplete),
@@ -142,7 +357,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
         mergedRanges.Add(new ExecutiveWorkbookRange(1, 1, 1, layout.TotalColumns));
 
         return DailyWorksheet(
-            "Gantt theo ngày",
+            "Gantt",
             rows,
             layout.TotalColumns,
             mergedRanges,
@@ -338,9 +553,16 @@ internal sealed class ExecutiveProgressWorkbookComposer
     {
         var laneStyle = row.ActualDisplayThrough is not null
             ? ExecutiveWorkbookStyleToken.ActualComplete
+            : row.ActualPresentationKind == ExecutiveActualPresentationKind.EffortOnly
+                ? ExecutiveWorkbookStyleToken.ActualComplete
             : row.ForecastFinish is not null && row.ForecastFinish > analysisAsOfDate
                 ? ExecutiveWorkbookStyleToken.Forecast
                 : ExecutiveWorkbookStyleToken.Unknown;
+        var laneLabel = row.ActualPresentationKind == ExecutiveActualPresentationKind.EffortOnly
+            ? "● Có ghi nhận"
+            : row.ActualPresentationKind == ExecutiveActualPresentationKind.None
+                ? ReaderFacingTextPolicy.MissingEvidenceLabel
+                : "Thực tế";
         var cells = new List<ExecutiveWorkbookCell>
         {
             Text(string.Empty),
@@ -350,7 +572,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
             Text(string.Empty),
             Text(string.Empty),
             Text(string.Empty),
-            Text("Thực tế", laneStyle)
+            Text(laneLabel, laneStyle)
         };
         cells.AddRange(dates.Select(date => TimelineActualCell(row, date, sourceReportingDate, analysisAsOfDate, axisStart, axisFinish, useContinuationMarkers)));
         return cells;
@@ -413,12 +635,19 @@ internal sealed class ExecutiveProgressWorkbookComposer
         DateOnly axisFinish,
         bool useContinuationMarkers)
     {
-        if (IsWithin(date, row.ActualStart, row.ActualDisplayThrough))
+        if (row.ActualPresentationKind is ExecutiveActualPresentationKind.RecordedInterval or ExecutiveActualPresentationKind.OpenRecordedInterval
+            && IsWithin(date, row.ActualStart, row.ActualDisplayThrough))
         {
             return Text(
                 useContinuationMarkers ? ContinuationMarker(date, row.ActualStart, row.ActualDisplayThrough, axisStart, axisFinish) : string.Empty,
                 ExecutiveWorkbookStyleToken.ActualComplete,
                 isReportingBoundary: date == sourceReportingDate);
+        }
+
+        if (row.ActualPresentationKind == ExecutiveActualPresentationKind.CompletionPoint
+            && row.ActualFinish == date)
+        {
+            return Text("✓", ExecutiveWorkbookStyleToken.ActualComplete, isReportingBoundary: date == sourceReportingDate);
         }
 
         var forecastStart = analysisAsOfDate.AddDays(1);
@@ -695,12 +924,17 @@ internal sealed class ExecutiveProgressWorkbookComposer
         var rows = new List<ExecutiveWorkbookRow>
         {
             RowOf(Text("Chi tiết công việc", ExecutiveWorkbookStyleToken.Title)),
-            RowOf(Text($"Ngày báo cáo: {FormatDate(report.SourceReportingDate)}", ExecutiveWorkbookStyleToken.ReportingBoundary)),
+            RowOf(Text($"Cập nhật đến {FormatDate(report.SourceReportingDate)} · mỗi dòng là một thẻ công việc", ExecutiveWorkbookStyleToken.ReportingBoundary)),
             BlankRow(),
             RowOf(
-                Text("Công việc", ExecutiveWorkbookStyleToken.Header),
+                Text("Hạng mục", ExecutiveWorkbookStyleToken.Header),
                 Text("Giai đoạn", ExecutiveWorkbookStyleToken.Header),
                 Text("Gói công việc", ExecutiveWorkbookStyleToken.Header),
+                Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
+                Text("Trạng thái", ExecutiveWorkbookStyleToken.Header),
+                Text("Ghi nhận", ExecutiveWorkbookStyleToken.Header),
+                Text("Cần chú ý", ExecutiveWorkbookStyleToken.Header),
+                Text("% thực tế", ExecutiveWorkbookStyleToken.Header),
                 Text("Bắt đầu kế hoạch", ExecutiveWorkbookStyleToken.Header),
                 Text("Kết thúc kế hoạch", ExecutiveWorkbookStyleToken.Header),
                 Text("Bắt đầu thực tế", ExecutiveWorkbookStyleToken.Header),
@@ -708,17 +942,23 @@ internal sealed class ExecutiveProgressWorkbookComposer
                 Text("Kết thúc dự báo", ExecutiveWorkbookStyleToken.Header),
                 Text("Giờ thực tế", ExecutiveWorkbookStyleToken.Header),
                 Text("Giờ còn lại", ExecutiveWorkbookStyleToken.Header),
-                Text("% thực tế", ExecutiveWorkbookStyleToken.Header),
-                Text("Trạng thái ghi nhận", ExecutiveWorkbookStyleToken.Header),
-                Text("Tình trạng thực thi", ExecutiveWorkbookStyleToken.Header),
-                Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
+                Text("Tiền nhiệm", ExecutiveWorkbookStyleToken.Header),
+                Text("Phụ thuộc", ExecutiveWorkbookStyleToken.Header),
                 Text("Cập nhật cuối", ExecutiveWorkbookStyleToken.Header),
-                Text("Mã tham chiếu", ExecutiveWorkbookStyleToken.Header))
+                Text("Mã tham chiếu", ExecutiveWorkbookStyleToken.Header),
+                Text("Nguồn tham chiếu", ExecutiveWorkbookStyleToken.Header))
         };
         rows.AddRange(report.DeliveryCardDetails.Select(detail => RowOf(
             Text(detail.Description),
             Text(detail.PhaseName),
             Text(detail.WorkPackageName),
+            Text(detail.OwnerLabel, detail.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+            Text(detail.StateLabel, StateStyle(detail.StateLabel)),
+            Text(detail.RecordingLabel, detail.RecordingLabel == "Có ghi nhận" ? ExecutiveWorkbookStyleToken.ActualComplete : ExecutiveWorkbookStyleToken.Unknown),
+            Text(detail.AttentionLabel, detail.AttentionLabel == "—" ? ExecutiveWorkbookStyleToken.Default : ExecutiveWorkbookStyleToken.Attention),
+            detail.ProgressPercent is null
+                ? Text(detail.ProgressLabel, ExecutiveWorkbookStyleToken.Unknown)
+                : Number(detail.ProgressPercent.Value / 100m, ExecutiveWorkbookStyleToken.ActualComplete, ExecutiveWorkbookNumberFormat.Percentage),
             DateCell(detail.PlannedStart, ExecutiveWorkbookStyleToken.Plan),
             DateCell(detail.PlannedFinish, ExecutiveWorkbookStyleToken.Plan),
             DateCell(detail.ActualStart, ExecutiveWorkbookStyleToken.ActualComplete),
@@ -726,14 +966,11 @@ internal sealed class ExecutiveProgressWorkbookComposer
             DateCell(detail.ForecastFinish, ExecutiveWorkbookStyleToken.Forecast),
             HoursCell(detail.ActualEffortHours),
             HoursCell(detail.RemainingEffortHours),
-            detail.ProgressPercent is null
-                ? Text(detail.ProgressLabel, ExecutiveWorkbookStyleToken.Unknown)
-                : Number(detail.ProgressPercent.Value / 100m, ExecutiveWorkbookStyleToken.ActualComplete, ExecutiveWorkbookNumberFormat.Percentage),
-            Text(detail.RecordingLabel, detail.RecordingLabel == "Đã ghi nhận" ? ExecutiveWorkbookStyleToken.ActualComplete : ExecutiveWorkbookStyleToken.Unknown),
-            Text(detail.StateLabel, StateStyle(detail.StateLabel)),
-            Text(detail.OwnerLabel, detail.OwnerLabel == "Chưa xác định đầu mối" ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+            Text(detail.PredecessorCodes.Count == 0 ? "—" : string.Join(", ", detail.PredecessorCodes)),
+            Text(detail.DependencyLabel),
             Text(FormatUpdate(detail.LastOfficialUpdate), detail.LastOfficialUpdate is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
-            Text(detail.ReferenceCode))));
+            Text(detail.ReferenceCode),
+            Text(detail.SourceReferenceLabel))));
         if (report.DeliveryCardDetails.Count == 0)
         {
             rows.Add(RowOf(Text("Chưa có dữ liệu công việc", ExecutiveWorkbookStyleToken.Unknown)));
@@ -742,14 +979,15 @@ internal sealed class ExecutiveProgressWorkbookComposer
         return Worksheet(
             "Chi tiết công việc",
             rows,
-            new[] { 40d, 24d, 28d, 15d, 15d, 15d, 15d, 15d, 14d, 14d, 14d, 18d, 22d, 24d, 20d, 18d },
+            new[] { 40d, 24d, 28d, 22d, 18d, 18d, 18d, 12d, 15d, 15d, 15d, 15d, 15d, 14d, 14d, 18d, 18d, 20d, 18d, 30d },
             freezeRows: 4,
             freezeColumns: 1,
             mergedRanges:
             [
-                new ExecutiveWorkbookRange(1, 1, 1, 16),
-                new ExecutiveWorkbookRange(2, 1, 2, 16)
-            ]);
+                new ExecutiveWorkbookRange(1, 1, 1, 20),
+                new ExecutiveWorkbookRange(2, 1, 2, 20)
+            ],
+            autoFilterRange: new ExecutiveWorkbookRange(4, 1, rows.Count, 20));
     }
 
     private static ExecutiveWorkbookWorksheet Worksheet(
@@ -758,7 +996,8 @@ internal sealed class ExecutiveProgressWorkbookComposer
         IReadOnlyList<double> widths,
         int freezeRows,
         int freezeColumns,
-        IReadOnlyList<ExecutiveWorkbookRange>? mergedRanges = null) =>
+        IReadOnlyList<ExecutiveWorkbookRange>? mergedRanges = null,
+        ExecutiveWorkbookRange? autoFilterRange = null) =>
         new(
             name,
             rows,
@@ -767,7 +1006,8 @@ internal sealed class ExecutiveProgressWorkbookComposer
             new ExecutiveWorkbookPane(freezeRows, freezeColumns),
             new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Landscape, fitToWidth: 1, fitToHeight: 0),
             showGridLines: false,
-            zoomPercent: 100);
+            zoomPercent: 100,
+            autoFilterRange: autoFilterRange);
 
     private static IReadOnlyList<ExecutiveWorkbookRow> TimelineAxisRows(TimelineAxis axis, int fixedColumnCount)
     {

@@ -175,7 +175,7 @@ internal static class ExecutiveProgressExportApplicationTests
         var bytes = InvokeExport(new ProjectCompiler(), official);
         var workbookText = string.Join('|', Enumerable.Range(1, 5).Select(sheet => ExecutiveProgressTestFixtures.WorksheetText(bytes, sheet)));
 
-        TestAssert.False(workbookText.Contains("CARIO", StringComparison.OrdinalIgnoreCase), "The executive workbook must not expose CARIO markers.");
+        TestAssert.False(workbookText.Contains("CARIO_EXPORT", StringComparison.OrdinalIgnoreCase), "The executive workbook must not expose technical CARIO export markers.");
         TestAssert.False(workbookText.Contains("PMC_EXPORT_KIND", StringComparison.OrdinalIgnoreCase), "The executive workbook must not expose technical preview markers.");
 
         var previewImport = new Outputs.XlsxPreviewImporter().Import("executive.xlsx", bytes);

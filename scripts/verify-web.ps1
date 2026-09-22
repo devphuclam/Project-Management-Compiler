@@ -427,6 +427,7 @@ try {
         'xl/worksheets/sheet3.xml',
         'xl/worksheets/sheet4.xml',
         'xl/worksheets/sheet5.xml',
+        'xl/worksheets/sheet6.xml',
         'xl/styles.xml'
     )) {
         Assert-Condition ($executiveEntryNames -contains $required) "Executive XLSX package is missing '$required'."
@@ -439,9 +440,9 @@ try {
         $executiveWorkbookReader.Dispose()
     }
     $executiveSheetNames = @($executiveWorkbookXml.SelectNodes("//*[local-name()='sheet']") | ForEach-Object { $_.name })
-    Assert-Condition (([string]::Join(',', $executiveSheetNames)) -eq 'Tổng quan,Gantt theo ngày,30 ngày tới,Vấn đề cần xử lý,Chi tiết công việc') 'Executive workbook must use the five approved reader-facing sheets in order.'
+    Assert-Condition (([string]::Join(',', $executiveSheetNames)) -eq 'Tổng quan,Điều hành 30 ngày,Gantt,WBS,Chi tiết công việc,Thông tin báo cáo') 'Executive workbook must use the six approved reader-facing sheets in order.'
     $executiveSheetXml = @{}
-    foreach ($sheetNumber in 1..5) {
+    foreach ($sheetNumber in 1..6) {
         $sheetReader = [IO.StreamReader]::new($executiveArchive.GetEntry("xl/worksheets/sheet$sheetNumber.xml").Open())
         try {
             $executiveSheetXml[$sheetNumber] = $sheetReader.ReadToEnd()
@@ -451,12 +452,12 @@ try {
         }
     }
     $executiveOverviewXml = [xml]$executiveSheetXml[1]
-    $executiveFirstFourSheets = [string]::Join('|', @(1..4 | ForEach-Object { $executiveSheetXml[$_] }))
+    $executiveReaderSheets = [string]::Join('|', @(1..5 | ForEach-Object { $executiveSheetXml[$_] }))
     Assert-Condition ($executiveOverviewXml.OuterXml.Contains('Báo cáo điều hành tiến độ', [StringComparison]::Ordinal) -and $executiveOverviewXml.OuterXml.Contains('Ngày báo cáo', [StringComparison]::Ordinal)) 'Executive overview must retain the management title and reporting-date context.'
-    Assert-Condition ($executiveSheetXml[2].Contains('Kế hoạch', [StringComparison]::Ordinal) -and $executiveSheetXml[2].Contains('Thực tế', [StringComparison]::Ordinal)) 'Executive daily Gantt must retain paired Plan and Actual reader lanes.'
-    Assert-Condition ($executiveSheetXml[3].Contains('30 ngày tới', [StringComparison]::Ordinal) -and $executiveSheetXml[3].Contains('Kế hoạch', [StringComparison]::Ordinal)) 'Executive near-term sheet must retain its exact operating horizon and Gantt legend.'
+    Assert-Condition ($executiveSheetXml[2].Contains('Điều hành 30 ngày', [StringComparison]::Ordinal) -and $executiveSheetXml[2].Contains('Việc cần làm', [StringComparison]::Ordinal)) 'Executive operating sheet must retain its exact operating horizon and reader-facing action columns.'
+    Assert-Condition ($executiveSheetXml[3].Contains('Kế hoạch', [StringComparison]::Ordinal) -and $executiveSheetXml[3].Contains('Thực tế', [StringComparison]::Ordinal)) 'Executive daily Gantt must retain paired Plan and Actual reader lanes.'
     Assert-Condition ($executiveSheetXml[5].Contains('Giờ thực tế', [StringComparison]::Ordinal) -and $executiveSheetXml[5].Contains('Mã tham chiếu', [StringComparison]::Ordinal)) 'Executive detail sheet must retain Actual effort and short-reference columns.'
-    Assert-Condition (-not $executiveFirstFourSheets.Contains('CARIO', [StringComparison]::OrdinalIgnoreCase) -and -not $executiveFirstFourSheets.Contains('PMC_', [StringComparison]::Ordinal)) 'Executive reader sheets must not contain technical CARIO/provenance markers.'
+    Assert-Condition (-not $executiveReaderSheets.Contains('CARIO_EXPORT', [StringComparison]::OrdinalIgnoreCase) -and -not $executiveReaderSheets.Contains('PMC_', [StringComparison]::Ordinal)) 'Executive reader sheets must not contain technical CARIO/provenance markers.'
     $executiveArchive.Dispose()
     $executiveArchive = $null
     $executiveFileStream.Dispose()

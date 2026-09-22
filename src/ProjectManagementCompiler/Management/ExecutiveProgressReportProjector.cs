@@ -65,10 +65,12 @@ public sealed class ExecutiveProgressReportProjector
             .ToArray();
 
         var workPackageSchedule = ProjectWorkPackages(project, sourceReportingDate);
-        var deliveryCardDetails = ProjectDeliveryCards(project);
         var allAttention = ProjectAttention(project, result.Analysis, sourceReportingDate, nextMilestone);
+        var deliveryCardDetails = ProjectDeliveryCards(project, allAttention);
         var dailyGantt = new ExecutiveDailyGanttProjector().Build(result);
         var dailyProject = dailyGantt.FullRows.Single(row => row.Kind == ExecutiveDailyGanttRowKind.Project);
+        var operating = new ExecutiveOperatingProjector().Build(result, dailyGantt, allAttention);
+        var wbs = new ExecutiveWbsProjector().Build(result);
 
         return new ExecutiveProgressReport
         {
@@ -101,7 +103,10 @@ public sealed class ExecutiveProgressReportProjector
             AllAttention = allAttention,
             OverviewTimeline = overviewTimeline,
             WorkPackageSchedule = workPackageSchedule,
-            DeliveryCardDetails = deliveryCardDetails
+            DeliveryCardDetails = deliveryCardDetails,
+            OperatingItems = operating.Items,
+            Wbs = wbs,
+            Metadata = ProjectMetadata(project, sourceReportingDate, analysisAsOfDate)
         };
     }
 
@@ -132,7 +137,9 @@ public sealed class ExecutiveProgressReportProjector
             .ToArray();
     }
 
-    private static IReadOnlyList<ExecutiveDeliveryCardDetail> ProjectDeliveryCards(CanonicalProject project)
+    private static IReadOnlyList<ExecutiveDeliveryCardDetail> ProjectDeliveryCards(
+        CanonicalProject project,
+        IReadOnlyList<ExecutiveAttentionItem> attention)
     {
         var phases = project.Phases.ToDictionary(phase => phase.Id, StringComparer.OrdinalIgnoreCase);
         var workPackages = project.WorkPackages.ToDictionary(workPackage => workPackage.Id, StringComparer.OrdinalIgnoreCase);
@@ -155,6 +162,8 @@ public sealed class ExecutiveProgressReportProjector
                         0,
                         MidpointRounding.AwayFromZero))
                     : (int?)null;
+                var attentionItem = attention.FirstOrDefault(item =>
+                    item.DeduplicationKey.Equals($"work-item:{card.Id}", StringComparison.OrdinalIgnoreCase));
                 return new ExecutiveDeliveryCardDetail
                 {
                     Description = ReaderFacingTextPolicy.CleanName(card.Name, card.Id),
@@ -171,9 +180,20 @@ public sealed class ExecutiveProgressReportProjector
                     RemainingEffortHours = isRecorded ? record!.RemainingEffortHours : null,
                     ProgressPercent = progressPercent,
                     ProgressLabel = progressPercent is null ? ReaderFacingTextPolicy.MissingEvidenceLabel : $"{progressPercent}%",
-                    RecordingLabel = isRecorded ? "Đã ghi nhận" : ReaderFacingTextPolicy.MissingEvidenceLabel,
+                    RecordingLabel = isRecorded ? "Có ghi nhận" : ReaderFacingTextPolicy.MissingEvidenceLabel,
                     OwnerLabel = ResolveDeliveryCardOwner(project, card.Id),
-                    StateLabel = isRecorded ? ExecutionLabel(record!.ExecutionState) : "Chưa cập nhật",
+                    StateLabel = isRecorded ? ExecutionLabel(record!.ExecutionState) : ReaderFacingTextPolicy.MissingEvidenceLabel,
+                    AttentionLabel = attentionItem?.Impact ?? "—",
+                    PredecessorCodes = project.Dependencies
+                        .Where(dependency => string.Equals(dependency.SubjectId, card.Id, StringComparison.OrdinalIgnoreCase))
+                        .Select(dependency => dependency.PredecessorId)
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    DependencyLabel = project.Dependencies.Any(dependency => string.Equals(dependency.SubjectId, card.Id, StringComparison.OrdinalIgnoreCase))
+                        ? "Đã xác định"
+                        : "Không có tiền nhiệm",
+                    SourceReferenceLabel = RelativeSourceReference(card.SourceReferences),
                     LastOfficialUpdate = isRecorded ? record!.LastUpdatedAt : null,
                     ReferenceCode = card.Id,
                     SourceOrder = sourceOrder
@@ -487,6 +507,47 @@ public sealed class ExecutiveProgressReportProjector
             .ToArray();
     }
 
+    private static ExecutiveReportMetadata ProjectMetadata(
+        CanonicalProject project,
+        DateOnly sourceReportingDate,
+        DateOnly analysisAsOfDate)
+    {
+        var metadata = project.ImportMetadata!;
+        return new ExecutiveReportMetadata
+        {
+            AuthorityLabel = "Nguồn chính thức đã kiểm tra",
+            SourceIdentity = metadata.SourceIdentity,
+            SnapshotId = metadata.SnapshotId,
+            ProjectId = metadata.ProjectId,
+            BaselineId = metadata.BaselineId,
+            BaselineVersion = metadata.BaselineVersion,
+            ContractVersion = metadata.ContractVersion,
+            RegisterRevision = metadata.RegisterRevision,
+            SourceReportingDate = sourceReportingDate,
+            AnalysisAsOfDate = analysisAsOfDate,
+            PlanningStart = project.Baseline.PlanningStart,
+            PlanningFinish = project.Baseline.PlanningFinish,
+            Limitations =
+            [
+                "Chỉ hiển thị tiến độ đã có bằng chứng chính thức.",
+                "Ngày thực tế không được suy ra từ kế hoạch hoặc phần trăm tiến độ.",
+                "Báo cáo là đầu ra trình bày, không dùng để nhập ngược vào dự án."
+            ]
+        };
+    }
+
+    private static string RelativeSourceReference(IReadOnlyList<SourceReference> references)
+    {
+        var reference = references.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value.RelativeFile));
+        if (reference is null || Path.IsPathFullyQualified(reference.RelativeFile))
+        {
+            return ReaderFacingTextPolicy.MissingEvidenceLabel;
+        }
+
+        var value = reference.RelativeFile.Replace('\\', '/');
+        return string.IsNullOrWhiteSpace(reference.Section) ? value : $"{value} · {reference.Section}";
+    }
+
     private static IReadOnlyList<ManagementEvidenceObservation> ValidEvidence(CanonicalProject project)
     {
         var reconciliations = project.ManagementEvidence.Reconciliations
@@ -719,7 +780,7 @@ public sealed class ExecutiveProgressReportProjector
             {
                 Code = ExecutiveConditionCode.ScheduleUnknown,
                 Label = "Chưa đánh giá",
-                Detail = "Chưa đủ dữ liệu để đánh giá tình trạng lịch trình.",
+                Detail = "Chưa ghi nhận đủ dữ liệu lịch trình.",
                 Tone = ExecutiveConditionTone.Unknown
             };
     }
@@ -742,7 +803,7 @@ public sealed class ExecutiveProgressReportProjector
             {
                 Code = ExecutiveConditionCode.ReadinessUnknown,
                 Label = "Chưa đánh giá",
-                Detail = "Chưa đủ bằng chứng để đánh giá mức sẵn sàng.",
+                Detail = "Chưa ghi nhận đủ bằng chứng để đánh giá mức sẵn sàng.",
                 Tone = ExecutiveConditionTone.Unknown
             };
         }
@@ -809,7 +870,7 @@ public sealed class ExecutiveProgressReportProjector
             {
                 Code = ExecutiveConditionCode.ReadinessUnknown,
                 Label = "Chưa đánh giá",
-                Detail = "Chưa đủ bằng chứng để đánh giá mức sẵn sàng.",
+                Detail = "Chưa ghi nhận đủ bằng chứng để đánh giá mức sẵn sàng.",
                 Tone = ExecutiveConditionTone.Unknown
             };
     }
@@ -838,8 +899,8 @@ public sealed class ExecutiveProgressReportProjector
         {
             RecordedPercent = percent,
             Statement = percent is null
-                ? "Chưa đủ dữ liệu để tính % hoàn thành"
-                : $"Đã ghi nhận {percent}% theo nỗ lực thực tế và còn lại.",
+                ? "Chưa ghi nhận đủ dữ liệu tiến độ."
+                : $"Tiến độ có bằng chứng: {percent}%.",
             ActualEffortHours = actual,
             RemainingEffortHours = remaining,
             CompletedCount = completed,

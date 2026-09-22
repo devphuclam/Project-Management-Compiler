@@ -221,6 +221,7 @@ public sealed class ExecutiveDailyGanttProjector
             .Concat(fullRows.SelectMany(row => new[]
             {
                 row.ActualStart,
+                row.ActualFinish,
                 row.ActualDisplayThrough,
                 row.ForecastFinish
             }))
@@ -312,6 +313,7 @@ public sealed class ExecutiveDailyGanttProjector
         var actualStart = isRecorded ? record!.ActualStart : null;
         var actualFinish = isRecorded ? record!.ActualFinish : null;
         var actualDisplayThrough = DirectActualDisplayThrough(state, actualStart, actualFinish, analysisAsOfDate);
+        var actualPresentationKind = ClassifyActual(record, state, actualStart, actualFinish, actualDisplayThrough);
         var forecastFinish = isRecorded ? DateOnlyFromOffset(record!.ForecastFinish) : null;
         var progressEligible = isRecorded && IsProgressEligible(record!);
         int? progressPercent = progressEligible
@@ -343,6 +345,10 @@ public sealed class ExecutiveDailyGanttProjector
             ActualStart = actualStart,
             ActualFinish = actualFinish,
             ActualDisplayThrough = actualDisplayThrough,
+            ActualPresentationKind = actualPresentationKind,
+            ActualEvidenceLabel = isRecorded ? "Có ghi nhận" : ReaderFacingTextPolicy.MissingEvidenceLabel,
+            ActualEffortHours = isRecorded ? record!.ActualEffortHours : null,
+            RemainingEffortHours = isRecorded ? record!.RemainingEffortHours : null,
             ForecastFinish = forecastFinish,
             ProgressPercent = progressPercent,
             ProgressLabel = ProgressLabel(progressPercent),
@@ -402,6 +408,15 @@ public sealed class ExecutiveDailyGanttProjector
             && child.Row.ActualStart is not null
             && child.Row.ActualFinish is not null
             && child.Row.ActualFinish >= child.Row.ActualStart);
+        var hasFinishOnly = children.Any(child => child.Row.ActualPresentationKind == ExecutiveActualPresentationKind.CompletionPoint);
+        var hasEffortOnly = children.Any(child => child.Row.ActualPresentationKind == ExecutiveActualPresentationKind.EffortOnly);
+        var actualPresentationKind = ClassifyRollupActual(
+            children,
+            hasActivityStart,
+            hasOpenActual,
+            hasCompletedFinish,
+            hasFinishOnly,
+            hasEffortOnly);
         var incomplete = children.Where(child => !child.IsRecorded || child.State != ExecutionState.Completed).ToArray();
         DateOnly? forecastFinish = incomplete.Length > 0 && incomplete.All(child => child.Row.ForecastFinish is not null)
             ? incomplete.Max(child => child.Row.ForecastFinish!.Value)
@@ -420,6 +435,10 @@ public sealed class ExecutiveDailyGanttProjector
             ActualStart = hasActivityStart ? activityStart : null,
             ActualFinish = null,
             ActualDisplayThrough = hasOpenActual ? analysisAsOfDate : hasCompletedFinish ? completedFinish : null,
+            ActualPresentationKind = actualPresentationKind,
+            ActualEvidenceLabel = recorded > 0 ? "Có ghi nhận" : ReaderFacingTextPolicy.MissingEvidenceLabel,
+            ActualEffortHours = SumKnown(children.Select(child => child.Row.ActualEffortHours)),
+            RemainingEffortHours = SumKnown(children.Select(child => child.Row.RemainingEffortHours)),
             ForecastFinish = forecastFinish,
             ProgressPercent = percentage,
             ProgressLabel = ProgressLabel(percentage),
@@ -562,6 +581,88 @@ public sealed class ExecutiveDailyGanttProjector
         && record.ActualEffortHours >= 0m
         && record.RemainingEffortHours >= 0m
         && record.ActualEffortHours + record.RemainingEffortHours > 0m;
+
+    private static ExecutiveActualPresentationKind ClassifyActual(
+        EffectiveExecutionRecord? record,
+        ExecutionState? state,
+        DateOnly? actualStart,
+        DateOnly? actualFinish,
+        DateOnly? actualDisplayThrough)
+    {
+        if (record?.IsRecorded != true)
+        {
+            return ExecutiveActualPresentationKind.None;
+        }
+
+        if (actualStart is not null && actualFinish is not null && actualFinish >= actualStart)
+        {
+            return ExecutiveActualPresentationKind.RecordedInterval;
+        }
+
+        if (state == ExecutionState.InProgress
+            && actualStart is not null
+            && actualFinish is null
+            && actualDisplayThrough is not null)
+        {
+            return ExecutiveActualPresentationKind.OpenRecordedInterval;
+        }
+
+        if (actualStart is null && actualFinish is not null)
+        {
+            return ExecutiveActualPresentationKind.CompletionPoint;
+        }
+
+        if (actualStart is null
+            && actualFinish is null
+            && (record.ActualEffortHours is not null || record.RemainingEffortHours is not null))
+        {
+            return ExecutiveActualPresentationKind.EffortOnly;
+        }
+
+        return ExecutiveActualPresentationKind.None;
+    }
+
+    private static ExecutiveActualPresentationKind ClassifyRollupActual(
+        IReadOnlyList<CardContext> children,
+        bool hasActivityStart,
+        bool hasOpenActual,
+        bool hasCompletedFinish,
+        bool hasFinishOnly,
+        bool hasEffortOnly)
+    {
+        if (children.Count == 0 || children.All(child => !child.IsRecorded))
+        {
+            return ExecutiveActualPresentationKind.None;
+        }
+
+        if (children.All(child => child.Row.ActualPresentationKind == ExecutiveActualPresentationKind.RecordedInterval))
+        {
+            return ExecutiveActualPresentationKind.RecordedInterval;
+        }
+
+        if (hasOpenActual && hasActivityStart)
+        {
+            return ExecutiveActualPresentationKind.OpenRecordedInterval;
+        }
+
+        if (hasFinishOnly && !hasActivityStart && children.All(child => child.Row.ActualPresentationKind == ExecutiveActualPresentationKind.CompletionPoint))
+        {
+            return ExecutiveActualPresentationKind.CompletionPoint;
+        }
+
+        if (hasEffortOnly && !hasActivityStart && !hasCompletedFinish && !hasFinishOnly)
+        {
+            return ExecutiveActualPresentationKind.EffortOnly;
+        }
+
+        return ExecutiveActualPresentationKind.None;
+    }
+
+    private static decimal? SumKnown(IEnumerable<decimal?> values)
+    {
+        var known = values.Where(value => value is not null).Select(value => value!.Value).ToArray();
+        return known.Length == 0 ? null : known.Sum();
+    }
 
     private static int CalculatePercent(decimal actual, decimal remaining) =>
         decimal.ToInt32(decimal.Round(actual / (actual + remaining) * 100m, 0, MidpointRounding.AwayFromZero));

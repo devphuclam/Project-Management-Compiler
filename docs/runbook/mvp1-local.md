@@ -122,22 +122,27 @@ conflicts remain visible and do not become an effective value.
 Sau khi import thành công **Official Git commit**, dùng nút **Xuất báo cáo
 tiến độ** ở header. Đây là bản trình bày dành cho người quản lý, không phải
 file kỹ thuật để import ngược vào Compiler. Một lần xuất tạo đúng một workbook
-với năm sheet theo thứ tự cố định:
+với sáu sheet theo thứ tự cố định:
 
 - file có tên `<ProjectName>_BaoCaoTienDo_<YYYY-MM-DD>.xlsx`, ngày lấy từ
   `statusDate` của Execution Register;
-- `Tổng quan` trả lời nhanh dự án đang ở đâu, mốc kế tiếp, điều kiện tiến độ,
-  readiness, % có bằng chứng và tối đa năm việc cần chú ý, trước khi đưa ra
-  daily Gantt rút gọn;
-- `Gantt theo ngày` giữ đầy đủ Project → Phase → Work package → Delivery card
-  → Milestone, với một ngày trên mỗi cột và hai làn liền kề `Kế hoạch` / `Thực tế`;
-- `30 ngày tới` chỉ giữ ngày báo cáo đến ngày thứ 29, ưu tiên việc quá hạn,
-  việc đang chạy, mốc, và dùng `◀` / `▶` để nói thật khi đoạn thời gian đi ra
-  ngoài cửa sổ;
-- `Vấn đề cần xử lý` giữ toàn bộ danh sách hành động đã xếp hạng;
-- `Chi tiết công việc` có đúng một dòng cho mỗi delivery card với kế hoạch,
-  Actual, forecast, effort, %, trạng thái ghi nhận, đầu mối, cập nhật cuối và
-  mã tham chiếu ngắn.
+- `Tổng quan` trả lời nhanh dự án đang ở đâu, tiến độ có bằng chứng, thay đổi
+  so với kế hoạch, mốc kế tiếp và quyết định cần xử lý; danh sách chú ý bị giới
+  hạn ở mức đọc được.
+- `Điều hành 30 ngày` gom một lần duy nhất các quyết định/blocker, việc quá
+  hạn, việc đang chạy và việc/mốc nằm trong cửa sổ từ ngày báo cáo đến ngày
+  thứ 29. Các dòng được xếp theo mức độ cần xử lý và không lặp lại giữa hai
+  danh sách cũ.
+- `Gantt` giữ đầy đủ Project → Phase → Work package → Delivery card →
+  Milestone, với một ngày trên mỗi cột và hai làn liền kề `Kế hoạch` / `Thực tế`.
+- `WBS` là cây bốn cấp để đọc phạm vi: mặc định mở đến Work Package; Delivery
+  Card, ngày, Actual, quan hệ và bằng chứng được mở rộng khi cần.
+- `Chi tiết công việc` có đúng một dòng cho mỗi Delivery Card với tên dễ đọc,
+  kế hoạch, Actual, forecast, effort, %, trạng thái ghi nhận, đầu mối, cập nhật
+  cuối, quan hệ và mã tham chiếu ngắn.
+- `Thông tin báo cáo` tập trung authority, source/snapshot, baseline, contract,
+  ngày báo cáo và các giới hạn diễn giải để năm sheet đầu không bị lặp
+  provenance kỹ thuật.
 
 Trong mọi Gantt, thanh **Kế hoạch** màu xanh là ngày baseline bất biến; thanh
 **Thực tế** màu xanh lá chỉ xuất hiện khi source đã ghi nhận ngày Actual;
@@ -152,7 +157,12 @@ Nếu chưa có official snapshot, nút này bị khóa. Working-tree preview, c
 preview, proposal và XLSX preview không được dùng làm báo cáo chính thức.
 File báo cáo tiến độ không phải input hợp lệ của **Import XLSX preview** và
 không thay thế file **CARIO + Gantt** kỹ thuật bảy sheet; hai luồng export vẫn
-tách biệt.
+tách biệt. Workbook quản lý này là đầu ra lưu trữ/trình bày của MVP hiện tại,
+không phải **Project Workbook** để nhập ngược. Ranh giới Project Workbook
+tương lai sẽ là một luồng thiết lập dự án riêng: người dùng tạo/chọn cấu trúc
+quản lý, chọn đúng một nguồn theo dõi chính thức, rồi Compiler mới cho phép
+đọc lại workbook đó theo một hợp đồng nhập riêng. Chưa dùng báo cáo sếp để
+thay thế ranh giới này.
 
 ### Read-only XLSX preview workflow
 

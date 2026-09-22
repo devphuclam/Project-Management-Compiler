@@ -61,6 +61,9 @@ public sealed record ExecutiveProgressReport
     public IReadOnlyList<ExecutiveScheduleRow> OverviewTimeline { get; init; } = Array.Empty<ExecutiveScheduleRow>();
     public IReadOnlyList<ExecutiveScheduleRow> WorkPackageSchedule { get; init; } = Array.Empty<ExecutiveScheduleRow>();
     public IReadOnlyList<ExecutiveDeliveryCardDetail> DeliveryCardDetails { get; init; } = Array.Empty<ExecutiveDeliveryCardDetail>();
+    public IReadOnlyList<ExecutiveOperatingItem> OperatingItems { get; init; } = Array.Empty<ExecutiveOperatingItem>();
+    public ExecutiveWbsProjection Wbs { get; init; } = new();
+    public ExecutiveReportMetadata Metadata { get; init; } = new();
 }
 
 public sealed record ExecutiveCondition
@@ -126,9 +129,30 @@ public sealed record ExecutiveDeliveryCardDetail
     public string RecordingLabel { get; init; } = string.Empty;
     public string OwnerLabel { get; init; } = string.Empty;
     public string StateLabel { get; init; } = string.Empty;
+    public string AttentionLabel { get; init; } = "—";
+    public IReadOnlyList<string> PredecessorCodes { get; init; } = Array.Empty<string>();
+    public string DependencyLabel { get; init; } = "Không có tiền nhiệm";
+    public string SourceReferenceLabel { get; init; } = ReaderFacingTextPolicy.MissingEvidenceLabel;
     public DateTimeOffset? LastOfficialUpdate { get; init; }
     public string ReferenceCode { get; init; } = string.Empty;
     public int SourceOrder { get; init; }
+}
+
+public sealed record ExecutiveReportMetadata
+{
+    public string AuthorityLabel { get; init; } = string.Empty;
+    public string SourceIdentity { get; init; } = string.Empty;
+    public string SnapshotId { get; init; } = string.Empty;
+    public string ProjectId { get; init; } = string.Empty;
+    public string BaselineId { get; init; } = string.Empty;
+    public string? BaselineVersion { get; init; }
+    public string ContractVersion { get; init; } = string.Empty;
+    public int RegisterRevision { get; init; }
+    public DateOnly SourceReportingDate { get; init; }
+    public DateOnly AnalysisAsOfDate { get; init; }
+    public DateOnly? PlanningStart { get; init; }
+    public DateOnly? PlanningFinish { get; init; }
+    public IReadOnlyList<string> Limitations { get; init; } = Array.Empty<string>();
 }
 
 public sealed record ExecutiveAttentionItem

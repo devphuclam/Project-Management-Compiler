@@ -201,7 +201,7 @@ public static partial class ReaderFacingTextPolicy
     private static partial Regex IdentityPrefixRegex();
 
     [GeneratedRegex(
-        @"^(?:(?:Project|Phase|Work\s*Package|Delivery\s*Card|Milestone|Decision\s*Gate)\s*(?:[:\-–—]|→|›|>)\s*)",
+        @"^(?:(?:Project|Phase|Work\s*Package|Delivery\s*Card|Planning\s*Package|Planning\s*Card|Milestone|Decision\s*Gate)\s*(?:[:\-–—]|→|›|>)\s*)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex KindPrefixRegex();
 

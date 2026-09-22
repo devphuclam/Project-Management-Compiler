@@ -81,7 +81,7 @@ internal static class ExecutiveProgressProjectionTests
         var progress = Read(report, "Progress")!;
 
         TestAssert.Equal(50, Read(progress, "RecordedPercent"), "Recorded percentage must use actual/(actual+remaining) and round to a whole percent.");
-        TestAssert.Equal("Đã ghi nhận 50% theo nỗ lực thực tế và còn lại.", Read(progress, "Statement"), "Valid progress must use the normative sentence.");
+        TestAssert.Equal("Tiến độ có bằng chứng: 50%.", Read(progress, "Statement"), "Valid progress must use the concise evidence-backed sentence.");
         TestAssert.Equal(0, Read(progress, "CompletedCount"), "Completed count must remain evidence-backed.");
         TestAssert.Equal(1, Read(progress, "InProgressCount"), "In-progress count must remain evidence-backed.");
         TestAssert.Equal(52, Read(progress, "NotStartedCount"), "Not-started count must remain evidence-backed.");
@@ -100,8 +100,58 @@ internal static class ExecutiveProgressProjectionTests
             });
             var invalidProgress = Read(invalid, "Progress")!;
             TestAssert.Equal(null, Read(invalidProgress, "RecordedPercent"), "Invalid or zero-sum effort must not produce a percentage.");
-            TestAssert.Equal("Chưa đủ dữ liệu để tính % hoàn thành", Read(invalidProgress, "Statement"), "Invalid effort must use the exact insufficient-data sentence.");
+            TestAssert.Equal("Chưa ghi nhận đủ dữ liệu tiến độ.", Read(invalidProgress, "Statement"), "Invalid effort must use the exact missing-evidence sentence.");
         }
+    }
+
+    public static void ProjectionBuildsConciseOverviewFactsAndPriorityActions()
+    {
+        var result = ExecutiveProgressTestFixtures.BuildFeature007ReportFixtureResult();
+        var report = new ExecutiveProgressReportProjector().Build(result);
+
+        TestAssert.False(report.CurrentPhase.Contains("PH0", StringComparison.Ordinal), "The current position must not repeat the phase code.");
+        TestAssert.Equal(
+            $"Tiến độ có bằng chứng: {report.Progress.RecordedPercent}%.",
+            report.Progress.Statement,
+            "The overview progress statement must be concise and explicitly evidence-backed.");
+        TestAssert.True(!string.IsNullOrWhiteSpace(report.ScheduleCondition.Label), "The overview must retain a concise plan-change condition.");
+        TestAssert.True(!string.IsNullOrWhiteSpace(report.ScheduleCondition.Detail), "The plan-change condition must retain its source-backed consequence.");
+        TestAssert.False(report.NextMilestone.DisplayName.Contains("G-", StringComparison.Ordinal), "The next milestone must use a clean reader-facing name.");
+        TestAssert.True(report.OverviewAttention.Count <= 5, "The overview projection must contain at most five priority actions.");
+        TestAssert.Equal(
+            string.Join('|', report.AllAttention.Where(item => item.OverviewEligible).Take(5).Select(item => item.DeduplicationKey)),
+            string.Join('|', report.OverviewAttention.Select(item => item.DeduplicationKey)),
+            "The overview must use the first five deterministic priority actions without reordering them.");
+
+        var empty = new ExecutiveProgressReportProjector().Build(result with
+        {
+            Project = result.Project with { ManagementEvidence = new ManagementEvidence() },
+            Analysis = result.Analysis with
+            {
+                Alerts = Array.Empty<Alert>(),
+                CpmNodes = Array.Empty<CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
+            }
+        });
+        TestAssert.Equal(0, empty.OverviewAttention.Count, "No supported management action must remain an explicit empty projection.");
+    }
+
+    public static void ProjectionExposesAllFiveActualEvidenceShapesWithoutInventingDates()
+    {
+        var report = new ExecutiveProgressReportProjector().Build(ExecutiveProgressTestFixtures.BuildFeature007ReportFixtureResult());
+        var rows = report.DailyGantt.FullRows
+            .Where(row => row.Kind == ExecutiveDailyGanttRowKind.DeliveryCard)
+            .ToDictionary(row => row.ReferenceCode, StringComparer.OrdinalIgnoreCase);
+
+        TestAssert.Equal(ExecutiveActualPresentationKind.RecordedInterval, rows[ExecutiveProgressTestFixtures.CompletedEarlyCardId].ActualPresentationKind, "A recorded start and finish must render as an interval.");
+        TestAssert.Equal(ExecutiveActualPresentationKind.OpenRecordedInterval, rows[ExecutiveProgressTestFixtures.OpenInProgressCardId].ActualPresentationKind, "An in-progress start without finish must render as an open interval.");
+        TestAssert.Equal(ExecutiveActualPresentationKind.CompletionPoint, rows[ExecutiveProgressTestFixtures.FinishOnlyCardId].ActualPresentationKind, "A finish-only record must render as a completion point.");
+        TestAssert.Equal(ExecutiveActualPresentationKind.EffortOnly, rows[ExecutiveProgressTestFixtures.EffortOnlyCardId].ActualPresentationKind, "Effort without dates must remain undated evidence.");
+        TestAssert.Equal(ExecutiveActualPresentationKind.None, rows[ExecutiveProgressTestFixtures.NoExecutionEvidenceCardId].ActualPresentationKind, "No official record must remain empty Actual evidence.");
+        TestAssert.Equal(null, rows[ExecutiveProgressTestFixtures.FinishOnlyCardId].ActualStart, "A finish-only record must not gain an inferred start date.");
+        TestAssert.Equal(new DateOnly(2026, 9, 24), rows[ExecutiveProgressTestFixtures.FinishOnlyCardId].ActualFinish, "A finish-only record must retain its official finish date.");
+        TestAssert.Equal("Có ghi nhận", rows[ExecutiveProgressTestFixtures.EffortOnlyCardId].ActualEvidenceLabel, "Effort-only evidence must use the concise recorded label.");
+        TestAssert.Equal("Chưa ghi nhận", rows[ExecutiveProgressTestFixtures.NoExecutionEvidenceCardId].ActualEvidenceLabel, "Missing evidence must use the approved missing label.");
     }
 
     public static void ProjectionBuildsConservativeWorkPackageAndDeliveryCardRows()
