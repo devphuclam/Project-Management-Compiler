@@ -6,7 +6,11 @@ internal static class GanttUiRegressionTests
     {
         var appJs = ReadAppJs();
 
-        TestAssert.Contains("columns: { state: true, recordedPercent: true, owner: false, attention: false }", appJs, "Gantt must start with the approved compact Task / ID, State, and Recorded % columns.");
+        TestAssert.Contains("columns: { state: true, plannedEffort: true, recordedPercent: true, owner: false, attention: false }", appJs, "Gantt must start with the approved compact Task / ID, State, Planned hours, and Recorded % columns.");
+        TestAssert.Contains("plannedEffortHours", appJs, "Gantt rows must carry authored planned effort into the task list.");
+        TestAssert.Contains("gantt-column-planned-effort", appJs, "Gantt must expose planned effort as a layout-aware task column.");
+        TestAssert.Contains("Planned h", appJs, "Gantt must label planned effort with a compact hours label.");
+        TestAssert.Contains("gantt-hide-planned-effort", appJs, "Gantt must hide planned effort and its cells as one optional column.");
         TestAssert.Contains("data-gantt-column", appJs, "Gantt must expose a column-visibility control seam.");
         TestAssert.Contains("gantt-columns-menu", appJs, "Gantt must render metadata options in a compact Columns menu.");
         TestAssert.Contains("taskIdOption.disabled = true", appJs, "The identity column must remain visible and non-toggleable.");
@@ -23,6 +27,7 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains(".gantt-task-header > span", styles, "Gantt header labels must be constrained inside their grid tracks.");
         TestAssert.Contains("text-overflow: ellipsis", styles, "Gantt metadata labels must truncate instead of escaping into the timeline.");
         TestAssert.Contains("gantt-hide-attention", styles, "Gantt must hide the Attention track and cells as one layout unit.");
+        TestAssert.Contains("gantt-task-planned-effort", styles, "Gantt planned-effort cells must have a dedicated compact visual treatment.");
     }
 
     public static void GanttMetadataColumnsUseCompactMenu()

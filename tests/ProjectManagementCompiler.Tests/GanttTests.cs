@@ -37,6 +37,7 @@ internal static class GanttTests
             "Gantt must expose available logical responsibility roles without fabricating concrete identities.");
         TestAssert.True(item.IsCritical, "Gantt must expose dependency-critical highlighting from shared analysis.");
         TestAssert.True(item.HasExecutionEvidence, "Gantt must distinguish explicit source execution from planning-only state.");
+        TestAssert.Equal(4m, item.PlannedEffortHours, "Gantt must expose the authored planned effort without deriving it from dates.");
         TestAssert.True(item.SourceReferences.Count > 0, "Gantt delivery-card rows must retain safe item-level source references.");
     }
 

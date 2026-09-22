@@ -172,6 +172,7 @@ public sealed class ExecutiveProgressReportProjector
                     WorkPackageName = workPackage is null ? "Chưa xác định" : ReaderFacingTextPolicy.CleanName(workPackage.Name, workPackage.Id),
                     PlannedStart = card.PlannedStart,
                     PlannedFinish = card.PlannedFinish,
+                    PlannedEffortHours = card.PlannedEffortHours,
                     ActualStart = isRecorded ? record!.ActualStart : null,
                     ActualFinish = isRecorded ? record!.ActualFinish : null,
                     ForecastFinish = isRecorded && record!.ForecastFinish is not null

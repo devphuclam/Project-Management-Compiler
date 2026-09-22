@@ -119,6 +119,7 @@ public sealed record ExecutiveDeliveryCardDetail
     public string WorkPackageName { get; init; } = string.Empty;
     public DateOnly? PlannedStart { get; init; }
     public DateOnly? PlannedFinish { get; init; }
+    public decimal? PlannedEffortHours { get; init; }
     public DateOnly? ActualStart { get; init; }
     public DateOnly? ActualFinish { get; init; }
     public DateOnly? ForecastFinish { get; init; }

@@ -33,6 +33,7 @@ public sealed record ExecutiveDailyGanttRow
     public string? WorkPackageDisplayName { get; init; }
     public DateOnly? PlannedStart { get; init; }
     public DateOnly? PlannedFinish { get; init; }
+    public decimal? PlannedEffortHours { get; init; }
     public DateOnly? ActualStart { get; init; }
     public DateOnly? ActualFinish { get; init; }
     public DateOnly? ActualDisplayThrough { get; init; }

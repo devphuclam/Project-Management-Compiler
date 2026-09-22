@@ -5,7 +5,7 @@ namespace ProjectManagementCompiler.Outputs;
 
 internal sealed class ExecutiveProgressWorkbookComposer
 {
-    private const int DailyGanttFixedColumnCount = 8;
+    private const int DailyGanttFixedColumnCount = 9;
     private const int OverviewFixedColumnCount = 5;
     private const int MaxExecutiveOperatingItems = 7;
     private const int NearTermOverdueMarkerSpan = 6;
@@ -261,8 +261,8 @@ internal sealed class ExecutiveProgressWorkbookComposer
 
     private static ExecutiveWorkbookWorksheet BuildWbs(ExecutiveProgressReport report)
     {
-        const int primaryColumnCount = 8;
-        const int totalColumns = 19;
+        const int primaryColumnCount = 9;
+        const int totalColumns = 20;
         var rows = new List<ExecutiveWorkbookRow>
         {
             RowOf(Text("WBS dự án", ExecutiveWorkbookStyleToken.Title)),
@@ -275,6 +275,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
                 Text("Loại", ExecutiveWorkbookStyleToken.Header),
                 Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
                 Text("Trạng thái", ExecutiveWorkbookStyleToken.Header),
+                Text("Giờ kế hoạch", ExecutiveWorkbookStyleToken.Header),
                 Text("% thực tế", ExecutiveWorkbookStyleToken.Header),
                 Text("Cần chú ý", ExecutiveWorkbookStyleToken.Header),
                 Text("Kế hoạch bắt đầu", ExecutiveWorkbookStyleToken.Header),
@@ -301,6 +302,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
                     Text(WbsKindLabel(item.Kind), WbsKindStyle(item.Kind)),
                     Text(item.OwnerLabel, item.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
                     Text(item.StateLabel, StateStyle(item.StateLabel)),
+                    HoursCell(item.PlannedEffortHours),
                     item.ProgressPercent is null ? Text(item.ProgressLabel, ExecutiveWorkbookStyleToken.Unknown) : Number(item.ProgressPercent.Value / 100m, ExecutiveWorkbookStyleToken.ActualComplete, ExecutiveWorkbookNumberFormat.Percentage),
                     Text(item.AttentionLabel, item.AttentionLabel == "—" ? ExecutiveWorkbookStyleToken.Default : ExecutiveWorkbookStyleToken.Attention),
                     DateCell(item.PlannedStart, ExecutiveWorkbookStyleToken.Plan),
@@ -323,7 +325,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
         return new ExecutiveWorkbookWorksheet(
             "WBS",
             rows,
-            new[] { 10d, 16d, 42d, 18d, 22d, 18d, 12d, 18d, 15d, 15d, 15d, 15d, 13d, 13d, 18d, 18d, 30d, 30d, 20d },
+            new[] { 10d, 16d, 42d, 18d, 22d, 18d, 13d, 12d, 18d, 15d, 15d, 15d, 15d, 13d, 13d, 18d, 18d, 30d, 30d, 20d },
             Array.Empty<ExecutiveWorkbookRange>(),
             new ExecutiveWorkbookPane(4, primaryColumnCount),
             new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Landscape, fitToWidth: 1, fitToHeight: 0),
@@ -331,10 +333,10 @@ internal sealed class ExecutiveProgressWorkbookComposer
             zoomPercent: 100,
             columnGroups:
             [
-                new ExecutiveWorkbookColumnGroup(9, 10, 1, hidden: true, collapsed: true),
-                new ExecutiveWorkbookColumnGroup(11, 14, 1, hidden: true, collapsed: true),
-                new ExecutiveWorkbookColumnGroup(15, 16, 1, hidden: true, collapsed: true),
-                new ExecutiveWorkbookColumnGroup(17, 19, 1, hidden: true, collapsed: true)
+                new ExecutiveWorkbookColumnGroup(10, 11, 1, hidden: true, collapsed: true),
+                new ExecutiveWorkbookColumnGroup(12, 15, 1, hidden: true, collapsed: true),
+                new ExecutiveWorkbookColumnGroup(16, 17, 1, hidden: true, collapsed: true),
+                new ExecutiveWorkbookColumnGroup(18, 20, 1, hidden: true, collapsed: true)
             ],
             autoFilterRange: new ExecutiveWorkbookRange(4, 1, rows.Count, totalColumns),
             outlineSummaryBelow: false,
@@ -588,6 +590,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
         {
             Text("Mã", ExecutiveWorkbookStyleToken.Header),
             Text("Hạng mục", ExecutiveWorkbookStyleToken.Header),
+            Text("Giờ kế hoạch", ExecutiveWorkbookStyleToken.Header),
             Text("Trạng thái", ExecutiveWorkbookStyleToken.Header),
             Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
             Text("% thực tế", ExecutiveWorkbookStyleToken.Header),
@@ -626,6 +629,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
         {
             Text(row.ReferenceCode, HierarchyStyle(row)),
             Text(HierarchyDisplayName(row), HierarchyStyle(row)),
+            HoursCell(row.PlannedEffortHours),
             Text(row.StateLabel, RowStateStyle(row)),
             Text(row.OwnerLabel, row.OwnerLabel == "Chưa xác định đầu mối" ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
             ProgressCell(row),
@@ -667,6 +671,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
             Text(string.Empty),
             Text(string.Empty),
             Text(string.Empty),
+            Text(string.Empty),
             Text(laneLabel, laneStyle)
         };
         cells.AddRange(dates.Select(date => TimelineActualCell(row, date, sourceReportingDate, analysisAsOfDate, axisStart, axisFinish, useContinuationMarkers)));
@@ -682,6 +687,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
         {
             Text(row.ReferenceCode, ExecutiveWorkbookStyleToken.Milestone),
             Text(HierarchyDisplayName(row), ExecutiveWorkbookStyleToken.Milestone),
+            HoursCell(row.PlannedEffortHours),
             Text(row.StateLabel, RowStateStyle(row)),
             Text(row.OwnerLabel, row.OwnerLabel == "Chưa xác định đầu mối" ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
             Text("Chưa đủ dữ liệu", ExecutiveWorkbookStyleToken.Unknown),
@@ -874,7 +880,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
 
     private static void AddTaskBandMerges(ICollection<ExecutiveWorkbookRange> mergedRanges, int planRow)
     {
-        foreach (var column in new[] { 1, 2, 3, 4, 5, 6, 7 })
+        foreach (var column in new[] { 1, 2, 3, 4, 5, 6, 7, 8 })
         {
             mergedRanges.Add(new ExecutiveWorkbookRange(planRow, column, planRow + 1, column));
         }
@@ -966,7 +972,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
         new(
             name,
             rows,
-            new[] { 15d, 29d, 14d, 12d, 11d, 11d, 10d, 10d }
+            new[] { 15d, 29d, 12d, 14d, 12d, 11d, 11d, 10d, 10d }
                 .Concat(Enumerable.Repeat(3d, totalColumns - DailyGanttFixedColumnCount))
                 .ToArray(),
             mergedRanges,
@@ -1025,6 +1031,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
                 Text("Hạng mục", ExecutiveWorkbookStyleToken.Header),
                 Text("Giai đoạn", ExecutiveWorkbookStyleToken.Header),
                 Text("Gói công việc", ExecutiveWorkbookStyleToken.Header),
+                Text("Giờ kế hoạch", ExecutiveWorkbookStyleToken.Header),
                 Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
                 Text("Trạng thái", ExecutiveWorkbookStyleToken.Header),
                 Text("Ghi nhận", ExecutiveWorkbookStyleToken.Header),
@@ -1047,6 +1054,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
             Text(detail.Description),
             Text(detail.PhaseName),
             Text(detail.WorkPackageName),
+            HoursCell(detail.PlannedEffortHours),
             Text(detail.OwnerLabel, detail.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
             Text(detail.StateLabel, StateStyle(detail.StateLabel)),
             Text(detail.RecordingLabel, detail.RecordingLabel == "Có ghi nhận" ? ExecutiveWorkbookStyleToken.ActualComplete : ExecutiveWorkbookStyleToken.Unknown),
@@ -1074,15 +1082,15 @@ internal sealed class ExecutiveProgressWorkbookComposer
         return Worksheet(
             "Chi tiết công việc",
             rows,
-            new[] { 40d, 24d, 28d, 22d, 18d, 18d, 18d, 12d, 15d, 15d, 15d, 15d, 15d, 14d, 14d, 18d, 18d, 20d, 18d, 30d },
+            new[] { 40d, 24d, 28d, 13d, 22d, 18d, 18d, 18d, 12d, 15d, 15d, 15d, 15d, 15d, 14d, 14d, 18d, 18d, 20d, 18d, 30d },
             freezeRows: 4,
             freezeColumns: 1,
             mergedRanges:
             [
-                new ExecutiveWorkbookRange(1, 1, 1, 20),
-                new ExecutiveWorkbookRange(2, 1, 2, 20)
+                new ExecutiveWorkbookRange(1, 1, 1, 21),
+                new ExecutiveWorkbookRange(2, 1, 2, 21)
             ],
-            autoFilterRange: new ExecutiveWorkbookRange(4, 1, rows.Count, 20));
+            autoFilterRange: new ExecutiveWorkbookRange(4, 1, rows.Count, 21));
     }
 
     private static ExecutiveWorkbookWorksheet Worksheet(

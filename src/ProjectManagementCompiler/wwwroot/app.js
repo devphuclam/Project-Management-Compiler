@@ -20,7 +20,7 @@
       dependencyFocus: "both",
       criticalPath: false,
       structureMode: false,
-      columns: { state: true, recordedPercent: true, owner: false, attention: false },
+      columns: { state: true, plannedEffort: true, recordedPercent: true, owner: false, attention: false },
       selectedRowKey: null
     };
   }
@@ -895,6 +895,10 @@
     return Math.round((actual / total) * 100) + "%";
   }
 
+  function plannedEffortLabel(row) {
+    return displayOptionalNumber(row && row.plannedEffortHours, "h");
+  }
+
   function resolveWorkItemVariance(row, analysis) {
     if (!row || row.kind !== "DeliveryCard") return null;
     return (analysis && analysis.workItemVariances || []).find(item => item.workItemId === row.id) || null;
@@ -941,6 +945,7 @@
   function ganttTaskColumnDefinition() {
     const columns = ["minmax(140px, 1fr)"];
     if (state.gantt.columns.state) columns.push("72px");
+    if (state.gantt.columns.plannedEffort) columns.push("68px");
     if (state.gantt.columns.recordedPercent) columns.push("72px");
     if (state.gantt.columns.owner) columns.push("80px");
     if (state.gantt.columns.attention) columns.push("68px");
@@ -950,6 +955,7 @@
   function ganttTaskPaneWidth() {
     return 328
       + (state.gantt.columns.state ? 72 : 0)
+      + (state.gantt.columns.plannedEffort ? 68 : 0)
       + (state.gantt.columns.recordedPercent ? 72 : 0)
       + (state.gantt.columns.owner ? 80 : 0)
       + (state.gantt.columns.attention ? 68 : 0);
@@ -1050,17 +1056,27 @@
       const alerts = laneEntries(item, "ALERT");
       let planStart = wbsNode.plannedStart || null;
       let planFinish = wbsNode.plannedFinish || null;
+      let plannedEffortHours = wbsNode.plannedEffortHours ?? null;
       if (kind === "Project") {
         planStart = baseline && baseline.planningStart || planStart;
         planFinish = baseline && baseline.planningFinish || planFinish;
+        plannedEffortHours = baseline && baseline.plannedEffortHours !== undefined
+          ? baseline.plannedEffortHours
+          : plannedEffortHours;
       }
       if (kind === "DeliveryCard") {
         planStart = planLane && planLane.start || planStart;
         planFinish = planLane && planLane.finish || planFinish;
+        plannedEffortHours = item && item.plannedEffortHours !== undefined
+          ? item.plannedEffortHours
+          : plannedEffortHours;
       }
       if (kind === "Milestone") {
         planStart = milestone && milestone.plannedDate || planStart;
         planFinish = milestone && milestone.plannedDate || planFinish || planStart;
+        plannedEffortHours = milestone && milestone.plannedEffortHours !== undefined
+          ? milestone.plannedEffortHours
+          : plannedEffortHours;
       }
       const sourceName = (item && item.name) || (milestone && milestone.name) || wbsNode.name || id;
       const row = {
@@ -1083,6 +1099,7 @@
         roles: item && item.logicalRoles || [],
         primaryOwner: primaryOwner(item && item.logicalRoles || []),
         dependencyIds: item && item.dependencyIds || milestone && milestone.dependencyIds || [],
+        plannedEffortHours,
         plan: { start: planStart, finish: planFinish },
         planStartOrigin: planStart ? "AUTHORED" : "UNKNOWN",
         planFinishOrigin: planFinish ? "AUTHORED" : "UNKNOWN",
@@ -1170,6 +1187,7 @@
         roles: item.logicalRoles || [],
         primaryOwner: primaryOwner(item.logicalRoles || []),
         dependencyIds: item.dependencyIds || [],
+        plannedEffortHours: item.plannedEffortHours ?? null,
         plan: { start: planLane && planLane.start || null, finish: planLane && planLane.finish || null },
         planStartOrigin: planLane && planLane.start ? "AUTHORED" : "UNKNOWN",
         planFinishOrigin: planLane && planLane.finish ? "AUTHORED" : "UNKNOWN",
@@ -1515,6 +1533,15 @@
     if (state.gantt.criticalPath && row.isCritical) status.appendChild(node("span", "Critical", "gantt-signal critical"));
     taskRow.appendChild(status);
 
+    const plannedEffort = plannedEffortLabel(row);
+    const effort = node("div", null, "gantt-task-cell gantt-task-planned-effort gantt-column-planned-effort");
+    const effortValue = node("span", plannedEffort, "gantt-planned-effort" + (plannedEffort === "Not recorded" ? " is-neutral" : ""));
+    effortValue.title = plannedEffort === "Not recorded"
+      ? "Authored planned effort is not recorded for this row."
+      : "Authored planned effort; it is not calculated from dates.";
+    effort.appendChild(effortValue);
+    taskRow.appendChild(effort);
+
     const recordedPercent = recordedPercentLabel(row);
     const progress = node("div", null, "gantt-task-cell gantt-task-recorded-percent gantt-column-recorded-percent");
     const progressValue = node("span", recordedPercent, "gantt-recorded-percent" + (recordedPercent === "Not recorded" ? " is-neutral" : ""));
@@ -1748,7 +1775,7 @@
     taskIdLabel.appendChild(taskIdOption);
     taskIdLabel.appendChild(node("span", "Task / ID"));
     columnMenu.appendChild(taskIdLabel);
-    [["state", "State"], ["recordedPercent", "Recorded %"], ["owner", "Primary owner"], ["attention", "Attention"]].forEach(([column, label]) => {
+    [["state", "State"], ["plannedEffort", "Planned h"], ["recordedPercent", "Recorded %"], ["owner", "Primary owner"], ["attention", "Attention"]].forEach(([column, label]) => {
       const wrapper = node("label", null, "gantt-menu-option");
       const input = node("input");
       input.type = "checkbox";
@@ -1986,6 +2013,7 @@
     const summary = node("div", null, "gantt-drawer-summary");
     appendDetailField(summary, "Planned start", displayDate(row.plan.start));
     appendDetailField(summary, "Planned finish", displayDate(row.plan.finish));
+    appendDetailField(summary, "Planned effort", displayOptionalNumber(row.plannedEffortHours, "h"));
     appendDetailField(summary, "Execution", row.state ? stateLabel(row.state) : "Not recorded");
     appendDetailField(summary, "Primary owner", row.primaryOwner ? row.primaryOwner.code : "Unassigned");
     panel.appendChild(summary);
@@ -2198,12 +2226,13 @@
     canvas.classList.toggle("gantt-plan-view", state.gantt.preset === "plan");
     canvas.classList.toggle("gantt-has-selection", Boolean(state.gantt.selectedRowKey));
     canvas.classList.toggle("gantt-hide-state", !state.gantt.columns.state);
+    canvas.classList.toggle("gantt-hide-planned-effort", !state.gantt.columns.plannedEffort);
     canvas.classList.toggle("gantt-hide-recorded-percent", !state.gantt.columns.recordedPercent);
     canvas.classList.toggle("gantt-hide-owner", !state.gantt.columns.owner);
     canvas.classList.toggle("gantt-hide-attention", !state.gantt.columns.attention);
     const headerRow = node("div", null, "gantt-header-row");
     const taskHeader = node("div", null, "gantt-task-header gantt-task-pane");
-    [["Task / ID", "gantt-column-identity"], ["State", "gantt-column-state"], ["Recorded %", "gantt-column-recorded-percent"], ["Primary owner", "gantt-column-owner"], ["Attention", "gantt-column-attention"]]
+    [["Task / ID", "gantt-column-identity"], ["State", "gantt-column-state"], ["Planned h", "gantt-column-planned-effort"], ["Recorded %", "gantt-column-recorded-percent"], ["Primary owner", "gantt-column-owner"], ["Attention", "gantt-column-attention"]]
       .forEach(([label, className]) => taskHeader.appendChild(node("span", label, className)));
     headerRow.appendChild(taskHeader);
     headerRow.appendChild(renderTimelineHeader(range, width, analysis || {}));
