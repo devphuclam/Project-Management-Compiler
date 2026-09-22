@@ -148,6 +148,10 @@ public sealed class ExecutiveProgressXlsxExporter
     {
         writer.WriteStartElement("worksheet", SpreadsheetNamespace);
         writer.WriteStartElement("sheetPr", SpreadsheetNamespace);
+        writer.WriteStartElement("outlinePr", SpreadsheetNamespace);
+        writer.WriteAttributeString("summaryBelow", worksheet.OutlineSummaryBelow ? "1" : "0");
+        writer.WriteAttributeString("summaryRight", worksheet.OutlineSummaryRight ? "1" : "0");
+        writer.WriteEndElement();
         writer.WriteStartElement("pageSetUpPr", SpreadsheetNamespace);
         writer.WriteAttributeString("fitToPage", "1");
         writer.WriteEndElement();
@@ -180,15 +184,48 @@ public sealed class ExecutiveProgressXlsxExporter
         writer.WriteEndElement();
         writer.WriteStartElement("sheetFormatPr", SpreadsheetNamespace);
         writer.WriteAttributeString("defaultRowHeight", "18");
+        var maximumRowOutlineLevel = worksheet.Rows.Count == 0
+            ? 0
+            : worksheet.Rows.Max(row => row.OutlineLevel);
+        var maximumColumnOutlineLevel = worksheet.ColumnGroups.Count == 0
+            ? 0
+            : worksheet.ColumnGroups.Max(group => group.OutlineLevel);
+        if (maximumRowOutlineLevel > 0)
+        {
+            writer.WriteAttributeString("outlineLevelRow", maximumRowOutlineLevel.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (maximumColumnOutlineLevel > 0)
+        {
+            writer.WriteAttributeString("outlineLevelCol", maximumColumnOutlineLevel.ToString(CultureInfo.InvariantCulture));
+        }
+
         writer.WriteEndElement();
         writer.WriteStartElement("cols", SpreadsheetNamespace);
         for (var index = 0; index < worksheet.ColumnWidths.Count; index++)
         {
+            var columnNumber = index + 1;
+            var group = worksheet.ColumnGroups.SingleOrDefault(candidate =>
+                columnNumber >= candidate.StartColumn && columnNumber <= candidate.EndColumn);
             writer.WriteStartElement("col", SpreadsheetNamespace);
-            writer.WriteAttributeString("min", (index + 1).ToString(CultureInfo.InvariantCulture));
-            writer.WriteAttributeString("max", (index + 1).ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("min", columnNumber.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("max", columnNumber.ToString(CultureInfo.InvariantCulture));
             writer.WriteAttributeString("width", worksheet.ColumnWidths[index].ToString(CultureInfo.InvariantCulture));
             writer.WriteAttributeString("customWidth", "1");
+            if (group is not null)
+            {
+                writer.WriteAttributeString("outlineLevel", group.OutlineLevel.ToString(CultureInfo.InvariantCulture));
+                if (group.Hidden)
+                {
+                    writer.WriteAttributeString("hidden", "1");
+                }
+
+                if (group.Collapsed && columnNumber == group.EndColumn)
+                {
+                    writer.WriteAttributeString("collapsed", "1");
+                }
+            }
+
             writer.WriteEndElement();
         }
 
@@ -200,6 +237,13 @@ public sealed class ExecutiveProgressXlsxExporter
         }
 
         writer.WriteEndElement();
+        if (worksheet.AutoFilterRange is not null)
+        {
+            writer.WriteStartElement("autoFilter", SpreadsheetNamespace);
+            writer.WriteAttributeString("ref", RangeAddress(worksheet.AutoFilterRange));
+            writer.WriteEndElement();
+        }
+
         if (worksheet.MergedRanges.Count > 0)
         {
             writer.WriteStartElement("mergeCells", SpreadsheetNamespace);
@@ -234,6 +278,21 @@ public sealed class ExecutiveProgressXlsxExporter
     {
         writer.WriteStartElement("row", SpreadsheetNamespace);
         writer.WriteAttributeString("r", rowNumber.ToString(CultureInfo.InvariantCulture));
+        if (row.OutlineLevel > 0)
+        {
+            writer.WriteAttributeString("outlineLevel", row.OutlineLevel.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (row.Hidden)
+        {
+            writer.WriteAttributeString("hidden", "1");
+        }
+
+        if (row.Collapsed)
+        {
+            writer.WriteAttributeString("collapsed", "1");
+        }
+
         for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
             var cell = row.Cells[cellIndex];
@@ -519,6 +578,9 @@ public sealed class ExecutiveProgressXlsxExporter
 
         return result + row.ToString(CultureInfo.InvariantCulture);
     }
+
+    private static string RangeAddress(ExecutiveWorkbookRange range) =>
+        $"{CellAddress(range.StartColumn, range.StartRow)}:{CellAddress(range.EndColumn, range.EndRow)}";
 
     private sealed record StyleDefinition(int FontId, int FillId, int BorderId, bool Wrap);
 }

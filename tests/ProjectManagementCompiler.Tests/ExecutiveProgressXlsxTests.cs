@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IO.Compression;
 using ProjectManagementCompiler.Management;
 using ProjectManagementCompiler.Outputs;
 
@@ -51,6 +52,151 @@ internal static class ExecutiveProgressXlsxTests
         TestAssert.Equal("Landscape", ReadRequiredProperty(printSettings, "Orientation").ToString(), "The neutral worksheet must retain landscape print orientation.");
         TestAssert.Equal(1, Convert.ToInt32(ReadRequiredProperty(printSettings, "FitToWidth")), "The neutral worksheet must retain its fit-to-width setting.");
         TestAssert.Equal(0, Convert.ToInt32(ReadRequiredProperty(printSettings, "FitToHeight")), "The neutral worksheet must retain its fit-to-height setting.");
+    }
+
+    public static void ExecutiveWorkbookDocumentValidatesProgressiveDisclosureMetadata()
+    {
+        var rowType = InternalOutputType("ExecutiveWorkbookRow");
+        var columnGroupType = InternalOutputType("ExecutiveWorkbookColumnGroup");
+        var worksheetType = InternalOutputType("ExecutiveWorkbookWorksheet");
+
+        TestAssert.True(rowType.GetProperty("OutlineLevel") is not null, "Workbook rows must expose an outline level.");
+        TestAssert.True(rowType.GetProperty("Hidden") is not null, "Workbook rows must expose initial hidden state.");
+        TestAssert.True(rowType.GetProperty("Collapsed") is not null, "Workbook rows must expose initial collapsed state.");
+        TestAssert.True(worksheetType.GetProperty("ColumnGroups") is not null, "Worksheets must expose typed column groups.");
+        TestAssert.True(worksheetType.GetProperty("AutoFilterRange") is not null, "Worksheets must expose an optional auto-filter range.");
+        TestAssert.True(worksheetType.GetProperty("OutlineSummaryBelow") is not null, "Worksheets must expose row summary direction.");
+        TestAssert.True(worksheetType.GetProperty("OutlineSummaryRight") is not null, "Worksheets must expose column summary direction.");
+
+        var cell = CreateInternal(
+            "ExecutiveWorkbookCell",
+            "WBS",
+            ParseInternalEnum("ExecutiveWorkbookStyleToken", "Header"),
+            ParseInternalEnum("ExecutiveWorkbookNumberFormat", "Text"),
+            false);
+        var cells = TypedArray(cell.GetType(), cell);
+        var parent = CreateInternal("ExecutiveWorkbookRow", cells, 2, false, true);
+        var deliveryCard = CreateInternal("ExecutiveWorkbookRow", cells, 3, true, false);
+        var rows = TypedArray(rowType, parent, deliveryCard);
+        var widths = Enumerable.Repeat(12d, 12).ToArray();
+        var mergedRanges = TypedArray(InternalOutputType("ExecutiveWorkbookRange"));
+        var group = CreateInternal("ExecutiveWorkbookColumnGroup", 9, 10, 1, true, true);
+        var groups = TypedArray(columnGroupType, group);
+        var filter = CreateInternal("ExecutiveWorkbookRange", 1, 1, 2, 12);
+        var pane = CreateInternal("ExecutiveWorkbookPane", 1, 3);
+        var print = CreateInternal(
+            "ExecutiveWorkbookPrintSettings",
+            ParseInternalEnum("ExecutiveWorkbookPrintOrientation", "Landscape"),
+            0,
+            0);
+
+        var worksheet = CreateInternal(
+            "ExecutiveWorkbookWorksheet",
+            "WBS",
+            rows,
+            widths,
+            mergedRanges,
+            pane,
+            print,
+            false,
+            100,
+            groups,
+            filter,
+            false,
+            false);
+
+        TestAssert.Equal(3, Convert.ToInt32(ReadRequiredProperty(deliveryCard, "OutlineLevel")), "Delivery Card rows must retain outline level 3.");
+        TestAssert.True(Convert.ToBoolean(ReadRequiredProperty(deliveryCard, "Hidden")), "Delivery Card rows must retain their initial hidden state.");
+        TestAssert.True(Convert.ToBoolean(ReadRequiredProperty(parent, "Collapsed")), "Visible parent rows must retain their collapsed state.");
+        TestAssert.Equal(1, ReadCollection(worksheet, "ColumnGroups").Length, "A valid worksheet must retain its typed column groups.");
+        TestAssert.False(Convert.ToBoolean(ReadRequiredProperty(worksheet, "OutlineSummaryBelow")), "WBS parent summaries must precede hidden children.");
+        TestAssert.False(Convert.ToBoolean(ReadRequiredProperty(worksheet, "OutlineSummaryRight")), "WBS primary columns must precede optional groups.");
+
+        AssertInvocationThrows<ArgumentOutOfRangeException>(
+            () => CreateInternal("ExecutiveWorkbookRow", cells, 8, false, false),
+            "Row outline levels above seven must be rejected.");
+
+        var overlappingGroups = TypedArray(
+            columnGroupType,
+            group,
+            CreateInternal("ExecutiveWorkbookColumnGroup", 10, 11, 1, true, false));
+        AssertInvocationThrows<ArgumentException>(
+            () => CreateInternal(
+                "ExecutiveWorkbookWorksheet",
+                "Invalid groups",
+                rows,
+                widths,
+                mergedRanges,
+                pane,
+                print,
+                false,
+                100,
+                overlappingGroups,
+                filter,
+                false,
+                false),
+            "Overlapping column groups must be rejected.");
+
+        var outOfBoundsFilter = CreateInternal("ExecutiveWorkbookRange", 1, 1, 3, 12);
+        AssertInvocationThrows<ArgumentOutOfRangeException>(
+            () => CreateInternal(
+                "ExecutiveWorkbookWorksheet",
+                "Invalid filter",
+                rows,
+                widths,
+                mergedRanges,
+                pane,
+                print,
+                false,
+                100,
+                groups,
+                outOfBoundsFilter,
+                false,
+                false),
+            "Auto-filter ranges outside the used worksheet bounds must be rejected.");
+    }
+
+    public static void ExecutiveWorkbookPackageSerializesProgressiveDisclosureMetadata()
+    {
+        var document = CreateProgressiveDisclosureDocument();
+        var exporterType = typeof(ExecutiveProgressXlsxExporter);
+        var serialize = exporterType.GetMethod("Serialize", BindingFlags.NonPublic | BindingFlags.Static);
+        TestAssert.True(serialize is not null, "The XLSX exporter must retain one deterministic neutral-document serialization seam.");
+
+        var first = (byte[])serialize!.Invoke(null, [document])!;
+        var second = (byte[])serialize.Invoke(null, [document])!;
+        TestAssert.True(first.SequenceEqual(second), "Progressive-disclosure metadata must not make package bytes non-deterministic.");
+
+        var worksheet = ExecutiveProgressTestFixtures.ReadXml(first, "xl/worksheets/sheet1.xml");
+        var outline = worksheet.Descendants().SingleOrDefault(element => element.Name.LocalName == "outlinePr");
+        TestAssert.True(outline is not null, "Worksheet XML must contain outlinePr.");
+        TestAssert.Equal("0", outline!.Attribute("summaryBelow")?.Value, "WBS row summaries must be serialized above their children.");
+        TestAssert.Equal("0", outline.Attribute("summaryRight")?.Value, "WBS column summaries must be serialized left of optional groups.");
+
+        var rows = worksheet.Descendants().Where(element => element.Name.LocalName == "row").ToArray();
+        TestAssert.Equal("2", rows[0].Attribute("outlineLevel")?.Value, "The parent row outline level must be serialized.");
+        TestAssert.Equal("1", rows[0].Attribute("collapsed")?.Value, "The parent collapsed state must be serialized.");
+        TestAssert.Equal("3", rows[1].Attribute("outlineLevel")?.Value, "The Delivery Card row outline level must be serialized.");
+        TestAssert.Equal("1", rows[1].Attribute("hidden")?.Value, "The Delivery Card initial hidden state must be serialized.");
+
+        var groupedColumns = worksheet.Descendants()
+            .Where(element => element.Name.LocalName == "col"
+                && element.Attribute("outlineLevel")?.Value == "1")
+            .ToArray();
+        TestAssert.Equal(2, groupedColumns.Length, "Every column in the approved test group must carry outline metadata.");
+        TestAssert.True(groupedColumns.All(column => column.Attribute("hidden")?.Value == "1"), "Initially collapsed optional columns must be hidden.");
+        TestAssert.Equal("1", groupedColumns[^1].Attribute("collapsed")?.Value, "The final grouped column must expose the collapsed control.");
+
+        var autoFilter = worksheet.Descendants().SingleOrDefault(element => element.Name.LocalName == "autoFilter");
+        TestAssert.Equal("A1:L2", autoFilter?.Attribute("ref")?.Value, "The complete typed auto-filter range must be serialized.");
+
+        using var archive = new ZipArchive(new MemoryStream(first), ZipArchiveMode.Read);
+        TestAssert.False(
+            archive.Entries.Any(entry =>
+                entry.FullName.Contains("vba", StringComparison.OrdinalIgnoreCase)
+                || entry.FullName.Contains("connections", StringComparison.OrdinalIgnoreCase)
+                || entry.FullName.Contains("externalLinks", StringComparison.OrdinalIgnoreCase)),
+            "The report package must not gain macro, connection, or external-link parts.");
     }
 
     public static void ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport()
@@ -535,6 +681,91 @@ internal static class ExecutiveProgressXlsxTests
         var value = property!.GetValue(instance);
         TestAssert.True(value is not null, $"{instance.GetType().Name}.{propertyName} must not be null.");
         return value!;
+    }
+
+    private static object CreateProgressiveDisclosureDocument()
+    {
+        var cell = CreateInternal(
+            "ExecutiveWorkbookCell",
+            "WBS",
+            ParseInternalEnum("ExecutiveWorkbookStyleToken", "Header"),
+            ParseInternalEnum("ExecutiveWorkbookNumberFormat", "Text"),
+            false);
+        var cells = TypedArray(cell.GetType(), cell);
+        var rowType = InternalOutputType("ExecutiveWorkbookRow");
+        var rows = TypedArray(
+            rowType,
+            CreateInternal("ExecutiveWorkbookRow", cells, 2, false, true),
+            CreateInternal("ExecutiveWorkbookRow", cells, 3, true, false));
+        var widths = Enumerable.Repeat(12d, 12).ToArray();
+        var rangeType = InternalOutputType("ExecutiveWorkbookRange");
+        var worksheet = CreateInternal(
+            "ExecutiveWorkbookWorksheet",
+            "WBS",
+            rows,
+            widths,
+            TypedArray(rangeType),
+            CreateInternal("ExecutiveWorkbookPane", 1, 3),
+            CreateInternal(
+                "ExecutiveWorkbookPrintSettings",
+                ParseInternalEnum("ExecutiveWorkbookPrintOrientation", "Landscape"),
+                0,
+                0),
+            false,
+            100,
+            TypedArray(
+                InternalOutputType("ExecutiveWorkbookColumnGroup"),
+                CreateInternal("ExecutiveWorkbookColumnGroup", 9, 10, 1, true, true)),
+            CreateInternal("ExecutiveWorkbookRange", 1, 1, 2, 12),
+            false,
+            false);
+
+        return CreateInternal(
+            "ExecutiveWorkbookDocument",
+            TypedArray(InternalOutputType("ExecutiveWorkbookWorksheet"), worksheet),
+            0);
+    }
+
+    private static Type InternalOutputType(string typeName) =>
+        Type.GetType($"ProjectManagementCompiler.Outputs.{typeName}, ProjectManagementCompiler", throwOnError: false)
+        ?? throw new InvalidOperationException($"Missing internal output type '{typeName}'.");
+
+    private static object ParseInternalEnum(string typeName, string value) =>
+        Enum.Parse(InternalOutputType(typeName), value);
+
+    private static object CreateInternal(string typeName, params object?[] arguments) =>
+        Activator.CreateInstance(
+            InternalOutputType(typeName),
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+            binder: null,
+            args: arguments,
+            culture: null)
+        ?? throw new InvalidOperationException($"Could not create internal output type '{typeName}'.");
+
+    private static Array TypedArray(Type itemType, params object[] items)
+    {
+        var values = Array.CreateInstance(itemType, items.Length);
+        for (var index = 0; index < items.Length; index++)
+        {
+            values.SetValue(items[index], index);
+        }
+
+        return values;
+    }
+
+    private static void AssertInvocationThrows<TException>(Action action, string message)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is TException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"{message} Expected {typeof(TException).Name}.");
     }
 
     private static object[] ReadCollection(object instance, string propertyName)

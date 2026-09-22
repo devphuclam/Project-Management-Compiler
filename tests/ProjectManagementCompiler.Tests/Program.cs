@@ -266,6 +266,8 @@ internal static class Program
         ,("DailyGanttSelectsExactNearTermWindowAndOrdersOverdueWork", ExecutiveDailyGanttProjectionTests.DailyGanttSelectsExactNearTermWindowAndOrdersOverdueWork)
         ,("DailyGanttRetainsAlertedDateIncompleteOverdueAndSupportsEmptyNearTerm", ExecutiveDailyGanttProjectionTests.DailyGanttRetainsAlertedDateIncompleteOverdueAndSupportsEmptyNearTerm)
         ,("ExecutiveWorkbookComposerExposesNeutralDocumentLayoutContract", ExecutiveProgressXlsxTests.ExecutiveWorkbookComposerExposesNeutralDocumentLayoutContract)
+        ,("ExecutiveWorkbookDocumentValidatesProgressiveDisclosureMetadata", ExecutiveProgressXlsxTests.ExecutiveWorkbookDocumentValidatesProgressiveDisclosureMetadata)
+        ,("ExecutiveWorkbookPackageSerializesProgressiveDisclosureMetadata", ExecutiveProgressXlsxTests.ExecutiveWorkbookPackageSerializesProgressiveDisclosureMetadata)
         ,("ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport", ExecutiveProgressXlsxTests.ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport)
         ,("ExecutiveWorkbookDailyGanttUsesPairedDailyLanesAndSemanticStyles", ExecutiveProgressXlsxTests.ExecutiveWorkbookDailyGanttUsesPairedDailyLanesAndSemanticStyles)
         ,("ExecutiveWorkbookNearTermUsesExactThirtyDayAxisAndTruthfulContinuations", ExecutiveProgressXlsxTests.ExecutiveWorkbookNearTermUsesExactThirtyDayAxisAndTruthfulContinuations)

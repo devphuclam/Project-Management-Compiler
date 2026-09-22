@@ -48,7 +48,11 @@ internal sealed class ExecutiveWorkbookWorksheet
         ExecutiveWorkbookPane freezePane,
         ExecutiveWorkbookPrintSettings printSettings,
         bool showGridLines,
-        int zoomPercent)
+        int zoomPercent,
+        IReadOnlyList<ExecutiveWorkbookColumnGroup>? columnGroups = null,
+        ExecutiveWorkbookRange? autoFilterRange = null,
+        bool outlineSummaryBelow = true,
+        bool outlineSummaryRight = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(rows);
@@ -56,6 +60,7 @@ internal sealed class ExecutiveWorkbookWorksheet
         ArgumentNullException.ThrowIfNull(mergedRanges);
         ArgumentNullException.ThrowIfNull(freezePane);
         ArgumentNullException.ThrowIfNull(printSettings);
+        columnGroups ??= Array.Empty<ExecutiveWorkbookColumnGroup>();
         if (columnWidths.Count == 0 || columnWidths.Any(width => double.IsNaN(width) || double.IsInfinity(width) || width <= 0d))
         {
             throw new ArgumentException("Every used or reserved worksheet column must have a positive finite width.", nameof(columnWidths));
@@ -93,6 +98,41 @@ internal sealed class ExecutiveWorkbookWorksheet
             }
         }
 
+        if (columnGroups.Any(group => group is null))
+        {
+            throw new ArgumentException("A worksheet cannot contain a null column group.", nameof(columnGroups));
+        }
+
+        var groups = columnGroups.ToArray();
+        if (groups.Any(group => group.EndColumn > columnWidths.Count))
+        {
+            throw new ArgumentOutOfRangeException(nameof(columnGroups), "Column groups must remain within the used worksheet columns.");
+        }
+
+        for (var first = 0; first < groups.Length; first++)
+        {
+            for (var second = first + 1; second < groups.Length; second++)
+            {
+                if (groups[first].Overlaps(groups[second]))
+                {
+                    throw new ArgumentException("Worksheet column groups must not overlap.", nameof(columnGroups));
+                }
+            }
+        }
+
+        if (autoFilterRange is not null)
+        {
+            if (autoFilterRange.EndRow > rows.Count || autoFilterRange.EndColumn > columnWidths.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(autoFilterRange), "The auto-filter range must remain within the used worksheet range.");
+            }
+
+            if (ranges.Any(autoFilterRange.Overlaps))
+            {
+                throw new ArgumentException("The auto-filter range must not intersect a merged range.", nameof(autoFilterRange));
+            }
+        }
+
         Name = name;
         Rows = Copy(rows);
         ColumnWidths = Copy(columnWidths);
@@ -101,6 +141,10 @@ internal sealed class ExecutiveWorkbookWorksheet
         PrintSettings = printSettings;
         ShowGridLines = showGridLines;
         ZoomPercent = zoomPercent;
+        ColumnGroups = Copy(groups);
+        AutoFilterRange = autoFilterRange;
+        OutlineSummaryBelow = outlineSummaryBelow;
+        OutlineSummaryRight = outlineSummaryRight;
     }
 
     public string Name { get; }
@@ -111,6 +155,10 @@ internal sealed class ExecutiveWorkbookWorksheet
     public ExecutiveWorkbookPrintSettings PrintSettings { get; }
     public bool ShowGridLines { get; }
     public int ZoomPercent { get; }
+    public IReadOnlyList<ExecutiveWorkbookColumnGroup> ColumnGroups { get; }
+    public ExecutiveWorkbookRange? AutoFilterRange { get; }
+    public bool OutlineSummaryBelow { get; }
+    public bool OutlineSummaryRight { get; }
 
     private static IReadOnlyList<T> Copy<T>(IEnumerable<T> values) =>
         new ReadOnlyCollection<T>(values.ToArray());
@@ -118,7 +166,11 @@ internal sealed class ExecutiveWorkbookWorksheet
 
 internal sealed class ExecutiveWorkbookRow
 {
-    public ExecutiveWorkbookRow(IReadOnlyList<ExecutiveWorkbookCell> cells)
+    public ExecutiveWorkbookRow(
+        IReadOnlyList<ExecutiveWorkbookCell> cells,
+        int outlineLevel = 0,
+        bool hidden = false,
+        bool collapsed = false)
     {
         ArgumentNullException.ThrowIfNull(cells);
         if (cells.Any(cell => cell is null))
@@ -126,10 +178,21 @@ internal sealed class ExecutiveWorkbookRow
             throw new ArgumentException("A worksheet row cannot contain a null cell.", nameof(cells));
         }
 
+        if (outlineLevel is < 0 or > 7)
+        {
+            throw new ArgumentOutOfRangeException(nameof(outlineLevel), "Worksheet row outline levels must be between zero and seven.");
+        }
+
         Cells = new ReadOnlyCollection<ExecutiveWorkbookCell>(cells.ToArray());
+        OutlineLevel = outlineLevel;
+        Hidden = hidden;
+        Collapsed = collapsed;
     }
 
     public IReadOnlyList<ExecutiveWorkbookCell> Cells { get; }
+    public int OutlineLevel { get; }
+    public bool Hidden { get; }
+    public bool Collapsed { get; }
 }
 
 internal sealed class ExecutiveWorkbookCell
@@ -195,6 +258,45 @@ internal sealed class ExecutiveWorkbookRange
             && EndRow >= other.StartRow
             && StartColumn <= other.EndColumn
             && EndColumn >= other.StartColumn;
+    }
+}
+
+internal sealed class ExecutiveWorkbookColumnGroup
+{
+    public ExecutiveWorkbookColumnGroup(
+        int startColumn,
+        int endColumn,
+        int outlineLevel,
+        bool hidden,
+        bool collapsed)
+    {
+        if (startColumn < 1 || endColumn < startColumn)
+        {
+            throw new ArgumentOutOfRangeException(nameof(startColumn), "Column groups use one-based, ordered coordinates.");
+        }
+
+        if (outlineLevel is < 1 or > 7)
+        {
+            throw new ArgumentOutOfRangeException(nameof(outlineLevel), "Column-group outline levels must be between one and seven.");
+        }
+
+        StartColumn = startColumn;
+        EndColumn = endColumn;
+        OutlineLevel = outlineLevel;
+        Hidden = hidden;
+        Collapsed = collapsed;
+    }
+
+    public int StartColumn { get; }
+    public int EndColumn { get; }
+    public int OutlineLevel { get; }
+    public bool Hidden { get; }
+    public bool Collapsed { get; }
+
+    public bool Overlaps(ExecutiveWorkbookColumnGroup other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return StartColumn <= other.EndColumn && EndColumn >= other.StartColumn;
     }
 }
 

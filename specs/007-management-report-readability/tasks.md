@@ -51,10 +51,10 @@ green.
 
 ### Neutral workbook progressive disclosure
 
-- [ ] T007 Add RED model-contract tests requiring row `OutlineLevel` in 0–7, Delivery Card `Hidden` state, parent `Collapsed` state, non-overlapping one-based column groups in used bounds, and a valid optional auto-filter range in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
-- [ ] T008 Extend worksheet, row, and column value objects with validated row outlines, column groups, initial hidden/collapsed state, summary direction, and optional auto-filter metadata in `src/ProjectManagementCompiler/Outputs/ExecutiveWorkbookDocument.cs`
-- [ ] T009 Add RED package assertions for worksheet `outlinePr`, row outline/hidden/collapsed attributes, grouped columns, and `autoFilter` XML while preserving deterministic package bytes in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
-- [ ] T010 Serialize outline settings, row and column grouping, hidden/collapsed state, and auto-filter ranges deterministically with no macro, connection, or external-link parts in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressXlsxExporter.cs`
+- [X] T007 Add RED model-contract tests requiring row `OutlineLevel` in 0–7, Delivery Card `Hidden` state, parent `Collapsed` state, non-overlapping one-based column groups in used bounds, and a valid optional auto-filter range in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T008 Extend worksheet, row, and column value objects with validated row outlines, column groups, initial hidden/collapsed state, summary direction, and optional auto-filter metadata in `src/ProjectManagementCompiler/Outputs/ExecutiveWorkbookDocument.cs`
+- [X] T009 Add RED package assertions for worksheet `outlinePr`, row outline/hidden/collapsed attributes, grouped columns, and `autoFilter` XML while preserving deterministic package bytes in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T010 Serialize outline settings, row and column grouping, hidden/collapsed state, and auto-filter ranges deterministically with no macro, connection, or external-link parts in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressXlsxExporter.cs`
 
 **Checkpoint**: One language policy supplies all reader names/labels, and the
 neutral workbook can express the approved WBS disclosure without external

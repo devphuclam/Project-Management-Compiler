@@ -83,3 +83,12 @@ Result: PASS — exit 0, 295 passed, 0 failed.
   exposed legacy kind/Markdown text instead of the shared reader-facing name.
 - T005/T006 GREEN — 299 passed, 0 failed after migrating both projectors and
   preserving existing schedule, ownership, and execution facts.
+- T007 RED — 299 passed, 1 failed because the neutral document had no typed
+  column-group contract.
+- T008 GREEN — 300 passed, 0 failed after adding validated row outlines,
+  column groups, summary direction, and auto-filter metadata.
+- T009 RED — 300 passed, 1 failed because worksheet XML omitted
+  `outlinePr`.
+- T010 GREEN — 301 passed, 0 failed after deterministic outline/group/filter
+  serialization; package inspection found no macro, connection, or
+  external-link parts.
