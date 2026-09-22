@@ -91,7 +91,7 @@ internal static class ExecutiveDailyGanttProjectionTests
         TestAssert.Equal(null, ReadDate(unrecorded, "ActualFinish"), "Overlay or proposal completion must not become official Actual.");
         TestAssert.Equal(null, ReadDate(unrecorded, "ForecastFinish"), "Only an official source forecast may appear on a daily Gantt row.");
         TestAssert.Equal(null, ReadRequired(unrecorded, "ProgressPercent"), "Unrecorded work must not receive a fabricated percentage.");
-        TestAssert.Equal("Chưa đủ dữ liệu", ReadText(unrecorded, "ProgressLabel"), "Unrecorded work must state its missing evidence explicitly.");
+        TestAssert.Equal("Chưa ghi nhận", ReadText(unrecorded, "ProgressLabel"), "Unrecorded work must state its missing evidence explicitly.");
         TestAssert.Equal(null, ReadRequired(unrecorded, "LastOfficialUpdate"), "Unrecorded work must not inherit a local update timestamp.");
 
         var inProgressWithoutStart = FullRow(projection, ExecutiveProgressTestFixtures.InProgressWithoutStartCardId);
@@ -106,7 +106,7 @@ internal static class ExecutiveDailyGanttProjectionTests
         foreach (var row in new[] { oneSided, zeroSum, missing })
         {
             TestAssert.Equal(null, ReadRequired(row, "ProgressPercent"), "One-sided, zero-sum, or missing effort must not be coerced into zero percent.");
-            TestAssert.Equal("Chưa đủ dữ liệu", ReadText(row, "ProgressLabel"), "Insufficient effort must use the compact reader-facing label.");
+            TestAssert.Equal("Chưa ghi nhận", ReadText(row, "ProgressLabel"), "Insufficient effort must use the compact reader-facing label.");
         }
 
         var explicitNotStarted = FullRow(projection, ExecutiveProgressTestFixtures.ExplicitNotStartedCardId);

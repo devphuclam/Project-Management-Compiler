@@ -246,8 +246,8 @@ internal static class ExecutiveProgressXlsxTests
             AssertEmptyUnknownCell(unrecordedCells[index], "An unrecorded delivery card must not gain fabricated Actual, forecast, or effort detail.");
         }
 
-        TestAssert.Equal("Chưa đủ dữ liệu", ReadRequiredProperty(unrecordedCells[10], "Value").ToString(), "An unrecorded delivery card must show explicit unknown progress rather than a false zero percent.");
-        TestAssert.Equal("Chưa cập nhật", ReadRequiredProperty(unrecordedCells[11], "Value").ToString(), "An unrecorded delivery card must state that no official update is recorded.");
+        TestAssert.Equal("Chưa ghi nhận", ReadRequiredProperty(unrecordedCells[10], "Value").ToString(), "An unrecorded delivery card must show explicit unknown progress rather than a false zero percent.");
+        TestAssert.Equal("Chưa ghi nhận", ReadRequiredProperty(unrecordedCells[11], "Value").ToString(), "An unrecorded delivery card must state that no official update is recorded.");
     }
 
     public static void ExecutiveWorkbookStatesWhenTheThirtyDayWindowIsEmpty()

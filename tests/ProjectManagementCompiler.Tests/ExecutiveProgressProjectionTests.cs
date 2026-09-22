@@ -16,7 +16,7 @@ internal static class ExecutiveProgressProjectionTests
         TestAssert.Equal(new DateOnly(2026, 9, 19), ReadDate(report, "SourceReportingDate"), "The report must disclose the official manifest reporting date.");
         TestAssert.Equal(new DateOnly(2026, 9, 18), ReadDate(report, "PlanningStart"), "The report must preserve the official planning start.");
         TestAssert.Equal(new DateOnly(2026, 12, 31), ReadDate(report, "PlanningFinish"), "The report must preserve the official planning finish.");
-        TestAssert.Equal("Planning package PH0", Read(report, "CurrentPhase"), "The current phase must be selected from the source reporting date.");
+        TestAssert.Equal("Planning package", Read(report, "CurrentPhase"), "The current phase must be selected from the source reporting date without repeating its code.");
 
         var nextMilestone = Read(report, "NextMilestone");
         TestAssert.True(nextMilestone is not null, "The report must expose a next milestone summary.");
@@ -106,16 +106,22 @@ internal static class ExecutiveProgressProjectionTests
 
     public static void ProjectionBuildsConservativeWorkPackageAndDeliveryCardRows()
     {
+        var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult(new DateOnly(2026, 9, 19));
+        var targetSourceOrder = result.Project.WorkPackages
+            .Select((item, index) => (item, index))
+            .Single(entry => entry.item.Id == "F05")
+            .index;
         var report = new ProjectManagementCompiler.Management.ExecutiveProgressReportProjector()
-            .Build(ExecutiveProgressTestFixtures.BuildOfficialFixtureResult(new DateOnly(2026, 9, 19)));
+            .Build(result);
 
         TestAssert.Equal(35, report.WorkPackageSchedule.Count, "The executive schedule must contain one row per work package.");
         TestAssert.Equal(53, report.DeliveryCardDetails.Count, "The executive detail sheet must contain one row per delivery card.");
 
-        var workPackage = report.WorkPackageSchedule.Single(row => row.DisplayName == "Planning package F05");
+        var workPackage = report.WorkPackageSchedule.Single(row => row.SourceOrder == targetSourceOrder);
+        TestAssert.Equal("Planning package", workPackage.DisplayName, "A reader-facing work-package name must not repeat its code.");
         TestAssert.Equal("Chưa bắt đầu", workPackage.StateLabel, "A work package whose evidenced children are all not started must be not started.");
         TestAssert.Equal("Phụ trách quy trình", workPackage.OwnerLabel, "A work package without direct readiness ownership must use the unanimous child accountable owner.");
-        TestAssert.Equal("Planning package PH1", workPackage.PhaseDisplayName, "Work-package rows must retain the cleaned parent phase name.");
+        TestAssert.Equal("Planning package", workPackage.PhaseDisplayName, "Work-package rows must retain the cleaned parent phase name.");
 
         var card = report.DeliveryCardDetails.Single(detail => detail.ReferenceCode == "P01-A");
         TestAssert.Equal("Planning card", card.Description, "Delivery-card descriptions must preserve source meaning without technical decoration.");
@@ -141,7 +147,7 @@ internal static class ExecutiveProgressProjectionTests
             }
         });
 
-        TestAssert.Equal("[Important] Planning package PH0", report.CurrentPhase, "Meaningful bracketed source text must not be mistaken for an identity prefix.");
+        TestAssert.Equal("[Important] Planning package", report.CurrentPhase, "Meaningful bracketed source text must survive while the row code is removed.");
         TestAssert.Equal("Tạo loại tài liệu", report.DeliveryCardDetails.Single(item => item.ReferenceCode == "P01-A").Description, "Known identity prefixes must be removed without losing the card meaning.");
     }
 

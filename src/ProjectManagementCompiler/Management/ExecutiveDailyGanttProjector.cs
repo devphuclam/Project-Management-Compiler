@@ -24,14 +24,14 @@ public sealed class ExecutiveDailyGanttProjector
         }
 
         var phaseContexts = project.Phases
-            .Select((phase, index) => new PhaseContext(phase, index, CleanName(phase.Name, phase.Id)))
+            .Select((phase, index) => new PhaseContext(phase, index, ReaderFacingTextPolicy.CleanName(phase.Name, phase.Id)))
             .ToArray();
         var phasesById = phaseContexts.ToDictionary(context => context.Phase.Id, StringComparer.OrdinalIgnoreCase);
         var workPackageContexts = project.WorkPackages
             .Select((workPackage, index) => new WorkPackageContext(
                 workPackage,
                 index,
-                CleanName(workPackage.Name, workPackage.Id),
+                ReaderFacingTextPolicy.CleanName(workPackage.Name, workPackage.Id),
                 phasesById.TryGetValue(workPackage.PhaseId, out var phase) ? phase : null))
             .ToArray();
         var workPackagesById = workPackageContexts.ToDictionary(context => context.WorkPackage.Id, StringComparer.OrdinalIgnoreCase);
@@ -79,7 +79,7 @@ public sealed class ExecutiveDailyGanttProjector
         Add(BuildRollup(
             ExecutiveDailyGanttRowKind.Project,
             project.Project.Id,
-            CleanName(project.Project.Name, project.Project.Id),
+            ReaderFacingTextPolicy.CleanName(project.Project.Name, project.Project.Id),
             hierarchyLevel: 0,
             phaseDisplayName: null,
             workPackageDisplayName: null,
@@ -334,7 +334,7 @@ public sealed class ExecutiveDailyGanttProjector
         {
             Kind = ExecutiveDailyGanttRowKind.DeliveryCard,
             ReferenceCode = card.Id,
-            DisplayName = CleanName(card.Name, card.Id),
+            DisplayName = ReaderFacingTextPolicy.CleanName(card.Name, card.Id),
             HierarchyLevel = 3,
             PhaseDisplayName = phaseName,
             WorkPackageDisplayName = workPackageName,
@@ -452,16 +452,16 @@ public sealed class ExecutiveDailyGanttProjector
         {
             Kind = ExecutiveDailyGanttRowKind.Milestone,
             ReferenceCode = context.Milestone.Id,
-            DisplayName = CleanName(context.Milestone.Name, context.Milestone.Id),
+            DisplayName = ReaderFacingTextPolicy.CleanName(context.Milestone.Name, context.Milestone.Id),
             HierarchyLevel = hierarchyLevel,
             PhaseDisplayName = phaseDisplayName,
             WorkPackageDisplayName = workPackageDisplayName,
             PlannedStart = context.Milestone.PlannedDate,
             PlannedFinish = context.Milestone.PlannedDate,
-            ProgressLabel = "Chưa đủ dữ liệu",
+            ProgressLabel = ReaderFacingTextPolicy.MissingEvidenceLabel,
             CoverageLabel = CoverageLabel(0, 0),
             StateLabel = context.Milestone.State is null ? "Chưa cập nhật" : ExecutionLabel(context.Milestone.State),
-            OwnerLabel = "Chưa xác định đầu mối",
+            OwnerLabel = ReaderFacingTextPolicy.MissingOwnerLabel,
             IsNextMilestone = nextMilestone is not null && nextMilestone.Index == context.Index
         };
 
@@ -515,12 +515,12 @@ public sealed class ExecutiveDailyGanttProjector
     {
         var owners = children
             .Select(child => child.Row.OwnerLabel)
-            .Where(owner => owner != "Chưa xác định đầu mối")
+            .Where(owner => owner != ReaderFacingTextPolicy.MissingOwnerLabel)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         return children.Count > 0 && owners.Length == 1 && children.All(child => child.Row.OwnerLabel == owners[0])
             ? owners[0]
-            : "Chưa xác định đầu mối";
+            : ReaderFacingTextPolicy.MissingOwnerLabel;
     }
 
     private static string ResolveDeliveryCardOwner(CanonicalProject project, string cardId)
@@ -533,12 +533,12 @@ public sealed class ExecutiveDailyGanttProjector
             .ToArray();
         if (assignments.Length != 1)
         {
-            return "Chưa xác định đầu mối";
+            return ReaderFacingTextPolicy.MissingOwnerLabel;
         }
 
         return !string.IsNullOrWhiteSpace(assignments[0].Identity)
             ? assignments[0].Identity!
-            : RoleLabel(assignments[0].Role) ?? "Chưa xác định đầu mối";
+            : ReaderFacingTextPolicy.OwnerOrMissing(RoleLabel(assignments[0].Role));
     }
 
     private static string? RoleLabel(string? role) => role?.Trim().ToUpperInvariant() switch
@@ -600,7 +600,8 @@ public sealed class ExecutiveDailyGanttProjector
         _ => "Chưa cập nhật"
     };
 
-    private static string ProgressLabel(int? percent) => percent is null ? "Chưa đủ dữ liệu" : $"{percent}%";
+    private static string ProgressLabel(int? percent) =>
+        percent is null ? ReaderFacingTextPolicy.MissingEvidenceLabel : $"{percent}%";
 
     private static string CoverageLabel(int recorded, int total) => $"Độ phủ {recorded}/{total}";
 
@@ -627,32 +628,6 @@ public sealed class ExecutiveDailyGanttProjector
             .Select(date => date!.Value)
             .ToArray();
         return values.Length == 0 ? null : values.Max();
-    }
-
-    private static string CleanName(string? value, string? exactId = null)
-    {
-        var cleaned = value?.Trim() ?? string.Empty;
-        while (cleaned.Length >= 2 && cleaned[0] == '`' && cleaned[^1] == '`')
-        {
-            cleaned = cleaned[1..^1].Trim();
-        }
-
-        while (!string.IsNullOrWhiteSpace(exactId) && cleaned.StartsWith($"[{exactId}]", StringComparison.OrdinalIgnoreCase))
-        {
-            cleaned = cleaned[(exactId!.Length + 2)..].Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(exactId) && cleaned.StartsWith(exactId, StringComparison.OrdinalIgnoreCase))
-        {
-            var remainder = cleaned[exactId.Length..];
-            if (remainder.Length == 0 || char.IsWhiteSpace(remainder[0]) || remainder[0] is ':' or '-' or '–' or '—')
-            {
-                cleaned = remainder.TrimStart(' ', '\t', ':', '-', '–', '—');
-            }
-        }
-
-        cleaned = cleaned.Replace("**", string.Empty, StringComparison.Ordinal).Replace("__", string.Empty, StringComparison.Ordinal).Trim();
-        return string.IsNullOrWhiteSpace(cleaned) ? "Chưa cập nhật" : cleaned;
     }
 
     private static ProjectCompilationException IncompleteOfficial(string message) =>

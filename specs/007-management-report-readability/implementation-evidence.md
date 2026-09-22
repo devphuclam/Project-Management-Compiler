@@ -75,3 +75,11 @@ Result: PASS — exit 0, 295 passed, 0 failed.
 - T002 complete — reusable Feature 007 fixture now covers nested/repeated title
   noise, all five Actual evidence shapes, the 1/6/35/53 WBS oracle, operating
   populations, and official metadata while the existing suite remains 295/295.
+- T003 RED — 295 passed, 3 failed because
+  `ReaderFacingTextPolicy` did not yet exist.
+- T004 GREEN — 298 passed, 0 failed after implementing deterministic cleanup
+  and approved missing-data labels.
+- T005/T006 RED — 298 passed, 1 failed because both executive projectors still
+  exposed legacy kind/Markdown text instead of the shared reader-facing name.
+- T005/T006 GREEN — 299 passed, 0 failed after migrating both projectors and
+  preserving existing schedule, ownership, and execution facts.

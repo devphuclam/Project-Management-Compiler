@@ -41,11 +41,11 @@ public sealed class ExecutiveProgressReportProjector
             .Select(entry => new ExecutiveScheduleRow
             {
                 Kind = ExecutiveScheduleRowKind.Phase,
-                DisplayName = CleanName(entry.Phase.Name),
+                DisplayName = ReaderFacingTextPolicy.CleanName(entry.Phase.Name, entry.Phase.Id),
                 PlannedStart = entry.Phase.PlannedStart,
                 PlannedFinish = entry.Phase.PlannedFinish,
                 StateLabel = "Chưa cập nhật",
-                OwnerLabel = "Chưa xác định đầu mối",
+                OwnerLabel = ReaderFacingTextPolicy.MissingOwnerLabel,
                 IsCurrent = currentPhase is not null && currentPhase.SourceOrder == entry.SourceOrder,
                 IsNextMilestone = false,
                 SourceOrder = entry.SourceOrder
@@ -53,11 +53,11 @@ public sealed class ExecutiveProgressReportProjector
             .Concat(milestoneEntries.Select(entry => new ExecutiveScheduleRow
             {
                 Kind = ExecutiveScheduleRowKind.Milestone,
-                DisplayName = CleanName(entry.Milestone.Name),
+                DisplayName = ReaderFacingTextPolicy.CleanName(entry.Milestone.Name, entry.Milestone.Id),
                 PlannedStart = entry.Milestone.PlannedDate,
                 PlannedFinish = entry.Milestone.PlannedDate,
                 StateLabel = ExecutionLabel(entry.Milestone.State),
-                OwnerLabel = "Chưa xác định đầu mối",
+                OwnerLabel = ReaderFacingTextPolicy.MissingOwnerLabel,
                 IsCurrent = false,
                 IsNextMilestone = nextMilestone is not null && nextMilestone.SourceOrder == entry.SourceOrder,
                 SourceOrder = entry.SourceOrder
@@ -72,14 +72,14 @@ public sealed class ExecutiveProgressReportProjector
 
         return new ExecutiveProgressReport
         {
-            ProjectName = CleanName(project.Project.Name),
+            ProjectName = ReaderFacingTextPolicy.CleanName(project.Project.Name, project.Project.Id),
             SourceReportingDate = sourceReportingDate,
             AnalysisAsOfDate = analysisAsOfDate,
             PlanningStart = project.Baseline.PlanningStart,
             PlanningFinish = project.Baseline.PlanningFinish,
             CurrentPhase = currentPhase is null
                 ? "Chưa xác định giai đoạn hiện tại"
-                : CleanName(currentPhase.Phase.Name),
+                : ReaderFacingTextPolicy.CleanName(currentPhase.Phase.Name, currentPhase.Phase.Id),
             ScheduleCondition = ProjectScheduleCondition(project, result.Analysis),
             ReadinessCondition = ProjectReadinessCondition(project),
             NextMilestone = nextMilestone is null
@@ -90,7 +90,7 @@ public sealed class ExecutiveProgressReportProjector
                 }
                 : new ExecutiveMilestoneSummary
                 {
-                    DisplayName = CleanName(nextMilestone.Milestone.Name),
+                    DisplayName = ReaderFacingTextPolicy.CleanName(nextMilestone.Milestone.Name, nextMilestone.Milestone.Id),
                     Kind = nextMilestone.Milestone.Kind,
                     PlannedDate = nextMilestone.Milestone.PlannedDate,
                     IsMissing = false
@@ -118,8 +118,8 @@ public sealed class ExecutiveProgressReportProjector
                 return new ExecutiveScheduleRow
                 {
                     Kind = ExecutiveScheduleRowKind.WorkPackage,
-                    DisplayName = CleanName(workPackage.Name, workPackage.Id),
-                    PhaseDisplayName = phase is null ? "Chưa xác định" : CleanName(phase.Name, phase.Id),
+                    DisplayName = ReaderFacingTextPolicy.CleanName(workPackage.Name, workPackage.Id),
+                    PhaseDisplayName = phase is null ? "Chưa xác định" : ReaderFacingTextPolicy.CleanName(phase.Name, phase.Id),
                     PlannedStart = workPackage.PlannedStart,
                     PlannedFinish = workPackage.PlannedFinish,
                     StateLabel = WorkPackageStateLabel(project, children),
@@ -157,9 +157,9 @@ public sealed class ExecutiveProgressReportProjector
                     : (int?)null;
                 return new ExecutiveDeliveryCardDetail
                 {
-                    Description = CleanCardDescription(card.Name, card.Id),
-                    PhaseName = phase is null ? "Chưa xác định" : CleanName(phase.Name, phase.Id),
-                    WorkPackageName = workPackage is null ? "Chưa xác định" : CleanName(workPackage.Name, workPackage.Id),
+                    Description = ReaderFacingTextPolicy.CleanName(card.Name, card.Id),
+                    PhaseName = phase is null ? "Chưa xác định" : ReaderFacingTextPolicy.CleanName(phase.Name, phase.Id),
+                    WorkPackageName = workPackage is null ? "Chưa xác định" : ReaderFacingTextPolicy.CleanName(workPackage.Name, workPackage.Id),
                     PlannedStart = card.PlannedStart,
                     PlannedFinish = card.PlannedFinish,
                     ActualStart = isRecorded ? record!.ActualStart : null,
@@ -170,8 +170,8 @@ public sealed class ExecutiveProgressReportProjector
                     ActualEffortHours = isRecorded ? record!.ActualEffortHours : null,
                     RemainingEffortHours = isRecorded ? record!.RemainingEffortHours : null,
                     ProgressPercent = progressPercent,
-                    ProgressLabel = progressPercent is null ? "Chưa đủ dữ liệu" : $"{progressPercent}%",
-                    RecordingLabel = isRecorded ? "Đã ghi nhận" : "Chưa cập nhật",
+                    ProgressLabel = progressPercent is null ? ReaderFacingTextPolicy.MissingEvidenceLabel : $"{progressPercent}%",
+                    RecordingLabel = isRecorded ? "Đã ghi nhận" : ReaderFacingTextPolicy.MissingEvidenceLabel,
                     OwnerLabel = ResolveDeliveryCardOwner(project, card.Id),
                     StateLabel = isRecorded ? ExecutionLabel(record!.ExecutionState) : "Chưa cập nhật",
                     LastOfficialUpdate = isRecorded ? record!.LastUpdatedAt : null,
@@ -249,10 +249,10 @@ public sealed class ExecutiveProgressReportProjector
             .Select(card => ResolveDeliveryCardOwner(project, card.Id))
             .ToArray();
         return childOwners.Length > 0
-            && childOwners.All(owner => owner != "Chưa xác định đầu mối")
+            && childOwners.All(owner => owner != ReaderFacingTextPolicy.MissingOwnerLabel)
             && childOwners.Distinct(StringComparer.Ordinal).Count() == 1
             ? childOwners[0]
-            : "Chưa xác định đầu mối";
+            : ReaderFacingTextPolicy.MissingOwnerLabel;
     }
 
     private static string ResolveAssignments(IReadOnlyList<Assignment> assignments)
@@ -263,7 +263,7 @@ public sealed class ExecutiveProgressReportProjector
             .ToArray();
         if (distinct.Length != 1)
         {
-            return "Chưa xác định đầu mối";
+            return ReaderFacingTextPolicy.MissingOwnerLabel;
         }
 
         var identity = distinct[0].Identity;
@@ -272,7 +272,7 @@ public sealed class ExecutiveProgressReportProjector
             return identity;
         }
 
-        return RoleLabel(distinct[0].Role) ?? "Chưa xác định đầu mối";
+        return ReaderFacingTextPolicy.OwnerOrMissing(RoleLabel(distinct[0].Role));
     }
 
     private static string? RoleLabel(string? role)
@@ -344,13 +344,13 @@ public sealed class ExecutiveProgressReportProjector
             }
 
             cardsById.TryGetValue(alert.WorkItemId, out var card);
-            var owner = card is null ? "Chưa xác định đầu mối" : ResolveDeliveryCardOwner(project, card.Id);
+            var owner = card is null ? ReaderFacingTextPolicy.MissingOwnerLabel : ResolveDeliveryCardOwner(project, card.Id);
             var dueDate = card is null
                 ? null
                 : category == ExecutiveAttentionCategory.Overdue && string.Equals(alert.AlertCode, "START_DELAY", StringComparison.OrdinalIgnoreCase)
                     ? card.PlannedStart
                     : card.PlannedFinish;
-            var cleanName = card is null ? "hạng mục" : CleanCardDescription(card.Name, card.Id);
+            var cleanName = card is null ? "hạng mục" : ReaderFacingTextPolicy.CleanName(card.Name, card.Id);
             var impact = category switch
             {
                 ExecutiveAttentionCategory.Blocked => "Hạng mục đang bị chặn.",
@@ -370,7 +370,7 @@ public sealed class ExecutiveProgressReportProjector
                 SourceOrder = sourceOrder++
             });
 
-            if (owner == "Chưa xác định đầu mối")
+            if (owner == ReaderFacingTextPolicy.MissingOwnerLabel)
             {
                 candidates.Add(new AttentionCandidate
                 {
@@ -392,7 +392,7 @@ public sealed class ExecutiveProgressReportProjector
                      .OrderBy(card => card.Id, StringComparer.Ordinal))
         {
             var owner = ResolveDeliveryCardOwner(project, card.Id);
-            if (owner != "Chưa xác định đầu mối")
+            if (owner != ReaderFacingTextPolicy.MissingOwnerLabel)
             {
                 continue;
             }
@@ -400,7 +400,7 @@ public sealed class ExecutiveProgressReportProjector
             candidates.Add(new AttentionCandidate
             {
                 Category = ExecutiveAttentionCategory.MissingOwner,
-                Action = $"Xử lý hạng mục “{CleanCardDescription(card.Name, card.Id)}”.",
+                Action = $"Xử lý hạng mục “{ReaderFacingTextPolicy.CleanName(card.Name, card.Id)}”.",
                 Impact = "Hạng mục quan trọng chưa xác định đầu mối.",
                 OwnerLabel = owner,
                 DueDate = card.PlannedFinish,
@@ -429,7 +429,7 @@ public sealed class ExecutiveProgressReportProjector
                     Category = attribution is null ? ExecutiveAttentionCategory.OtherDecision : ExecutiveAttentionCategory.DecisionBeforeNextMilestone,
                     Action = action,
                     Impact = impact,
-                    OwnerLabel = RoleLabel(observation.RequiredAuthorityRole) ?? "Chưa xác định đầu mối",
+                    OwnerLabel = ReaderFacingTextPolicy.OwnerOrMissing(RoleLabel(observation.RequiredAuthorityRole)),
                     DueDate = attribution?.DueDate,
                     DueLabel = attribution?.DueLabel ?? "Chưa xác định",
                     OverviewEligible = attribution is not null,
@@ -455,7 +455,7 @@ public sealed class ExecutiveProgressReportProjector
                     Category = ExecutiveAttentionCategory.PendingAction,
                     Action = action,
                     Impact = impact,
-                    OwnerLabel = RoleLabel(observation.WaitingForRole) ?? RoleLabel(observation.RequiredAuthorityRole) ?? "Chưa xác định đầu mối",
+                    OwnerLabel = ReaderFacingTextPolicy.OwnerOrMissing(RoleLabel(observation.WaitingForRole) ?? RoleLabel(observation.RequiredAuthorityRole)),
                     DueDate = null,
                     DueLabel = "Chưa xác định",
                     OverviewEligible = false,
@@ -541,11 +541,11 @@ public sealed class ExecutiveProgressReportProjector
 
         if (token.StartsWith("BLOCKS_", StringComparison.Ordinal))
         {
-            return $"Có thể chặn cổng {CleanName(cleaned["BLOCKS_".Length..])}.";
+            return $"Có thể chặn cổng {ReaderFacingTextPolicy.CleanName(cleaned["BLOCKS_".Length..])}.";
         }
 
         var looksTechnical = cleaned.All(character => char.IsLetterOrDigit(character) || character is '_' or '-');
-        return looksTechnical && cleaned == token ? null : CleanName(cleaned);
+        return looksTechnical && cleaned == token ? null : ReaderFacingTextPolicy.CleanName(cleaned);
     }
 
     private static DecisionAttribution? AttributeDecision(CanonicalProject project, ManagementEvidenceObservation observation, MilestoneEntry? nextMilestone)
@@ -594,7 +594,7 @@ public sealed class ExecutiveProgressReportProjector
             && beforePackages.All(workPackage => workPackage.PlannedStart is not null && workPackage.PlannedStart <= milestone.PlannedDate))
         {
             var earliest = beforePackages.Min(workPackage => workPackage.PlannedStart!.Value);
-            return new DecisionAttribution(earliest, $"Trước {CleanName(beforePackages.OrderBy(package => package.PlannedStart).First().Name, beforePackages.OrderBy(package => package.PlannedStart).First().Id)}");
+            return new DecisionAttribution(earliest, $"Trước {ReaderFacingTextPolicy.CleanName(beforePackages.OrderBy(package => package.PlannedStart).First().Name, beforePackages.OrderBy(package => package.PlannedStart).First().Id)}");
         }
 
         foreach (var value in new[] { observation.GateId, observation.GateEffectCode, observation.DueCondition })
@@ -869,89 +869,6 @@ public sealed class ExecutiveProgressReportProjector
         ExecutionState.Cancelled => "Đã hủy",
         _ => "Chưa cập nhật"
     };
-
-    private static string CleanName(string? value, string? exactId = null)
-    {
-        var cleaned = value?.Trim() ?? string.Empty;
-        while (cleaned.Length >= 2 && cleaned[0] == '`' && cleaned[^1] == '`')
-        {
-            cleaned = cleaned[1..^1].Trim();
-        }
-
-        while (cleaned.StartsWith("[", StringComparison.Ordinal))
-        {
-            var closing = cleaned.IndexOf(']');
-            if (closing <= 0)
-            {
-                break;
-            }
-
-            var prefix = cleaned[1..closing].Trim();
-            if (!LooksLikeIdentityPrefix(prefix, exactId))
-            {
-                break;
-            }
-
-            cleaned = cleaned[(closing + 1)..].Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(exactId)
-            && cleaned.StartsWith(exactId.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            var remainder = cleaned[exactId.Trim().Length..];
-            if (remainder.Length == 0)
-            {
-                cleaned = string.Empty;
-            }
-            else if (char.IsWhiteSpace(remainder[0]) || remainder[0] is ':' or '-' or '–' or '—')
-            {
-                cleaned = remainder.TrimStart(' ', '\t', ':', '-', '–', '—');
-            }
-        }
-
-        return string.IsNullOrWhiteSpace(cleaned) ? "Chưa cập nhật" : cleaned;
-    }
-
-    private static bool LooksLikeIdentityPrefix(string value, string? exactId)
-    {
-        if (!string.IsNullOrWhiteSpace(exactId)
-            && string.Equals(value, exactId.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var normalized = value.Trim();
-        if (normalized.StartsWith("G-", StringComparison.OrdinalIgnoreCase))
-        {
-            normalized = normalized[2..];
-        }
-
-        var letterCount = 0;
-        while (letterCount < normalized.Length
-            && letterCount < 4
-            && char.IsLetter(normalized[letterCount]))
-        {
-            letterCount++;
-        }
-
-        return letterCount > 0
-            && letterCount < normalized.Length
-            && char.IsDigit(normalized[letterCount]);
-    }
-
-    private static string CleanCardDescription(string? value, string cardId)
-    {
-        var cleaned = CleanName(value, cardId);
-        var suffix = cardId.Trim();
-        if (cleaned.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-            && cleaned.Length > suffix.Length
-            && char.IsWhiteSpace(cleaned[cleaned.Length - suffix.Length - 1]))
-        {
-            cleaned = cleaned[..(cleaned.Length - suffix.Length)].TrimEnd();
-        }
-
-        return string.IsNullOrWhiteSpace(cleaned) ? "Chưa cập nhật" : cleaned;
-    }
 
     private static string FormatDate(DateOnly? date) =>
         date?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Chưa xác định";

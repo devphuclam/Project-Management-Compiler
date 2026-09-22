@@ -44,10 +44,10 @@ green.
 
 ### Reader-language policy
 
-- [ ] T003 Add and register RED tests covering exact IDs, repeated `[PH0][PLN01]` prefixes, kind labels, arrows, Markdown markers, meaningful bracketed text, long Vietnamese titles, empty titles, `Chưa ghi nhận`, and `Chưa phân công` in `tests/ProjectManagementCompiler.Tests/ReaderFacingTextPolicyTests.cs` and `tests/ProjectManagementCompiler.Tests/Program.cs`
-- [ ] T004 Implement deterministic cleanup that removes only recognized identity/formatting noise, preserves business meaning, never generates prose, and returns `Chưa ghi nhận` for an empty result in `src/ProjectManagementCompiler/Management/ReaderFacingTextPolicy.cs`
-- [ ] T005 [P] Replace private name cleanup and obsolete owner/evidence wording with `ReaderFacingTextPolicy` while preserving projection facts in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
-- [ ] T006 [P] Replace private name cleanup and obsolete owner/evidence wording with `ReaderFacingTextPolicy` while preserving daily hierarchy and evidence facts in `src/ProjectManagementCompiler/Management/ExecutiveDailyGanttProjector.cs`
+- [X] T003 Add and register RED tests covering exact IDs, repeated `[PH0][PLN01]` prefixes, kind labels, arrows, Markdown markers, meaningful bracketed text, long Vietnamese titles, empty titles, `Chưa ghi nhận`, and `Chưa phân công` in `tests/ProjectManagementCompiler.Tests/ReaderFacingTextPolicyTests.cs` and `tests/ProjectManagementCompiler.Tests/Program.cs`
+- [X] T004 Implement deterministic cleanup that removes only recognized identity/formatting noise, preserves business meaning, never generates prose, and returns `Chưa ghi nhận` for an empty result in `src/ProjectManagementCompiler/Management/ReaderFacingTextPolicy.cs`
+- [X] T005 [P] Replace private name cleanup and obsolete owner/evidence wording with `ReaderFacingTextPolicy` while preserving projection facts in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
+- [X] T006 [P] Replace private name cleanup and obsolete owner/evidence wording with `ReaderFacingTextPolicy` while preserving daily hierarchy and evidence facts in `src/ProjectManagementCompiler/Management/ExecutiveDailyGanttProjector.cs`
 
 ### Neutral workbook progressive disclosure
 
