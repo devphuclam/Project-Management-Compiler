@@ -73,15 +73,15 @@ decision within 60 seconds, with no technical metadata or identifier clutter.
 
 ### Tests for User Story 1
 
-- [ ] T011 [US1] Add RED projection tests for concise current phase, evidence-backed progress, schedule variance, next milestone, at-most-five actions, missing-action state, and clean Reader-Facing Names in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressProjectionTests.cs`
-- [ ] T012 [US1] Add RED worksheet tests for summary question order, compact headline blocks, phase/milestone overview, action columns, active first sheet, landscape settings, frozen context, and absence of forbidden technical text in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T011 [US1] Add RED projection tests for concise current phase, evidence-backed progress, schedule variance, next milestone, at-most-five actions, missing-action state, and clean Reader-Facing Names in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressProjectionTests.cs`
+- [X] T012 [US1] Add RED worksheet tests for summary question order, compact headline blocks, phase/milestone overview, action columns, active first sheet, landscape settings, frozen context, and absence of forbidden technical text in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Project concise summary statements and deterministic priority actions without commit, snapshot, path, raw enum, validation code, or generated explanation in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
-- [ ] T014 [P] [US1] Create shared typed cell, date, style, range, and concise label helpers without business selection logic in `src/ProjectManagementCompiler/Outputs/ExecutiveWorksheetFormatting.cs`
-- [ ] T015 [US1] Compose the complete `Tổng quan` sheet with at most five actions and readable landscape/normal-zoom behavior in `src/ProjectManagementCompiler/Outputs/ExecutiveOverviewWorksheetComposer.cs`
-- [ ] T016 [US1] Delegate only the overview sheet to the focused composer while preserving the still-unmigrated supporting sheets during this checkpoint in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
+- [X] T013 [US1] Project concise summary statements and deterministic priority actions without commit, snapshot, path, raw enum, validation code, or generated explanation in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
+- [X] T014 [P] [US1] Create shared typed cell, date, style, range, and concise label helpers without business selection logic in the neutral workbook composition boundary (`src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`)
+- [X] T015 [US1] Compose the complete `Tổng quan` sheet with at most five actions and readable landscape/normal-zoom behavior in the neutral workbook composition boundary.
+- [X] T016 [US1] Delegate only the overview sheet to the focused composer while preserving the still-unmigrated supporting sheets during this checkpoint in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
 
 **Checkpoint**: `Tổng quan` is independently composable, visually reviewable,
 and answers the sponsor's primary questions without technical decoding.
@@ -99,15 +99,15 @@ must produce the approved interval/marker/empty state and zero inferred dates.
 
 ### Tests for User Story 2
 
-- [ ] T017 [US2] Add RED projection tests for `RecordedInterval`, `OpenRecordedInterval`, `CompletionPoint`, `EffortOnly`, and `None`, including finish-only with null start, effort-only with no date, invalid-effort percentage suppression, and conservative roll-up coverage in `tests/ProjectManagementCompiler.Tests/ExecutiveDailyGanttProjectionTests.cs`
-- [ ] T018 [US2] Add RED workbook tests for one daily column per date, adjacent `Kế hoạch`/`Thực tế` lanes, green intervals, `✓` finish point, `● Có ghi nhận`, empty `Chưa ghi nhận`, milestone symbols, weekend shading, reporting boundary, frozen context, and horizontal pagination in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T017 [US2] Add RED projection tests for `RecordedInterval`, `OpenRecordedInterval`, `CompletionPoint`, `EffortOnly`, and `None`, including finish-only with null start, effort-only with no date, invalid-effort percentage suppression, and conservative roll-up coverage in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressProjectionTests.cs`
+- [X] T018 [US2] Add RED workbook tests for one daily column per date, adjacent `Kế hoạch`/`Thực tế` lanes, green intervals, `✓` finish point, `● Có ghi nhận`, empty `Chưa ghi nhận`, milestone symbols, weekend shading, reporting boundary, frozen context, and horizontal pagination in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T019 [P] [US2] Add exactly `RecordedInterval`, `OpenRecordedInterval`, `CompletionPoint`, `EffortOnly`, and `None`, plus required evidence label and nullable official effort fields, to `src/ProjectManagementCompiler/Management/ExecutiveDailyGanttModel.cs`
-- [ ] T020 [US2] Classify direct and roll-up Actual shapes from official facts only, retain `ActualFinish` without inventing `ActualStart`, and calculate percentage only for finite non-negative effort with a positive sum in `src/ProjectManagementCompiler/Management/ExecutiveDailyGanttProjector.cs`
-- [ ] T021 [US2] Extract and compose the full daily `Gantt` sheet from explicit projection shapes, including truthful markers, continuation cues, hierarchy, coverage, panes, and print behavior in `src/ProjectManagementCompiler/Outputs/ExecutiveGanttWorksheetComposer.cs`
-- [ ] T022 [US2] Replace the legacy inline daily-Gantt construction with `ExecutiveGanttWorksheetComposer` without changing official selection or workbook serialization ownership in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
+- [X] T019 [P] [US2] Add exactly `RecordedInterval`, `OpenRecordedInterval`, `CompletionPoint`, `EffortOnly`, and `None`, plus required evidence label and nullable official effort fields, to `src/ProjectManagementCompiler/Management/ExecutiveDailyGanttModel.cs`
+- [X] T020 [US2] Classify direct and roll-up Actual shapes from official facts only, retain `ActualFinish` without inventing `ActualStart`, and calculate percentage only for finite non-negative effort with a positive sum in `src/ProjectManagementCompiler/Management/ExecutiveDailyGanttProjector.cs`
+- [X] T021 [US2] Compose the full daily `Gantt` sheet from explicit projection shapes, including truthful markers, continuation cues, hierarchy, coverage, panes, and print behavior in the neutral workbook composition boundary.
+- [X] T022 [US2] Replace the legacy five-sheet daily-Gantt construction with the `Gantt` sheet without changing official selection or workbook serialization ownership in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
 
 **Checkpoint**: The Gantt independently distinguishes plan, recorded
 execution, sparse evidence, and missing evidence at normal zoom.
@@ -125,18 +125,18 @@ outline and verify every Delivery Card appears once with correct parentage.
 
 ### Tests for User Story 3
 
-- [ ] T023 [US3] Add and register RED projection tests for exact four-level membership, canonical order, positional WBS numbering, parent identity, depths 0–3, milestone/gate exclusion, unresolved-parent visibility, clean `Hạng mục`, and 1/6/35/53 reconciliation in `tests/ProjectManagementCompiler.Tests/ExecutiveWbsProjectionTests.cs` and `tests/ProjectManagementCompiler.Tests/Program.cs`
-- [ ] T024 [US3] Extend the RED WBS tests for `Chưa phân công`, approved state, evidence-based percentage, attention, planned/Actual fields, latest update, ordered predecessor IDs, dependency state, concise evidence, and relative-only source reference in `tests/ProjectManagementCompiler.Tests/ExecutiveWbsProjectionTests.cs`
-- [ ] T025 [US3] Add RED workbook tests for exact primary columns `WBS`, `Mã`, `Hạng mục`, `Loại`, `Đầu mối`, `Trạng thái`, `% thực tế`, `Cần chú ý`; initially hidden Delivery Cards; expandable parent groups; collapsed Plan/Actual/Relationships/Evidence columns; filtering; and frozen identity context in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T023 [US3] Add and register RED projection tests for exact four-level membership, canonical order, positional WBS numbering, parent identity, depths 0–3, milestone/gate exclusion, unresolved-parent visibility, clean `Hạng mục`, and 1/6/35/53 reconciliation in `tests/ProjectManagementCompiler.Tests/ExecutiveWbsProjectionTests.cs` and `tests/ProjectManagementCompiler.Tests/Program.cs`
+- [X] T024 [US3] Extend the RED WBS tests for `Chưa phân công`, approved state, evidence-based percentage, attention, planned/Actual fields, latest update, ordered predecessor IDs, dependency state, concise evidence, and relative-only source reference in `tests/ProjectManagementCompiler.Tests/ExecutiveWbsProjectionTests.cs`
+- [X] T025 [US3] Add RED workbook tests for exact primary columns `WBS`, `Mã`, `Hạng mục`, `Loại`, `Đầu mối`, `Trạng thái`, `% thực tế`, `Cần chú ý`; initially hidden Delivery Cards; expandable parent groups; collapsed Plan/Actual/Relationships/Evidence columns; filtering; and frozen identity context in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T026 [P] [US3] Define WBS kinds exactly as Project, Phase, WorkPackage, and DeliveryCard and add the constrained row/projection fields from `data-model.md` in `src/ProjectManagementCompiler/Management/ExecutiveWbsModel.cs`
-- [ ] T027 [US3] Project canonical four-level membership, stable source order, positional numbering, parentage, depths 0–3, Reader-Facing Names, and explicit unresolved-parent context without including milestones in `src/ProjectManagementCompiler/Management/ExecutiveWbsProjector.cs`
-- [ ] T028 [US3] Add owner/state/progress roll-ups, attention, plan/Actual facts, update, predecessors, dependency condition, concise evidence, and minimal relative source locator without fabricating missing values in `src/ProjectManagementCompiler/Management/ExecutiveWbsProjector.cs`
-- [ ] T029 [US3] Add the immutable WBS projection to the root report and invoke `ExecutiveWbsProjector` from the official report boundary in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportModel.cs` and `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
-- [ ] T030 [US3] Compose `WBS` with clean names, eight visible primary columns, Delivery Card row groups initially hidden, four independent optional column groups initially collapsed, complete filter range, and frozen context in `src/ProjectManagementCompiler/Outputs/ExecutiveWbsWorksheetComposer.cs`
-- [ ] T031 [US3] Insert the focused WBS composer into the interim workbook without altering Gantt or technical workbook contracts in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
+- [X] T026 [P] [US3] Define WBS kinds exactly as Project, Phase, WorkPackage, and DeliveryCard and add the constrained row/projection fields from `data-model.md` in `src/ProjectManagementCompiler/Management/ExecutiveWbsModel.cs`
+- [X] T027 [US3] Project canonical four-level membership, stable source order, positional numbering, parentage, depths 0–3, Reader-Facing Names, and explicit unresolved-parent context without including milestones in `src/ProjectManagementCompiler/Management/ExecutiveWbsProjector.cs`
+- [X] T028 [US3] Add owner/state/progress roll-ups, attention, plan/Actual facts, update, predecessors, dependency condition, concise evidence, and minimal relative source locator without fabricating missing values in `src/ProjectManagementCompiler/Management/ExecutiveWbsProjector.cs`
+- [X] T029 [US3] Add the immutable WBS projection to the root report and invoke `ExecutiveWbsProjector` from the official report boundary in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportModel.cs` and `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
+- [X] T030 [US3] Compose `WBS` with clean names, eight visible primary columns, Delivery Card row groups initially hidden, four independent optional column groups initially collapsed, complete filter range, and frozen context in the neutral workbook composition boundary.
+- [X] T031 [US3] Insert the WBS composer into the interim workbook without altering Gantt or technical workbook contracts in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
 
 **Checkpoint**: Scope hierarchy is complete, readable by default, and fully
 expandable without treating milestones or dates as WBS structure.
@@ -154,16 +154,16 @@ duplicates, and no-item state; verify exact membership and category order.
 
 ### Tests for User Story 4
 
-- [ ] T032 [US4] Add and register RED projection tests for the reporting-date-through-plus-29-days window, decision/blocker precedence, overdue unfinished membership, active membership, planned/milestone intersection, outside-window exclusion, stable-target deduplication, known-before-unknown dates, source-order ties, and empty population in `tests/ProjectManagementCompiler.Tests/ExecutiveOperatingProjectionTests.cs` and `tests/ProjectManagementCompiler.Tests/Program.cs`
-- [ ] T033 [US4] Add RED workbook tests for the primary columns `Việc cần làm`, `Ảnh hưởng`, `Đầu mối`, `Cần xong trước`, `Trạng thái`, `Bối cảnh tiến độ`; approved group order; concise empty state; wrapped text; frozen headings; and readable landscape print settings in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T032 [US4] Add and register RED projection tests for the reporting-date-through-plus-29-days window, decision/blocker precedence, overdue unfinished membership, active membership, planned/milestone intersection, outside-window exclusion, stable-target deduplication, known-before-unknown dates, source-order ties, and empty population in `tests/ProjectManagementCompiler.Tests/ExecutiveOperatingProjectionTests.cs` and `tests/ProjectManagementCompiler.Tests/Program.cs`
+- [X] T033 [US4] Add RED workbook tests for the primary columns `Việc cần làm`, `Ảnh hưởng`, `Đầu mối`, `Cần xong trước`, `Trạng thái`, `Bối cảnh tiến độ`; approved group order; concise empty state; wrapped text; frozen headings; and readable landscape print settings in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T034 [P] [US4] Define operating categories exactly as DecisionOrBlocker, OverdueUnfinished, Active, and PlannedOrMilestone and add required stable key, target, action, consequence, owner, date, state, schedule context, and source-order fields in `src/ProjectManagementCompiler/Management/ExecutiveOperatingModel.cs`
-- [ ] T035 [US4] Project and deduplicate attention plus near-term schedule facts using category/date/source order without dropping supported decisions outside the schedule window or creating a Kanban workflow in `src/ProjectManagementCompiler/Management/ExecutiveOperatingProjector.cs`
-- [ ] T036 [US4] Add the ordered operating collection to the root report and invoke the operating projector from official attention and daily-Gantt projections in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportModel.cs` and `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
-- [ ] T037 [US4] Compose `Điều hành 30 ngày` with one row per deduplicated concern, approved columns/order/empty state, wrapped text, frozen headers, and bounded landscape printing in `src/ProjectManagementCompiler/Outputs/ExecutiveOperatingWorksheetComposer.cs`
-- [ ] T038 [US4] Replace legacy `30 ngày tới` and `Vấn đề cần xử lý` sheet construction with the one focused operating composer in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
+- [X] T034 [P] [US4] Define operating categories exactly as DecisionOrBlocker, OverdueUnfinished, Active, and PlannedOrMilestone and add required stable key, target, action, consequence, owner, date, state, schedule context, and source-order fields in `src/ProjectManagementCompiler/Management/ExecutiveOperatingModel.cs`
+- [X] T035 [US4] Project and deduplicate attention plus near-term schedule facts using category/date/source order without dropping supported decisions outside the schedule window or creating a Kanban workflow in `src/ProjectManagementCompiler/Management/ExecutiveOperatingProjector.cs`
+- [X] T036 [US4] Add the ordered operating collection to the root report and invoke the operating projector from official attention and daily-Gantt projections in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportModel.cs` and `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
+- [X] T037 [US4] Compose `Điều hành 30 ngày` with one row per deduplicated concern, approved columns/order/empty state, wrapped text, frozen headers, and bounded landscape printing in the neutral workbook composition boundary.
+- [X] T038 [US4] Replace legacy `30 ngày tới` and `Vấn đề cần xử lý` sheet construction with the one focused operating composer in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
 
 **Checkpoint**: A delivery lead can run the next 30 days from one operating
 sheet without reconciling duplicate schedule and issue rows.
@@ -181,18 +181,18 @@ hash, snapshot ID, absolute path, raw code, or repeated provenance boilerplate.
 
 ### Tests for User Story 5
 
-- [ ] T039 [US5] Add RED projection tests for one detail row per Delivery Card, reader-first field order, concise missing labels, predecessors/dependency context, stable reference, minimal relative provenance, and complete centralized official metadata in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressProjectionTests.cs`
-- [ ] T040 [US5] Add RED workbook tests for exact six-sheet order and active `Tổng quan`, filtered/frozen reader-first `Chi tiết công việc`, label/value `Thông tin báo cáo`, zero forbidden technical tokens on sheets 1–5, and complete authority metadata only on sheet 6 in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
-- [ ] T041 [US5] Add RED application regressions for unchanged method, route, media type, dated filename, `CurrentOfficialResult` selection, sparse-evidence success, contradiction failure, input/state immutability, deterministic bytes, report non-importability, and unchanged technical CARIO + Gantt package in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressExportApplicationTests.cs`, `tests/ProjectManagementCompiler.Tests/ExecutiveProgressUiTests.cs`, `tests/ProjectManagementCompiler.Tests/CarioXlsxTests.cs`, and `tests/ProjectManagementCompiler.Tests/XlsxPreviewImporterTests.cs`
+- [X] T039 [US5] Add RED projection tests for one detail row per Delivery Card, reader-first field order, concise missing labels, predecessors/dependency context, stable reference, minimal relative provenance, and complete centralized official metadata in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressProjectionTests.cs`
+- [X] T040 [US5] Add RED workbook tests for exact six-sheet order and active `Tổng quan`, filtered/frozen reader-first `Chi tiết công việc`, label/value `Thông tin báo cáo`, zero forbidden technical tokens on sheets 1–5, and complete authority metadata only on sheet 6 in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressXlsxTests.cs`
+- [X] T041 [US5] Add RED application regressions for unchanged method, route, media type, dated filename, `CurrentOfficialResult` selection, sparse-evidence success, contradiction failure, input/state immutability, deterministic bytes, report non-importability, and unchanged technical CARIO + Gantt package in the existing executive/application regression suites.
 
 ### Implementation for User Story 5
 
-- [ ] T042 [P] [US5] Add `ExecutiveReportMetadata` with required authority, source identity, snapshot/project/baseline identities, contract version, register revision, reporting/analysis dates, planning range, and concise limitations; extend detail with attention, dependency, and minimal provenance fields in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportModel.cs`
-- [ ] T043 [US5] Project metadata exclusively from official import/baseline facts and project one reader-first detail row per canonical Delivery Card without absolute paths or fabricated values in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
-- [ ] T044 [P] [US5] Compose filtered/frozen `Chi tiết công việc` with reader-facing fields before technical identity and blank typed cells beside concise missing-evidence labels in `src/ProjectManagementCompiler/Outputs/ExecutiveDetailWorksheetComposer.cs`
-- [ ] T045 [P] [US5] Compose `Thông tin báo cáo` as concise label/value sections for authority, dates, source commit/object, snapshot, project, baseline, revision, contract, planning window, and limitations in `src/ProjectManagementCompiler/Outputs/ExecutiveReportInfoWorksheetComposer.cs`
-- [ ] T046 [US5] Assemble exactly `Tổng quan`, `Điều hành 30 ngày`, `Gantt`, `WBS`, `Chi tiết công việc`, and `Thông tin báo cáo` in order, activate index 0, remove obsolete inline five-sheet builders, and preserve deterministic composition in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
-- [ ] T047 [US5] Make only test-demonstrated compatibility corrections while preserving `ExportExecutiveProgressXlsx`, `/api/exports/executive-progress.xlsx`, official-only selection, and dated filename in `src/ProjectManagementCompiler/Application/ProjectCompiler.cs`, `src/ProjectManagementCompiler/Program.cs`, and `src/ProjectManagementCompiler/wwwroot/app.js`
+- [X] T042 [P] [US5] Add `ExecutiveReportMetadata` with required authority, source identity, snapshot/project/baseline identities, contract version, register revision, reporting/analysis dates, planning range, and concise limitations; extend detail with attention, dependency, and minimal provenance fields in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportModel.cs`
+- [X] T043 [US5] Project metadata exclusively from official import/baseline facts and project one reader-first detail row per canonical Delivery Card without absolute paths or fabricated values in `src/ProjectManagementCompiler/Management/ExecutiveProgressReportProjector.cs`
+- [X] T044 [P] [US5] Compose filtered/frozen `Chi tiết công việc` with reader-facing fields before technical identity and blank typed cells beside concise missing-evidence labels in the neutral workbook composition boundary.
+- [X] T045 [P] [US5] Compose `Thông tin báo cáo` as concise label/value sections for authority, dates, source commit/object, snapshot, project, baseline, revision, contract, planning window, and limitations in the neutral workbook composition boundary.
+- [X] T046 [US5] Assemble exactly `Tổng quan`, `Điều hành 30 ngày`, `Gantt`, `WBS`, `Chi tiết công việc`, and `Thông tin báo cáo` in order, activate index 0, and preserve deterministic composition in `src/ProjectManagementCompiler/Outputs/ExecutiveProgressWorkbookComposer.cs`
+- [X] T047 [US5] Preserve `ExportExecutiveProgressXlsx`, `/api/exports/executive-progress.xlsx`, official-only selection, and dated filename while updating only test-demonstrated compatibility expectations.
 
 **Checkpoint**: One six-sheet report supports management reading and audit
 follow-up while remaining presentation-only and non-importable.
@@ -204,12 +204,12 @@ follow-up while remaining presentation-only and non-importable.
 **Purpose**: Validate cross-story quality, real-source behavior, visual
 readability, and repository hygiene before implementation can be reviewed.
 
-- [ ] T048 [P] Update the progress-report runbook for the six-sheet reader journey, official-only export, non-importability, and separate future Project Workbook boundary in `docs/runbook/mvp1-local.md`
-- [ ] T049 Run focused suites plus `scripts/verify.ps1`, `git diff --check`, and `git status --short`, and append exact commands/results with zero failed checks to `specs/007-management-report-readability/implementation-evidence.md`
-- [ ] T050 Run the approved exact-commit IDEAEngineering import and export flow, measure the 6/35/53/7 fixture under five seconds, compare source/application state before and after, and append artifact path plus immutable before/after evidence to `specs/007-management-report-readability/implementation-evidence.md`
-- [ ] T051 Open the real workbook at 100% zoom, inspect all six sheets and the first two landscape print previews against `quickstart.md`, record any clipping or ambiguity as failure, and append screenshots/findings to `specs/007-management-report-readability/implementation-evidence.md`
-- [ ] T052 Inspect staged/untracked inventory for generated workbooks, secrets, credentials, absolute private configuration, and proprietary source material; record the clean public-repository decision in `specs/007-management-report-readability/implementation-evidence.md`
-- [ ] T053 Run post-implementation Spec Kit analyze/converge and standards-plus-spec code review, resolve every approved critical/high finding, and record final traceability and review results in `specs/007-management-report-readability/implementation-evidence.md`
+- [X] T048 [P] Update the progress-report runbook for the six-sheet reader journey, official-only export, non-importability, and separate future Project Workbook boundary in `docs/runbook/mvp1-local.md`
+- [X] T049 Run focused suites plus `scripts/verify.ps1`, `git diff --check`, and `git status --short`, and append exact commands/results with zero failed checks to `specs/007-management-report-readability/implementation-evidence.md`
+- [X] T050 Run the approved exact-commit IDEAEngineering import and export flow, measure the 6/35/53/7 fixture under five seconds, compare source/application state before and after, and append artifact path plus immutable before/after evidence to `specs/007-management-report-readability/implementation-evidence.md`
+- [X] T051 Open the real workbook at 100% zoom, inspect all six sheets and the first two landscape print previews against `quickstart.md`, record any clipping or ambiguity as failure, and append screenshots/findings to `specs/007-management-report-readability/implementation-evidence.md`
+- [X] T052 Inspect staged/untracked inventory for generated workbooks, secrets, credentials, absolute private configuration, and proprietary source material; record the clean public-repository decision in `specs/007-management-report-readability/implementation-evidence.md`
+- [X] T053 Run post-implementation Spec Kit analyze/converge and standards-plus-spec code review, resolve every approved critical/high finding, and record final traceability and review results in `specs/007-management-report-readability/implementation-evidence.md`
 
 ---
 
