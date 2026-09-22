@@ -26,6 +26,21 @@ internal static class ExecutiveProgressTestFixtures
     public const string MissingEffortCardId = "P07-A";
     public const string OneDayCompletedCardId = "F01-A";
     public const string RepeatedRawId = "P01";
+    public const string FinishOnlyCardId = ExplicitNotStartedCardId;
+    public const string EffortOnlyCardId = InProgressWithoutStartCardId;
+    public const string NoExecutionEvidenceCardId = UnrecordedCardId;
+    public const int ExpectedProjectCount = 1;
+    public const int ExpectedPhaseCount = 6;
+    public const int ExpectedWorkPackageCount = 35;
+    public const int ExpectedDeliveryCardCount = 53;
+
+    public static IReadOnlyList<(string SourceText, string? ExactId, string Expected)> ReaderFacingTitleCases { get; } =
+    [
+        ("[PH0][PLN01] Delivery Card → **Xác nhận bộ tài liệu được phép dùng để bắt đầu**", "PLN01", "Xác nhận bộ tài liệu được phép dùng để bắt đầu"),
+        ("P01-A — P01-A — Chốt phạm vi phiên bản thử nghiệm cuối năm", "P01-A", "Chốt phạm vi phiên bản thử nghiệm cuối năm"),
+        ("[Bắt buộc] Giữ nguyên nội dung có ý nghĩa", "P02-A", "[Bắt buộc] Giữ nguyên nội dung có ý nghĩa"),
+        ("", null, "Chưa ghi nhận")
+    ];
 
     public static CompilationResult BuildOfficialFixtureResult(DateOnly? asOfDate = null)
     {
@@ -55,6 +70,72 @@ internal static class ExecutiveProgressTestFixtures
         return SourceExecutionTestFixtures.BuildResult(
             BuildDailyGanttFixtureProject(reportingDate),
             analysisAsOfDate ?? reportingDate);
+    }
+
+    /// <summary>
+    /// Feature 007 acceptance fixture. It preserves the established daily-Gantt
+    /// fixture while adding a finish-only completion and deterministic
+    /// reader-facing title noise. Together with the existing records it covers
+    /// recorded interval, open interval, completion point, effort-only, and no
+    /// execution evidence without changing legacy fixture expectations.
+    /// </summary>
+    public static CompilationResult BuildFeature007ReportFixtureResult(
+        DateOnly? sourceReportingDate = null,
+        DateOnly? analysisAsOfDate = null)
+    {
+        var reportingDate = sourceReportingDate ?? DailyGanttDefaultReportingDate;
+        return SourceExecutionTestFixtures.BuildResult(
+            BuildFeature007ReportFixtureProject(reportingDate),
+            analysisAsOfDate ?? reportingDate);
+    }
+
+    public static CanonicalProject BuildFeature007ReportFixtureProject(
+        DateOnly? sourceReportingDate = null)
+    {
+        var reportingDate = sourceReportingDate ?? DailyGanttDefaultReportingDate;
+        var project = BuildDailyGanttFixtureProject(reportingDate);
+
+        var cards = project.DeliveryCards
+            .Select(card => card.Id switch
+            {
+                CompletedEarlyCardId => card with
+                {
+                    Name = "[PH0][P01][P01-A] Delivery Card → **Xác nhận bộ tài liệu được phép dùng để bắt đầu**"
+                },
+                CompletedLateCardId => card with
+                {
+                    Name = "P01-B — P01-B — Chốt phạm vi phiên bản thử nghiệm cuối năm"
+                },
+                OpenInProgressCardId => card with
+                {
+                    Name = "[Bắt buộc] Giữ nguyên nội dung có ý nghĩa"
+                },
+                _ => card
+            })
+            .ToArray();
+
+        var records = project.SourceExecution.Records
+            .Select(record => string.Equals(
+                    record.Entity.Id,
+                    FinishOnlyCardId,
+                    StringComparison.OrdinalIgnoreCase)
+                ? Recorded(
+                    FinishOnlyCardId,
+                    ExecutionState.Completed,
+                    SourceResultState.Pass,
+                    actualFinish: new DateOnly(2026, 9, 24),
+                    actualEffortHours: 2m,
+                    remainingEffortHours: 0m,
+                    lastUpdatedAt: AtUtc(2026, 9, 24, 16),
+                    evidence: [CompletionEvidence(FinishOnlyCardId, new DateOnly(2026, 9, 24))])
+                : record)
+            .ToArray();
+
+        return project with
+        {
+            DeliveryCards = cards,
+            SourceExecution = project.SourceExecution with { Records = records }
+        };
     }
 
     public static CompilationResult BuildReportingDateBeforeBaselineFixtureResult() =>
