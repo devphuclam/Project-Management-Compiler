@@ -198,3 +198,48 @@ rewrite either value.
 A dependency from a known milestone/gate to a delivery card or later gate is a
 valid execution-graph edge. Appendix work-package predecessor evidence remains
 separate traceability data and is not double-fed into CPM.
+
+## Project setup and reader outputs
+
+**Project Setup Workspace**:
+A guided definition of a project's hierarchy, schedule, responsibilities,
+tracking policy, and evidence expectations before progress monitoring begins.
+It is the primary low-code authoring surface for projects that do not already
+publish a supported management source contract.
+_Avoid_: management report, source repository, spreadsheet template
+
+**Tracking Source**:
+The single selected authority used to obtain ongoing planning and execution
+facts for a managed project. A tracking source may be an external supported
+source or the project's own managed workspace, but competing sources are not
+silently blended.
+_Avoid_: every available input, management report, presentation workbook
+
+**Management Report**:
+A cleaned, point-in-time, reader-facing presentation of one official project
+snapshot. It supports management review but is neither a project-authoring
+surface nor an import/source contract.
+_Avoid_: project workbook, source of truth, technical export
+
+**Project Workbook**:
+A future versioned, round-trip project archive that can restore a compatible
+project workspace and its structured facts. It is distinct from the Management
+Report and is not the primary project-setup experience.
+_Avoid_: management report, CARIO fill file, arbitrary Excel workbook
+
+**WBS View**:
+The complete deliverable hierarchy Project -> Phase -> Work Package -> Delivery
+Card. It describes scope decomposition; milestones and schedule lanes remain
+separate management concepts.
+_Avoid_: flat task list, Gantt, milestone list
+
+**Reader-Facing Name**:
+The meaningful project or work-item name shown to a reader after redundant
+identifiers, hierarchy prefixes, and source markup are removed. Stable IDs stay
+available in a separate identity field and the source meaning is not rewritten.
+_Avoid_: raw source title, identifier-decorated title, generated summary
+
+**Finish-Only Completion**:
+Official completion evidence with a recorded Actual finish but no recorded
+Actual start. It proves a completion point, not an Actual duration interval.
+_Avoid_: one-day Actual bar, inferred Actual start
