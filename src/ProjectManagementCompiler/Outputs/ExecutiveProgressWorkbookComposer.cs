@@ -6,6 +6,8 @@ namespace ProjectManagementCompiler.Outputs;
 internal sealed class ExecutiveProgressWorkbookComposer
 {
     private const int DailyGanttFixedColumnCount = 8;
+    private const int OverviewFixedColumnCount = 5;
+    private const int MaxExecutiveOperatingItems = 7;
     private const int NearTermOverdueMarkerSpan = 6;
 
     public ExecutiveWorkbookDocument Build(ExecutiveProgressReport report)
@@ -26,98 +28,185 @@ internal sealed class ExecutiveProgressWorkbookComposer
 
     private static ExecutiveWorkbookWorksheet BuildOverview(ExecutiveProgressReport report)
     {
+        var buckets = BuildCompactOverviewAxis(report);
+        var totalColumns = OverviewFixedColumnCount + buckets.Count;
+        var mergedRanges = new List<ExecutiveWorkbookRange>();
         var rows = new List<ExecutiveWorkbookRow>
         {
             RowOf(Text("Báo cáo điều hành tiến độ", ExecutiveWorkbookStyleToken.Title)),
             RowOf(Text(report.ProjectName, ExecutiveWorkbookStyleToken.Subtitle)),
             RowOf(Text($"Cập nhật đến {FormatDate(report.SourceReportingDate)}", ExecutiveWorkbookStyleToken.ReportingBoundary)),
             RowOf(Text(BuildPlanningContext(report), ExecutiveWorkbookStyleToken.Subtitle)),
-            BlankRow(),
-            RowOf(
+            BlankRow()
+        };
+
+        foreach (var row in new[] { 1, 2, 3, 4 })
+        {
+            mergedRanges.Add(new ExecutiveWorkbookRange(row, 1, row, totalColumns));
+        }
+
+        var summarySpans = BuildBalancedSpans(totalColumns, 5);
+        AddSpannedRow(
+            rows,
+            mergedRanges,
+            totalColumns,
+            summarySpans,
+            [
                 Text("Vị trí hiện tại", ExecutiveWorkbookStyleToken.Header),
-                Text("Tiến độ có bằng chứng", ExecutiveWorkbookStyleToken.Header),
-                Text("Thay đổi so với kế hoạch", ExecutiveWorkbookStyleToken.Header),
+                Text("Độ phủ ghi nhận", ExecutiveWorkbookStyleToken.Header),
+                Text("Tiến độ lịch", ExecutiveWorkbookStyleToken.Header),
                 Text("Mốc kế tiếp", ExecutiveWorkbookStyleToken.Header),
-                Text("Cần quyết định", ExecutiveWorkbookStyleToken.Header)),
-            RowOf(
-                Text(report.CurrentPhase, StyleFor(report.ScheduleCondition.Tone)),
+                Text("Điều kiện mở cổng", ExecutiveWorkbookStyleToken.Header)
+            ]);
+        AddSpannedRow(
+            rows,
+            mergedRanges,
+            totalColumns,
+            summarySpans,
+            [
+                Text(report.CurrentPhase, ExecutiveWorkbookStyleToken.Default),
                 Text(report.Progress.Statement, report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
                 Text(report.ScheduleCondition.Label, StyleFor(report.ScheduleCondition.Tone)),
                 Text(report.NextMilestone.DisplayName, report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
-                Text(report.ReadinessCondition.Label, StyleFor(report.ReadinessCondition.Tone))),
-            RowOf(
-                Text(BuildProgressEvidence(report.Progress), report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
-                Text(report.Progress.RecordedPercent is null ? ReaderFacingTextPolicy.MissingEvidenceLabel : $"{report.Progress.RecordedPercent}%", report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
+                Text(report.ReadinessCondition.Label, StyleFor(report.ReadinessCondition.Tone))
+            ]);
+        AddSpannedRow(
+            rows,
+            mergedRanges,
+            totalColumns,
+            summarySpans,
+            [
+                Text(BuildCounts(report.Progress), ExecutiveWorkbookStyleToken.Default),
+                Text(BuildProgressSummaryDetail(report.Progress), report.Progress.RecordedPercent is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.ActualComplete),
                 Text(report.ScheduleCondition.Detail, StyleFor(report.ScheduleCondition.Tone)),
                 Text(FormatDate(report.NextMilestone.PlannedDate), report.NextMilestone.IsMissing ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
-                Text(report.ReadinessCondition.Detail, StyleFor(report.ReadinessCondition.Tone))),
-            BlankRow(),
-            RowOf(Text("Tiến độ giai đoạn và mốc", ExecutiveWorkbookStyleToken.Header)),
-            RowOf(
-                Text("Hạng mục", ExecutiveWorkbookStyleToken.Header),
-                Text("Kế hoạch bắt đầu", ExecutiveWorkbookStyleToken.Header),
-                Text("Kế hoạch kết thúc", ExecutiveWorkbookStyleToken.Header),
-                Text("Thực tế bắt đầu", ExecutiveWorkbookStyleToken.Header),
-                Text("Thực tế kết thúc/đến", ExecutiveWorkbookStyleToken.Header)),
-            BlankRow(),
-            RowOf(
-                Text("Kế hoạch", ExecutiveWorkbookStyleToken.Plan),
-                Text("Thực tế", ExecutiveWorkbookStyleToken.ActualComplete),
-                Text("Dự báo", ExecutiveWorkbookStyleToken.Forecast),
-                Text("Ngày báo cáo", ExecutiveWorkbookStyleToken.ReportingBoundary)),
-            BlankRow()
-        };
-        var scheduleRows = BuildOverviewScheduleRows(report).ToArray();
-        rows.InsertRange(11, scheduleRows);
+                Text(report.ReadinessCondition.Detail, StyleFor(report.ReadinessCondition.Tone))
+            ]);
 
-        var mergedRanges = new List<ExecutiveWorkbookRange>();
-        AddReaderContextMerges(mergedRanges, 8, 2, 3, 4, 9);
         rows.Add(BlankRow());
+        var timelineTitleRow = rows.Count + 1;
+        rows.Add(RowOf(Text("Tiến độ giai đoạn và mốc", ExecutiveWorkbookStyleToken.Header)));
+        mergedRanges.Add(new ExecutiveWorkbookRange(timelineTitleRow, 1, timelineTitleRow, totalColumns));
+        var timelineNoteRow = rows.Count + 1;
+        rows.Add(RowOf(Text("Gantt tóm tắt theo giai đoạn; mỗi cột là một tuần. Kế hoạch và thực tế từng công việc nằm ở sheet Gantt.", ExecutiveWorkbookStyleToken.Subtitle)));
+        mergedRanges.Add(new ExecutiveWorkbookRange(timelineNoteRow, 1, timelineNoteRow, totalColumns));
+
+        var axisTitleCells = Enumerable.Repeat(Text(string.Empty, ExecutiveWorkbookStyleToken.Header), totalColumns).ToArray();
+        axisTitleCells[0] = Text("Hạng mục", ExecutiveWorkbookStyleToken.Header);
+        axisTitleCells[3] = Text("Bắt đầu", ExecutiveWorkbookStyleToken.Header);
+        axisTitleCells[4] = Text("Kết thúc", ExecutiveWorkbookStyleToken.Header);
+        axisTitleCells[OverviewFixedColumnCount] = Text(buckets.Count > 0 && buckets[0].IsMonthly ? "Tháng" : "Tuần", ExecutiveWorkbookStyleToken.Header);
+        var axisTitleRow = rows.Count + 1;
+        rows.Add(RowOf(axisTitleCells));
+        mergedRanges.Add(new ExecutiveWorkbookRange(axisTitleRow, 1, axisTitleRow, 3));
+        if (buckets.Count > 1)
+        {
+            mergedRanges.Add(new ExecutiveWorkbookRange(axisTitleRow, OverviewFixedColumnCount + 1, axisTitleRow, totalColumns));
+        }
+
+        var axisDateCells = Enumerable.Repeat(Text(string.Empty, ExecutiveWorkbookStyleToken.Header), totalColumns).ToArray();
+        for (var index = 0; index < buckets.Count; index++)
+        {
+            var bucket = buckets[index];
+            axisDateCells[OverviewFixedColumnCount + index] = Text(
+                bucket.Label,
+                bucket.Contains(report.SourceReportingDate) ? ExecutiveWorkbookStyleToken.ReportingBoundary : ExecutiveWorkbookStyleToken.Header,
+                isReportingBoundary: bucket.Contains(report.SourceReportingDate));
+        }
+
+        var axisDateRow = rows.Count + 1;
+        rows.Add(RowOf(axisDateCells));
+        mergedRanges.Add(new ExecutiveWorkbookRange(axisDateRow, 1, axisDateRow, 3));
+
+        foreach (var item in report.OverviewTimeline)
+        {
+            var cells = Enumerable.Repeat(Text(string.Empty), totalColumns).ToArray();
+            cells[0] = Text(item.DisplayName, item.IsCurrent ? ExecutiveWorkbookStyleToken.ReportingBoundary : TimelineStyle(item));
+            cells[3] = DateCell(item.PlannedStart, ExecutiveWorkbookStyleToken.Plan);
+            cells[4] = DateCell(item.PlannedFinish, ExecutiveWorkbookStyleToken.Plan);
+            for (var index = 0; index < buckets.Count; index++)
+            {
+                var bucket = buckets[index];
+                var isBoundary = bucket.Contains(report.SourceReportingDate);
+                if (item.Kind == ExecutiveScheduleRowKind.Milestone
+                    && item.PlannedStart is not null
+                    && bucket.Contains(item.PlannedStart.Value))
+                {
+                    cells[OverviewFixedColumnCount + index] = Text("◆", ExecutiveWorkbookStyleToken.Milestone, isBoundary);
+                }
+                else if (item.Kind == ExecutiveScheduleRowKind.Phase
+                    && bucket.Intersects(item.PlannedStart, item.PlannedFinish))
+                {
+                    cells[OverviewFixedColumnCount + index] = Text("■", ExecutiveWorkbookStyleToken.Plan, isBoundary);
+                }
+                else
+                {
+                    cells[OverviewFixedColumnCount + index] = Text(string.Empty, ExecutiveWorkbookStyleToken.Default, isBoundary);
+                }
+            }
+
+            var scheduleRow = rows.Count + 1;
+            rows.Add(RowOf(cells));
+            mergedRanges.Add(new ExecutiveWorkbookRange(scheduleRow, 1, scheduleRow, 3));
+        }
+
+        rows.Add(RowOf(
+            Text("Kế hoạch giai đoạn", ExecutiveWorkbookStyleToken.Plan),
+            Text("◆ Mốc", ExecutiveWorkbookStyleToken.Milestone),
+            Text("Tuần báo cáo", ExecutiveWorkbookStyleToken.ReportingBoundary),
+            Text("Chi tiết kế hoạch / thực tế: xem sheet Gantt", ExecutiveWorkbookStyleToken.Subtitle)));
+        rows.Add(BlankRow());
+        var attentionTitleRow = rows.Count + 1;
         rows.Add(RowOf(Text("Nội dung cần xin ý kiến", ExecutiveWorkbookStyleToken.Header)));
+        mergedRanges.Add(new ExecutiveWorkbookRange(attentionTitleRow, 1, attentionTitleRow, totalColumns));
         var attention = report.OverviewAttention.Take(5).ToArray();
         if (attention.Length == 0)
         {
+            var emptyRow = rows.Count + 1;
             rows.Add(RowOf(Text("Hiện chưa có nội dung cần xin ý kiến", ExecutiveWorkbookStyleToken.Unknown)));
+            mergedRanges.Add(new ExecutiveWorkbookRange(emptyRow, 1, emptyRow, totalColumns));
         }
         else
         {
-            rows.Add(RowOf(
-                Text("Việc cần xử lý", ExecutiveWorkbookStyleToken.Header),
-                Text("Ảnh hưởng", ExecutiveWorkbookStyleToken.Header),
-                Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
-                Text("Cần xong trước", ExecutiveWorkbookStyleToken.Header)));
-            rows.AddRange(attention.Select(item => RowOf(
-                Text(item.Action, ExecutiveWorkbookStyleToken.Attention),
-                Text(item.Impact, ExecutiveWorkbookStyleToken.Attention),
-                Text(item.OwnerLabel, item.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
-                Text(item.DueLabel))));
+            var attentionSpans = BuildAttentionSpans(totalColumns);
+            AddSpannedRow(
+                rows,
+                mergedRanges,
+                totalColumns,
+                attentionSpans,
+                [
+                    Text("Việc cần xử lý", ExecutiveWorkbookStyleToken.Header),
+                    Text("Ảnh hưởng", ExecutiveWorkbookStyleToken.Header),
+                    Text("Đầu mối", ExecutiveWorkbookStyleToken.Header),
+                    Text("Cần xong trước", ExecutiveWorkbookStyleToken.Header)
+                ]);
+            foreach (var item in attention)
+            {
+                AddSpannedRow(
+                    rows,
+                    mergedRanges,
+                    totalColumns,
+                    attentionSpans,
+                    [
+                        Text(item.Action, ExecutiveWorkbookStyleToken.Attention),
+                        Text(item.Impact, ExecutiveWorkbookStyleToken.Attention),
+                        Text(item.OwnerLabel, item.OwnerLabel == ReaderFacingTextPolicy.MissingOwnerLabel ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Default),
+                        Text(item.DueLabel)
+                    ]);
+            }
         }
 
-        mergedRanges.Add(new ExecutiveWorkbookRange(1, 1, 1, DailyGanttFixedColumnCount));
-        return DailyWorksheet(
+        return new ExecutiveWorkbookWorksheet(
             "Tổng quan",
             rows,
-            DailyGanttFixedColumnCount,
+            new[] { 18d, 18d, 18d, 12d, 12d }
+                .Concat(Enumerable.Repeat(buckets.Count > 0 && buckets[0].IsMonthly ? 8d : 6d, buckets.Count))
+                .ToArray(),
             mergedRanges,
-            freezeRows: 11,
-            freezeColumns: 5,
-            fitToWidth: 1);
-    }
-
-    private static IEnumerable<ExecutiveWorkbookRow> BuildOverviewScheduleRows(ExecutiveProgressReport report)
-    {
-        return report.OverviewTimeline.Select(item =>
-        {
-            var actual = report.DailyGantt.FullRows.FirstOrDefault(row =>
-                row.Kind == (item.Kind == ExecutiveScheduleRowKind.Phase ? ExecutiveDailyGanttRowKind.Phase : ExecutiveDailyGanttRowKind.Milestone)
-                && string.Equals(row.DisplayName, item.DisplayName, StringComparison.Ordinal));
-            return RowOf(
-                Text(item.DisplayName, item.IsCurrent ? ExecutiveWorkbookStyleToken.ReportingBoundary : ExecutiveWorkbookStyleToken.Default),
-                DateCell(item.PlannedStart, ExecutiveWorkbookStyleToken.Plan),
-                DateCell(item.PlannedFinish, ExecutiveWorkbookStyleToken.Plan),
-                DateCell(actual?.ActualStart, ExecutiveWorkbookStyleToken.ActualComplete),
-                DateCell(actual?.ActualFinish ?? actual?.ActualDisplayThrough, ExecutiveWorkbookStyleToken.ActualComplete));
-        });
+            new ExecutiveWorkbookPane(axisDateRow, OverviewFixedColumnCount),
+            new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Landscape, fitToWidth: 1, fitToHeight: 0),
+            showGridLines: false,
+            zoomPercent: 100);
     }
 
     private static ExecutiveWorkbookWorksheet BuildOperating(ExecutiveProgressReport report)
@@ -139,7 +228,8 @@ internal sealed class ExecutiveProgressWorkbookComposer
                 Text("Bối cảnh tiến độ", ExecutiveWorkbookStyleToken.Header))
         };
 
-        rows.AddRange(report.OperatingItems.Select(item => RowOf(
+        var displayItems = report.OperatingItems.Take(MaxExecutiveOperatingItems).ToArray();
+        rows.AddRange(displayItems.Select(item => RowOf(
             Text(OperatingCategoryLabel(item.Category), OperatingCategoryStyle(item.Category)),
             Text(item.Action, ExecutiveWorkbookStyleToken.Attention),
             Text(item.Consequence, ExecutiveWorkbookStyleToken.Attention),
@@ -147,7 +237,7 @@ internal sealed class ExecutiveProgressWorkbookComposer
             Text(item.RequiredDateLabel, item.RequiredDate is null ? ExecutiveWorkbookStyleToken.Unknown : ExecutiveWorkbookStyleToken.Plan),
             Text(item.StateLabel, StateStyle(item.StateLabel)),
             Text(item.ScheduleContext, ExecutiveWorkbookStyleToken.Default))));
-        if (report.OperatingItems.Count == 0)
+        if (displayItems.Length == 0)
         {
             rows.Add(RowOf(Text("Không có việc cần theo dõi trong 30 ngày tới.", ExecutiveWorkbookStyleToken.Unknown)));
         }
@@ -156,7 +246,12 @@ internal sealed class ExecutiveProgressWorkbookComposer
             "Điều hành 30 ngày",
             rows,
             new[] { 20d, 44d, 36d, 22d, 18d, 18d, 34d },
-            Array.Empty<ExecutiveWorkbookRange>(),
+            [
+                new ExecutiveWorkbookRange(1, 1, 1, 7),
+                new ExecutiveWorkbookRange(2, 1, 2, 7),
+                new ExecutiveWorkbookRange(3, 1, 3, 7),
+                new ExecutiveWorkbookRange(4, 1, 4, 7)
+            ],
             new ExecutiveWorkbookPane(6, 2),
             new ExecutiveWorkbookPrintSettings(ExecutiveWorkbookPrintOrientation.Landscape, fitToWidth: 1, fitToHeight: 0),
             showGridLines: false,
@@ -1009,72 +1104,9 @@ internal sealed class ExecutiveProgressWorkbookComposer
             zoomPercent: 100,
             autoFilterRange: autoFilterRange);
 
-    private static IReadOnlyList<ExecutiveWorkbookRow> TimelineAxisRows(TimelineAxis axis, int fixedColumnCount)
+    private static IReadOnlyList<OverviewTimeBucket> BuildCompactOverviewAxis(ExecutiveProgressReport report)
     {
-        if (axis.WeekStarts.Count == 0)
-        {
-            return Array.Empty<ExecutiveWorkbookRow>();
-        }
-
-        var monthCells = axis.WeekStarts
-            .Select((week, index) =>
-            {
-                var previous = index == 0 ? (DateOnly?)null : axis.WeekStarts[index - 1];
-                var isFirstWeekOfMonth = previous is null || previous.Value.Month != week.Month || previous.Value.Year != week.Year;
-                return Text(isFirstWeekOfMonth ? $"Tháng {week:MM/yyyy}" : string.Empty, isFirstWeekOfMonth ? ExecutiveWorkbookStyleToken.Plan : ExecutiveWorkbookStyleToken.Default);
-            })
-            .ToArray();
-        var weekCells = axis.WeekStarts
-            .Select(week =>
-            {
-                var weekNumber = ISOWeek.GetWeekOfYear(week.ToDateTime(TimeOnly.MinValue));
-                var marker = axis.ReportingDate >= week && axis.ReportingDate <= week.AddDays(6)
-                    ? " · Ngày báo cáo"
-                    : string.Empty;
-                return Text($"W{weekNumber:00}{marker}", marker.Length > 0 ? ExecutiveWorkbookStyleToken.ReportingBoundary : ExecutiveWorkbookStyleToken.Default);
-            })
-            .ToArray();
-
-        var monthPrefix = new[] { Text("Tháng", ExecutiveWorkbookStyleToken.Header) }
-            .Concat(Enumerable.Repeat(Text(string.Empty), fixedColumnCount - 1));
-        var weekPrefix = new[] { Text("Tuần ISO", ExecutiveWorkbookStyleToken.Header) }
-            .Concat(Enumerable.Repeat(Text(string.Empty), fixedColumnCount - 1));
-        return
-        [
-            RowOf(monthPrefix.Concat(monthCells).ToArray()),
-            RowOf(weekPrefix.Concat(weekCells).ToArray())
-        ];
-    }
-
-    private static IReadOnlyList<ExecutiveWorkbookCell> TimelineCells(ExecutiveScheduleRow row, TimelineAxis axis)
-    {
-        if (axis.WeekStarts.Count == 0 || row.PlannedStart is null && row.PlannedFinish is null)
-        {
-            return Array.Empty<ExecutiveWorkbookCell>();
-        }
-
-        var start = row.PlannedStart ?? row.PlannedFinish!.Value;
-        var finish = row.PlannedFinish ?? row.PlannedStart!.Value;
-        if (finish < start)
-        {
-            (start, finish) = (finish, start);
-        }
-
-        return axis.WeekStarts
-            .Select(week =>
-            {
-                var weekFinish = week.AddDays(6);
-                var visible = row.Kind == ExecutiveScheduleRowKind.Milestone
-                    ? start >= week && start <= weekFinish
-                    : start <= weekFinish && finish >= week;
-                return Text(visible ? row.Kind == ExecutiveScheduleRowKind.Milestone ? "◆" : "■" : string.Empty, visible ? TimelineStyle(row) : ExecutiveWorkbookStyleToken.Default);
-            })
-            .ToArray();
-    }
-
-    private static TimelineAxis BuildTimelineAxis(IEnumerable<ExecutiveScheduleRow> rows, ExecutiveProgressReport report)
-    {
-        var dates = rows
+        var dates = report.OverviewTimeline
             .SelectMany(row => new[] { row.PlannedStart, row.PlannedFinish })
             .Concat(new DateOnly?[] { report.PlanningStart, report.PlanningFinish, report.SourceReportingDate })
             .Where(date => date is not null)
@@ -1082,30 +1114,90 @@ internal sealed class ExecutiveProgressWorkbookComposer
             .ToArray();
         if (dates.Length == 0)
         {
-            return new TimelineAxis(Array.Empty<DateOnly>(), report.SourceReportingDate);
+            return Array.Empty<OverviewTimeBucket>();
         }
 
         var start = dates.Min();
         var finish = dates.Max();
-        var weekStart = start.AddDays(-(int)start.DayOfWeek + (int)DayOfWeek.Monday);
-        if (start.DayOfWeek == DayOfWeek.Sunday)
+        if (finish.DayNumber - start.DayNumber <= 196)
         {
-            weekStart = start.AddDays(-6);
+            var dayOffset = ((int)start.DayOfWeek + 6) % 7;
+            var firstMonday = start.AddDays(-dayOffset);
+            var buckets = new List<OverviewTimeBucket>();
+            for (var cursor = firstMonday; cursor <= finish; cursor = cursor.AddDays(7))
+            {
+                buckets.Add(new OverviewTimeBucket(cursor, cursor.AddDays(6), cursor.ToString("dd/MM", CultureInfo.InvariantCulture), IsMonthly: false));
+            }
+
+            return buckets;
         }
 
-        var lastWeek = finish.AddDays(-(int)finish.DayOfWeek + (int)DayOfWeek.Monday);
-        if (finish.DayOfWeek == DayOfWeek.Sunday)
+        var firstMonth = new DateOnly(start.Year, start.Month, 1);
+        var monthlyBuckets = new List<OverviewTimeBucket>();
+        for (var cursor = firstMonth; cursor <= finish; cursor = cursor.AddMonths(1))
         {
-            lastWeek = finish.AddDays(-6);
+            var monthFinish = new DateOnly(cursor.Year, cursor.Month, DateTime.DaysInMonth(cursor.Year, cursor.Month));
+            monthlyBuckets.Add(new OverviewTimeBucket(cursor, monthFinish, cursor.ToString("MM/yyyy", CultureInfo.InvariantCulture), IsMonthly: true));
         }
 
-        var weekStarts = new List<DateOnly>();
-        for (var cursor = weekStart; cursor <= lastWeek; cursor = cursor.AddDays(7))
+        return monthlyBuckets;
+    }
+
+    private static IReadOnlyList<OverviewColumnSpan> BuildBalancedSpans(int totalColumns, int spanCount)
+    {
+        var spans = new List<OverviewColumnSpan>(spanCount);
+        var baseWidth = totalColumns / spanCount;
+        var remainder = totalColumns % spanCount;
+        var start = 1;
+        for (var index = 0; index < spanCount; index++)
         {
-            weekStarts.Add(cursor);
+            var width = baseWidth + (index < remainder ? 1 : 0);
+            spans.Add(new OverviewColumnSpan(start, start + width - 1));
+            start += width;
         }
 
-        return new TimelineAxis(weekStarts, report.SourceReportingDate);
+        return spans;
+    }
+
+    private static IReadOnlyList<OverviewColumnSpan> BuildAttentionSpans(int totalColumns)
+    {
+        var actionEnd = Math.Max(1, (int)Math.Round(totalColumns * 0.38m, MidpointRounding.AwayFromZero));
+        var impactEnd = Math.Max(actionEnd + 1, (int)Math.Round(totalColumns * 0.72m, MidpointRounding.AwayFromZero));
+        var ownerEnd = Math.Max(impactEnd + 1, (int)Math.Round(totalColumns * 0.87m, MidpointRounding.AwayFromZero));
+        ownerEnd = Math.Min(ownerEnd, totalColumns - 1);
+        return
+        [
+            new OverviewColumnSpan(1, actionEnd),
+            new OverviewColumnSpan(actionEnd + 1, impactEnd),
+            new OverviewColumnSpan(impactEnd + 1, ownerEnd),
+            new OverviewColumnSpan(ownerEnd + 1, totalColumns)
+        ];
+    }
+
+    private static void AddSpannedRow(
+        ICollection<ExecutiveWorkbookRow> rows,
+        ICollection<ExecutiveWorkbookRange> mergedRanges,
+        int totalColumns,
+        IReadOnlyList<OverviewColumnSpan> spans,
+        IReadOnlyList<ExecutiveWorkbookCell> values)
+    {
+        if (spans.Count != values.Count)
+        {
+            throw new InvalidOperationException("A spanned overview row must provide one value per span.");
+        }
+
+        var cells = Enumerable.Repeat(Text(string.Empty), totalColumns).ToArray();
+        for (var index = 0; index < spans.Count; index++)
+        {
+            cells[spans[index].StartColumn - 1] = values[index];
+        }
+
+        var rowNumber = rows.Count + 1;
+        rows.Add(RowOf(cells));
+        foreach (var span in spans.Where(span => span.EndColumn > span.StartColumn))
+        {
+            mergedRanges.Add(new ExecutiveWorkbookRange(rowNumber, span.StartColumn, rowNumber, span.EndColumn));
+        }
     }
 
     private static ExecutiveWorkbookCell Text(
@@ -1151,12 +1243,12 @@ internal sealed class ExecutiveProgressWorkbookComposer
     private static string BuildPlanningContext(ExecutiveProgressReport report) =>
         $"Khung kế hoạch: {FormatDate(report.PlanningStart)} – {FormatDate(report.PlanningFinish)}";
 
-    private static string BuildProgressEvidence(ExecutiveProgressSummary progress)
+    private static string BuildProgressSummaryDetail(ExecutiveProgressSummary progress)
     {
-        var effort = progress.ActualEffortHours is not null && progress.RemainingEffortHours is not null
-            ? $"Nỗ lực: {progress.ActualEffortHours:0.##} giờ thực tế / {progress.RemainingEffortHours:0.##} giờ còn lại"
-            : "Nỗ lực: Chưa đủ dữ liệu";
-        return $"{effort} · Độ phủ ghi nhận {progress.RecordedCardCount}/{progress.TotalCardCount} · Đủ effort {progress.ProgressEligibleCardCount}/{progress.TotalCardCount} · Cập nhật {FormatUpdate(progress.LastOfficialUpdate)}";
+        var percentage = progress.RecordedPercent is null
+            ? "Chưa đủ dữ liệu để tính % hoàn thành toàn dự án"
+            : $"Tiến độ tổng thể {progress.RecordedPercent}%";
+        return $"{progress.CompletedCount} công việc hoàn thành · {percentage}";
     }
 
     private static string BuildCounts(ExecutiveProgressSummary progress) =>
@@ -1185,6 +1277,29 @@ internal sealed class ExecutiveProgressWorkbookComposer
     private static string FormatUpdate(DateTimeOffset? update) =>
         update?.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? "Chưa cập nhật";
 
-    private sealed record TimelineAxis(IReadOnlyList<DateOnly> WeekStarts, DateOnly ReportingDate);
+    private sealed record OverviewColumnSpan(int StartColumn, int EndColumn);
+
+    private sealed record OverviewTimeBucket(DateOnly Start, DateOnly Finish, string Label, bool IsMonthly)
+    {
+        public bool Contains(DateOnly date) => date >= Start && date <= Finish;
+
+        public bool Intersects(DateOnly? start, DateOnly? finish)
+        {
+            if (start is null && finish is null)
+            {
+                return false;
+            }
+
+            var effectiveStart = start ?? finish!.Value;
+            var effectiveFinish = finish ?? start!.Value;
+            if (effectiveFinish < effectiveStart)
+            {
+                (effectiveStart, effectiveFinish) = (effectiveFinish, effectiveStart);
+            }
+
+            return effectiveStart <= Finish && effectiveFinish >= Start;
+        }
+    }
+
     private sealed record DailyGanttTableLayout(int HeaderLastRow, int TotalColumns);
 }

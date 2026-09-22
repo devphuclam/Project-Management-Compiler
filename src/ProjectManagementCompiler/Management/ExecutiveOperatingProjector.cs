@@ -58,7 +58,11 @@ public sealed class ExecutiveOperatingProjector
         {
             if (row.Kind == ExecutiveDailyGanttRowKind.DeliveryCard && row.IsOverdue && row.StateLabel is not "Hoàn thành" and not "Đã hủy")
             {
-                candidates.Add(BuildScheduleItem(row, ExecutiveOperatingCategory.OverdueUnfinished, "Xử lý công việc đã quá hạn.", "Lịch kế hoạch đang bị trễ."));
+                candidates.Add(BuildScheduleItem(
+                    row,
+                    ExecutiveOperatingCategory.OverdueUnfinished,
+                    $"Hoàn tất “{row.DisplayName}” và cập nhật vướng mắc.",
+                    "Công việc đang trễ so với ngày kế hoạch."));
                 continue;
             }
 
@@ -66,7 +70,17 @@ public sealed class ExecutiveOperatingProjector
                 && row.StateLabel == "Đang thực hiện"
                 && Intersects(row, start, finish))
             {
-                candidates.Add(BuildScheduleItem(row, ExecutiveOperatingCategory.Active, "Theo dõi công việc đang thực hiện.", "Cần cập nhật đến ngày báo cáo."));
+                candidates.Add(BuildScheduleItem(
+                    row,
+                    ExecutiveOperatingCategory.Active,
+                    $"Cập nhật tiến độ “{row.DisplayName}”.",
+                    "Cần xác nhận tình trạng tại ngày báo cáo."));
+                continue;
+            }
+
+            if (row.Kind == ExecutiveDailyGanttRowKind.DeliveryCard
+                && row.StateLabel is "Hoàn thành" or "Đã hủy")
+            {
                 continue;
             }
 
@@ -75,8 +89,12 @@ public sealed class ExecutiveOperatingProjector
                 candidates.Add(BuildScheduleItem(
                     row,
                     ExecutiveOperatingCategory.PlannedOrMilestone,
-                    row.Kind == ExecutiveDailyGanttRowKind.Milestone ? "Chuẩn bị cho mốc sắp tới." : "Chuẩn bị công việc theo kế hoạch.",
-                    "Công việc nằm trong cửa sổ 30 ngày."));
+                    row.Kind == ExecutiveDailyGanttRowKind.Milestone
+                        ? $"Chuẩn bị mốc “{row.DisplayName}”."
+                        : $"{row.DisplayName}.",
+                    row.Kind == ExecutiveDailyGanttRowKind.Milestone
+                        ? "Mốc nằm trong 30 ngày tới."
+                        : "Dự kiến hoàn tất trong 30 ngày tới."));
             }
         }
 
@@ -127,7 +145,7 @@ public sealed class ExecutiveOperatingProjector
             Category = category,
             TargetKind = targetKind,
             TargetId = row.ReferenceCode,
-            Action = $"{action} {row.DisplayName}",
+            Action = action,
             Consequence = consequence,
             OwnerLabel = row.OwnerLabel,
             RequiredDate = requiredDate,

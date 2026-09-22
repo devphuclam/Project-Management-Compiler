@@ -453,7 +453,7 @@ try {
     }
     $executiveOverviewXml = [xml]$executiveSheetXml[1]
     $executiveReaderSheets = [string]::Join('|', @(1..5 | ForEach-Object { $executiveSheetXml[$_] }))
-    Assert-Condition ($executiveOverviewXml.OuterXml.Contains('Báo cáo điều hành tiến độ', [StringComparison]::Ordinal) -and $executiveOverviewXml.OuterXml.Contains('Ngày báo cáo', [StringComparison]::Ordinal)) 'Executive overview must retain the management title and reporting-date context.'
+    Assert-Condition ($executiveOverviewXml.OuterXml.Contains('Báo cáo điều hành tiến độ', [StringComparison]::Ordinal) -and $executiveOverviewXml.OuterXml.Contains('Cập nhật đến', [StringComparison]::Ordinal)) 'Executive overview must retain the management title and reporting-date context.'
     Assert-Condition ($executiveSheetXml[2].Contains('Điều hành 30 ngày', [StringComparison]::Ordinal) -and $executiveSheetXml[2].Contains('Việc cần làm', [StringComparison]::Ordinal)) 'Executive operating sheet must retain its exact operating horizon and reader-facing action columns.'
     Assert-Condition ($executiveSheetXml[3].Contains('Kế hoạch', [StringComparison]::Ordinal) -and $executiveSheetXml[3].Contains('Thực tế', [StringComparison]::Ordinal)) 'Executive daily Gantt must retain paired Plan and Actual reader lanes.'
     Assert-Condition ($executiveSheetXml[5].Contains('Giờ thực tế', [StringComparison]::Ordinal) -and $executiveSheetXml[5].Contains('Mã tham chiếu', [StringComparison]::Ordinal)) 'Executive detail sheet must retain Actual effort and short-reference columns.'

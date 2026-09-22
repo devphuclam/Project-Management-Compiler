@@ -275,6 +275,7 @@ internal static class Program
         ,("ExecutiveWorkbookPackageSerializesProgressiveDisclosureMetadata", ExecutiveProgressXlsxTests.ExecutiveWorkbookPackageSerializesProgressiveDisclosureMetadata)
         ,("ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport", ExecutiveProgressXlsxTests.ExecutiveWorkbookPackageRemainsDeterministicForTheSameReport)
         ,("ExecutiveOverviewUsesApprovedReaderJourney", ExecutiveProgressXlsxTests.ExecutiveOverviewUsesApprovedReaderJourney)
+        ,("ExecutiveWorkbookUsesAConciseVietnameseDecisionAgenda", ExecutiveProgressXlsxTests.ExecutiveWorkbookUsesAConciseVietnameseDecisionAgenda)
         ,("ExecutiveWorkbookDailyGanttUsesPairedDailyLanesAndSemanticStyles", ExecutiveProgressXlsxTests.ExecutiveWorkbookDailyGanttUsesPairedDailyLanesAndSemanticStyles)
         ,("ExecutiveWorkbookNearTermUsesExactThirtyDayAxisAndTruthfulContinuations", ExecutiveProgressXlsxTests.ExecutiveWorkbookNearTermUsesExactThirtyDayAxisAndTruthfulContinuations)
         ,("ExecutiveWorkbookExplainsGanttLegendAndNearTermCounts", ExecutiveProgressXlsxTests.ExecutiveWorkbookExplainsGanttLegendAndNearTermCounts)

@@ -72,6 +72,19 @@ internal static class ExecutiveProgressProjectionTests
         TestAssert.Equal("Bị chặn", Read(Read(blocked, "ScheduleCondition")!, "Label"), "Blocked schedule alerts must have highest schedule precedence.");
         TestAssert.Contains("Có 1 hạng mục lịch trình đang bị chặn.", Read(Read(blocked, "ScheduleCondition")!, "Detail")?.ToString() ?? string.Empty, "Blocked schedule detail must use the normative sentence.");
         TestAssert.Equal("Chưa đánh giá", Read(Read(blocked, "ReadinessCondition")!, "Label"), "A schedule alert must not change readiness condition.");
+
+        var sparse = ExecutiveProgressTestFixtures.BuildDailyGanttFixtureResult() with
+        {
+            Analysis = ExecutiveProgressTestFixtures.BuildDailyGanttFixtureResult().Analysis with
+            {
+                Alerts = Array.Empty<Alert>(),
+                CpmNodes = Array.Empty<CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
+            }
+        };
+        var sparseSchedule = Read(BuildReport(sparse), "ScheduleCondition")!;
+        TestAssert.Equal("Chưa đủ dữ liệu", Read(sparseSchedule, "Label"), "Sparse execution coverage must not be presented as an on-plan schedule assessment.");
+        TestAssert.Contains("chưa đủ dữ liệu để đánh giá lệch kế hoạch", Read(sparseSchedule, "Detail")?.ToString() ?? string.Empty, "The schedule condition must explain why no variance conclusion is available.");
     }
 
     public static void ProjectionUsesEvidenceSafeProgressAndSupportedStateCounts()
@@ -80,8 +93,11 @@ internal static class ExecutiveProgressProjectionTests
         var report = BuildReport(result);
         var progress = Read(report, "Progress")!;
 
-        TestAssert.Equal(50, Read(progress, "RecordedPercent"), "Recorded percentage must use actual/(actual+remaining) and round to a whole percent.");
-        TestAssert.Equal("Tiến độ có bằng chứng: 50%.", Read(progress, "Statement"), "Valid progress must use the concise evidence-backed sentence.");
+        TestAssert.Equal(null, Read(progress, "RecordedPercent"), "A project-wide percentage must remain unknown until every delivery card is eligible for the calculation.");
+        TestAssert.Equal(
+            $"{Read(progress, "RecordedCardCount")}/53 công việc đã có ghi nhận.",
+            Read(progress, "Statement"),
+            "Partial coverage must be expressed as a count, never as a misleading project-wide percentage.");
         TestAssert.Equal(0, Read(progress, "CompletedCount"), "Completed count must remain evidence-backed.");
         TestAssert.Equal(1, Read(progress, "InProgressCount"), "In-progress count must remain evidence-backed.");
         TestAssert.Equal(52, Read(progress, "NotStartedCount"), "Not-started count must remain evidence-backed.");
@@ -100,7 +116,10 @@ internal static class ExecutiveProgressProjectionTests
             });
             var invalidProgress = Read(invalid, "Progress")!;
             TestAssert.Equal(null, Read(invalidProgress, "RecordedPercent"), "Invalid or zero-sum effort must not produce a percentage.");
-            TestAssert.Equal("Chưa ghi nhận đủ dữ liệu tiến độ.", Read(invalidProgress, "Statement"), "Invalid effort must use the exact missing-evidence sentence.");
+            TestAssert.Equal(
+                $"{Read(invalidProgress, "RecordedCardCount")}/53 công việc đã có ghi nhận.",
+                Read(invalidProgress, "Statement"),
+                "Invalid effort must preserve the truthful coverage statement.");
         }
     }
 
@@ -111,9 +130,9 @@ internal static class ExecutiveProgressProjectionTests
 
         TestAssert.False(report.CurrentPhase.Contains("PH0", StringComparison.Ordinal), "The current position must not repeat the phase code.");
         TestAssert.Equal(
-            $"Tiến độ có bằng chứng: {report.Progress.RecordedPercent}%.",
+            $"{report.Progress.RecordedCardCount}/{report.Progress.TotalCardCount} công việc đã có ghi nhận.",
             report.Progress.Statement,
-            "The overview progress statement must be concise and explicitly evidence-backed.");
+            "The overview progress statement must lead with truthful evidence coverage.");
         TestAssert.True(!string.IsNullOrWhiteSpace(report.ScheduleCondition.Label), "The overview must retain a concise plan-change condition.");
         TestAssert.True(!string.IsNullOrWhiteSpace(report.ScheduleCondition.Detail), "The plan-change condition must retain its source-backed consequence.");
         TestAssert.False(report.NextMilestone.DisplayName.Contains("G-", StringComparison.Ordinal), "The next milestone must use a clean reader-facing name.");

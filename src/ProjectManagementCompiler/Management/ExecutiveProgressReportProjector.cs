@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using ProjectManagementCompiler.Application;
 using ProjectManagementCompiler.Domain;
 
@@ -82,7 +83,7 @@ public sealed class ExecutiveProgressReportProjector
             CurrentPhase = currentPhase is null
                 ? "Chưa xác định giai đoạn hiện tại"
                 : ReaderFacingTextPolicy.CleanName(currentPhase.Phase.Name, currentPhase.Phase.Id),
-            ScheduleCondition = ProjectScheduleCondition(project, result.Analysis),
+            ScheduleCondition = ProjectScheduleCondition(project, result.Analysis, dailyProject),
             ReadinessCondition = ProjectReadinessCondition(project),
             NextMilestone = nextMilestone is null
                 ? new ExecutiveMilestoneSummary
@@ -436,9 +437,9 @@ public sealed class ExecutiveProgressReportProjector
             if (observation.EvidenceKind == ManagementEvidenceKind.DecisionRecord
                 && string.Equals(observation.StateCode, "OPEN", StringComparison.OrdinalIgnoreCase))
             {
-                var action = FirstMeaningful(observation.ActionSummary, observation.Summary);
-                var impact = ConsequenceLabel(FirstMeaningful(observation.GateEffectSummary, observation.AffectedTargetSummary, observation.CompletionCondition));
-                if (action is null || impact is null)
+                var action = DecisionActionLabel(observation);
+                var impact = DecisionConsequenceLabel(observation);
+                if (action is null || impact is null || IsTechnicalReferenceOnly(action))
                 {
                     continue;
                 }
@@ -465,7 +466,7 @@ public sealed class ExecutiveProgressReportProjector
             {
                 var action = FirstMeaningful(observation.ActionSummary, observation.Summary);
                 var impact = ConsequenceLabel(FirstMeaningful(observation.AffectedTargetSummary, observation.CompletionCondition, observation.GateEffectSummary));
-                if (action is null || impact is null)
+                if (action is null || impact is null || IsTechnicalReferenceOnly(action))
                 {
                     continue;
                 }
@@ -609,6 +610,104 @@ public sealed class ExecutiveProgressReportProjector
         return looksTechnical && cleaned == token ? null : ReaderFacingTextPolicy.CleanName(cleaned);
     }
 
+    private static string? DecisionActionLabel(ManagementEvidenceObservation observation)
+    {
+        var value = FirstMeaningful(observation.ActionSummary, observation.Summary);
+        if (value is null)
+        {
+            return null;
+        }
+
+        var normalized = value.ToUpperInvariant();
+        if (normalized.Contains("SUCCESSOR", StringComparison.Ordinal)
+            && (normalized.Contains("VAULT", StringComparison.Ordinal)
+                || normalized.Contains("SCOPE", StringComparison.Ordinal)))
+        {
+            return "Phê duyệt phạm vi kế nhiệm cho luồng chuyển file qua Vault.";
+        }
+
+        if (normalized.Contains("GATEWAY", StringComparison.Ordinal)
+            || normalized.Contains("RUNTIME QUALIFICATION", StringComparison.Ordinal))
+        {
+            return "Xác nhận phạm vi Gateway cho PH1 và thời điểm xử lý Format Worker.";
+        }
+
+        if (normalized.Contains("ENVIRONMENT", StringComparison.Ordinal)
+            && normalized.Contains("ALLOCATION", StringComparison.Ordinal))
+        {
+            return "Phân bổ môi trường và danh tính cho PH1.";
+        }
+
+        if (normalized.Contains("REVIEW COMPETENCE", StringComparison.Ordinal))
+        {
+            return "Xác nhận người duyệt và lịch rà soát PH1.";
+        }
+
+        if (normalized.Contains("FIXTURE", StringComparison.Ordinal)
+            && normalized.Contains("PROVENANCE", StringComparison.Ordinal))
+        {
+            return "Chốt quy mô và nguồn gốc bộ dữ liệu thử PH1.";
+        }
+
+        if (normalized.Contains("DEPENDENCY", StringComparison.Ordinal)
+            && normalized.Contains("INTAKE", StringComparison.Ordinal))
+        {
+            return "Chốt nguồn ngoài, phụ thuộc và giấy phép sử dụng.";
+        }
+
+        var cleaned = ReaderFacingTextPolicy.CleanName(value)
+            .Replace(": OPEN", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace(" OPEN", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Trim(' ', '.', ';', ':');
+        return cleaned.Length == 0 ? null : $"{cleaned}.";
+    }
+
+    private static string? DecisionConsequenceLabel(ManagementEvidenceObservation observation)
+    {
+        var subject = FirstMeaningful(observation.ActionSummary, observation.Summary)?.ToUpperInvariant() ?? string.Empty;
+        if (subject.Contains("FIXTURE", StringComparison.Ordinal)
+            && subject.Contains("PROVENANCE", StringComparison.Ordinal))
+        {
+            return "Nếu chưa chốt, chưa đủ căn cứ sử dụng bộ dữ liệu thử cho PH1.";
+        }
+
+        if (subject.Contains("DEPENDENCY", StringComparison.Ordinal)
+            && subject.Contains("INTAKE", StringComparison.Ordinal))
+        {
+            return "Nguồn mới chưa hoàn tất thẩm tra không được đưa vào PH1.";
+        }
+
+        var gateCode = FirstMeaningful(observation.GateEffectCode, observation.GateEffect);
+        var blockingGate = BlockingGateId(gateCode);
+        if (blockingGate is not null)
+        {
+            return $"Nếu chưa xử lý, dự án chưa thể qua cổng {blockingGate}.";
+        }
+
+        if (gateCode?.Contains("DEFERRED_SCOPE", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Phạm vi này chỉ được hoãn khi có quyết định thẩm quyền rõ ràng.";
+        }
+
+        return ConsequenceLabel(FirstMeaningful(
+            observation.GateEffectSummary,
+            observation.AffectedTargetSummary,
+            observation.CompletionCondition));
+    }
+
+    private static bool IsTechnicalReferenceOnly(string value)
+    {
+        var normalized = value.Trim().TrimEnd('.');
+        return Regex.IsMatch(
+                normalized,
+                @"^[A-Z]{1,4}-?\d+\s*/\s*[A-Z]{1,4}-?\d+(?:\s*[—–-]\s*[A-Z]{1,4}-?\d+)?(?:\s+(?:preparation|handoff))?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            || Regex.IsMatch(
+                normalized,
+                @"^[A-Z]{1,4}-?\d+\s*/\s*(?:preparation|handoff)$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
     private static DecisionAttribution? AttributeDecision(CanonicalProject project, ManagementEvidenceObservation observation, MilestoneEntry? nextMilestone)
     {
         if (nextMilestone is null || nextMilestone.Milestone.PlannedDate is null)
@@ -726,7 +825,10 @@ public sealed class ExecutiveProgressReportProjector
 
     private sealed record DecisionAttribution(DateOnly DueDate, string DueLabel);
 
-    private static ExecutiveCondition ProjectScheduleCondition(CanonicalProject project, ManagementAnalysis analysis)
+    private static ExecutiveCondition ProjectScheduleCondition(
+        CanonicalProject project,
+        ManagementAnalysis analysis,
+        ExecutiveDailyGanttRow dailyProject)
     {
         var blocked = DistinctAlertWorkItems(analysis, "BLOCKED");
         if (blocked.Count > 0)
@@ -764,25 +866,30 @@ public sealed class ExecutiveProgressReportProjector
             };
         }
 
-        var assessable = analysis.AsOfDate is not null
-            && project.Phases.Any(phase => IsValidRange(phase.PlannedStart, phase.PlannedFinish))
-            || project.WorkPackages.Any(workPackage => IsValidRange(workPackage.PlannedStart, workPackage.PlannedFinish))
-            || project.DeliveryCards.Any(card => IsValidRange(card.PlannedStart, card.PlannedFinish));
-        return assessable
-            ? new ExecutiveCondition
-            {
-                Code = ExecutiveConditionCode.ScheduleAssessable,
-                Label = "Chưa ghi nhận lệch kế hoạch",
-                Detail = "Chưa ghi nhận hạng mục bị chặn, quá hạn hoặc có nguy cơ tại ngày báo cáo.",
-                Tone = ExecutiveConditionTone.Plan
-            }
-            : new ExecutiveCondition
+        var authoredSchedule = analysis.AsOfDate is not null
+            && (project.Phases.Any(phase => IsValidRange(phase.PlannedStart, phase.PlannedFinish))
+                || project.WorkPackages.Any(workPackage => IsValidRange(workPackage.PlannedStart, workPackage.PlannedFinish))
+                || project.DeliveryCards.Any(card => IsValidRange(card.PlannedStart, card.PlannedFinish)));
+        var executionCoverageComplete = dailyProject.TotalChildCount > 0
+            && dailyProject.RecordedChildCount == dailyProject.TotalChildCount;
+        if (!authoredSchedule || !executionCoverageComplete)
+        {
+            return new ExecutiveCondition
             {
                 Code = ExecutiveConditionCode.ScheduleUnknown,
-                Label = "Chưa đánh giá",
-                Detail = "Chưa ghi nhận đủ dữ liệu lịch trình.",
+                Label = "Chưa đủ dữ liệu",
+                Detail = $"Mới có ghi nhận cho {dailyProject.RecordedChildCount}/{dailyProject.TotalChildCount} công việc; chưa đủ dữ liệu để đánh giá lệch kế hoạch.",
                 Tone = ExecutiveConditionTone.Unknown
             };
+        }
+
+        return new ExecutiveCondition
+        {
+            Code = ExecutiveConditionCode.ScheduleAssessable,
+            Label = "Chưa ghi nhận lệch kế hoạch",
+            Detail = "Chưa ghi nhận hạng mục bị chặn, quá hạn hoặc có nguy cơ tại ngày báo cáo.",
+            Tone = ExecutiveConditionTone.Plan
+        };
     }
 
     private static ExecutiveCondition ProjectReadinessCondition(CanonicalProject project)
@@ -811,13 +918,15 @@ public sealed class ExecutiveProgressReportProjector
         var blocked = valid.Count(observation =>
             string.Equals(observation.ResultCode, "BLOCKED", StringComparison.OrdinalIgnoreCase)
             || !string.IsNullOrWhiteSpace(observation.BlockerOrDeviation));
+        var gateId = ReadinessGateId(valid);
+        var gateLabel = gateId is null ? "cổng sẵn sàng" : $"cổng {gateId}";
         if (blocked > 0)
         {
             return new ExecutiveCondition
             {
                 Code = ExecutiveConditionCode.ReadinessBlocked,
-                Label = "Bị chặn",
-                Detail = $"Có {blocked} nội dung sẵn sàng đang bị chặn.",
+                Label = $"{UppercaseFirst(gateLabel)} đang bị chặn",
+                Detail = $"Có {blocked} nội dung cần xử lý trước khi có thể mở {gateLabel}.",
                 Tone = ExecutiveConditionTone.Blocked
             };
         }
@@ -830,8 +939,8 @@ public sealed class ExecutiveProgressReportProjector
             return new ExecutiveCondition
             {
                 Code = ExecutiveConditionCode.ReadinessDecision,
-                Label = "Cần quyết định",
-                Detail = $"Có {decisions} quyết định đang chờ thẩm quyền.",
+                Label = gateId is null ? "Cần quyết định" : $"Cần quyết định trước cổng {gateId}",
+                Detail = $"Có {decisions} quyết định đang chờ thẩm quyền trước khi mở {gateLabel}.",
                 Tone = ExecutiveConditionTone.Attention
             };
         }
@@ -886,21 +995,23 @@ public sealed class ExecutiveProgressReportProjector
         var unknown = Math.Max(0, counts.Total - completed - inProgress - notStarted);
         var actual = analysis.ExecutionEffort.ActualEffortHours;
         var remaining = analysis.ExecutionEffort.RemainingEffortHours;
-        var eligible = actual is not null
+        var effortEligible = actual is not null
             && remaining is not null
             && actual >= 0m
             && remaining >= 0m
             && actual + remaining > 0m;
-        var percent = eligible
+        var coverageComplete = dailyProject.TotalChildCount > 0
+            && dailyProject.ProgressEligibleChildCount == dailyProject.TotalChildCount;
+        var percent = effortEligible && coverageComplete
             ? (int?)decimal.ToInt32(decimal.Round(actual!.Value / (actual.Value + remaining!.Value) * 100m, 0, MidpointRounding.AwayFromZero))
             : null;
 
         return new ExecutiveProgressSummary
         {
             RecordedPercent = percent,
-            Statement = percent is null
-                ? "Chưa ghi nhận đủ dữ liệu tiến độ."
-                : $"Tiến độ có bằng chứng: {percent}%.",
+            Statement = dailyProject.TotalChildCount == 0
+                ? "Chưa có công việc để đánh giá."
+                : $"{dailyProject.RecordedChildCount}/{dailyProject.TotalChildCount} công việc đã có ghi nhận.",
             ActualEffortHours = actual,
             RemainingEffortHours = remaining,
             CompletedCount = completed,
@@ -913,6 +1024,39 @@ public sealed class ExecutiveProgressReportProjector
             LastOfficialUpdate = dailyProject.LastOfficialUpdate
         };
     }
+
+    private static string? ReadinessGateId(IEnumerable<ManagementEvidenceObservation> evidence)
+    {
+        foreach (var observation in evidence)
+        {
+            if (!string.IsNullOrWhiteSpace(observation.GateId))
+            {
+                return observation.GateId.Trim().ToUpperInvariant();
+            }
+
+            var gate = BlockingGateId(FirstMeaningful(observation.GateEffectCode, observation.GateEffect));
+            if (gate is not null)
+            {
+                return gate;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? BlockingGateId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(value, @"\bBLOCKS_(?<gate>PG\d+)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups["gate"].Value.ToUpperInvariant() : null;
+    }
+
+    private static string UppercaseFirst(string value) =>
+        value.Length == 0 ? value : char.ToUpperInvariant(value[0]) + value[1..];
 
     private static HashSet<string> DistinctAlertWorkItems(ManagementAnalysis analysis, params string[] codes) =>
         analysis.Alerts
