@@ -26,7 +26,7 @@ all five stories because the six-sheet contract is atomic.
 **Purpose**: Capture the coherent Feature 006 starting point and reusable test
 data before production behavior changes.
 
-- [ ] T001 Run `scripts/build.ps1` and `scripts/test.ps1`, capture the exact pass/fail and `git status --short` baseline, and create the implementation log at `specs/007-management-report-readability/implementation-evidence.md`
+- [X] T001 Run `scripts/build.ps1` and `scripts/test.ps1`, capture the exact pass/fail and `git status --short` baseline, and create the implementation log at `specs/007-management-report-readability/implementation-evidence.md`
 - [ ] T002 Add reusable fixture builders for nested/repeated title prefixes, all five Actual evidence shapes, WBS hierarchy counts, operating categories, and official metadata without changing existing fixture expectations in `tests/ProjectManagementCompiler.Tests/ExecutiveProgressTestFixtures.cs`
 
 **Checkpoint**: Existing build and tests are characterized, and future RED
