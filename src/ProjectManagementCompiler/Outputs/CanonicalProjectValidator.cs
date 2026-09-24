@@ -1213,8 +1213,6 @@ public static class CanonicalProjectValidator
 
         ValidateNonNegative(diagnostics, actualEffort, code + "_EFFORT", owner, "actual effort");
         ValidateNonNegative(diagnostics, remainingEffort, code + "_EFFORT", owner, "remaining effort");
-        ValidateHalfHour(diagnostics, actualEffort, code + "_EFFORT_GRANULARITY", owner, "actual effort");
-        ValidateHalfHour(diagnostics, remainingEffort, code + "_EFFORT_GRANULARITY", owner, "remaining effort");
     }
 
     private static void ValidateControlledEvidence(
@@ -1363,19 +1361,6 @@ public static class CanonicalProjectValidator
         if (value is not null && value.Value.CompareTo(default) < 0)
         {
             Add(diagnostics, code, $"{label} cannot be negative.", owner);
-        }
-    }
-
-    private static void ValidateHalfHour(
-        ICollection<ImportWarning> diagnostics,
-        decimal? value,
-        string code,
-        string? owner,
-        string label)
-    {
-        if (value is not null && decimal.Remainder(value.Value, 0.5m) != 0)
-        {
-            Add(diagnostics, code, $"{label} must use 0.5-hour granularity.", owner);
         }
     }
 

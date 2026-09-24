@@ -128,12 +128,14 @@ After deserialization, validation must confirm:
 - metadata fields are internally consistent, populated where required, safe, and
   free of local absolute paths/credentials;
 - source execution records use typed identities, target existing Delivery Cards,
-  unique `kind + id`, valid recording/state/result semantics, non-negative effort,
-  half-hour effort granularity, safe source paths, and valid controlled evidence;
+  unique `kind + id`, valid recording/state/result semantics, non-negative
+  decimal actual/remaining effort preserved from the source, safe source paths,
+  and valid controlled evidence;
 - proposals target existing Delivery Cards, use supported fields and lifecycle
   values, carry required base snapshot/revision metadata, and contain only valid
-  typed/date/numeric changes and safe evidence. Migrated schema-1.0 proposals may
-  retain expected revision `0`; v2 source registers require revision at least `1`.
+  typed/date/numeric changes and safe evidence. Proposal effort remains in
+  non-negative 0.5-hour increments. Migrated schema-1.0 proposals may retain
+  expected revision `0`; v2 source registers require revision at least `1`.
 - `GIT_COMMIT` metadata uses a full 40-hex `SourceIdentity`; URI-shaped repository
   identities cannot contain user info. Metadata project/baseline IDs equal the
   canonical project/baseline and source execution IDs, and revision/status date

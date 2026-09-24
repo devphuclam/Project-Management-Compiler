@@ -27,12 +27,14 @@ After deserialization the reader MUST validate, before returning a project:
   characters, and a URI-shaped repository identity has no user-info credentials;
 - `sourceExecution` project/baseline identities matching `importMetadata`, typed
   DeliveryCard identities, target existence, uniqueness,
-  recording/state/result combinations, non-negative half-hour effort/date
-  semantics, safe source paths, revision at least `1`, and controlled evidence;
+  recording/state/result combinations, non-negative decimal source effort/date
+  semantics without rounding, safe source paths, revision at least `1`, and
+  controlled evidence;
 - `executionProposals` supported DeliveryCard targets, lifecycle/base metadata,
   supported change fields and syntactically valid values, safe evidence, and no
-  source-authority promotion. A migrated schema-1.0 proposal may carry expected
-  revision `0` as its explicit legacy compatibility marker.
+  source-authority promotion. Proposal effort values use non-negative 0.5-hour
+  increments. A migrated schema-1.0 proposal may carry expected revision `0` as
+  its explicit legacy compatibility marker.
 
 The metadata project and baseline IDs must equal `CanonicalProject.Project.Id` and
 `CanonicalProject.Baseline.Id`; source execution IDs, register revision, and

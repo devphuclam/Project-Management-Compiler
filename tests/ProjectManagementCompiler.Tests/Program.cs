@@ -9,6 +9,8 @@ internal static class Program
         ("ManifestImportNeverFallsBackToLegacyCapture", ManifestImportTests.ManifestImportNeverFallsBackToLegacyCapture),
         ("ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation", ManifestImportTests.ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation),
         ("AcceptedManifestImportsExactTotalsAndP01Truth", ManifestImportTests.AcceptedManifestImportsExactTotalsAndP01Truth),
+        ("ManifestImportPreservesFractionalSourceEffortForCompletedCards", ManifestImportTests.ManifestImportPreservesFractionalSourceEffortForCompletedCards),
+        ("CurrentIdeaEngineeringCommitImportsP04AndP05FractionalEffort", ManifestImportTests.CurrentIdeaEngineeringCommitImportsP04AndP05FractionalEffort),
         ("AcceptedManifestCapturesDeclaredReadinessEvidenceSeparately", ManifestImportTests.AcceptedManifestCapturesDeclaredReadinessEvidenceSeparately),
         ("AcceptedFixtureCatalogueMatchesDeclaredOracle", ManifestImportTests.AcceptedFixtureCatalogueMatchesDeclaredOracle),
         ("OfficialAnalysisUsesRecordedSourceExecutionOnly", ManifestExecutionTests.OfficialAnalysisUsesRecordedSourceExecutionOnly),

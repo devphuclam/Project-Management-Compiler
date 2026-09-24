@@ -10,6 +10,24 @@ branch name `codex/feature003-final-micro-pass` is retained below only as
 provenance; current integration targets `main`. The executable quickstart is in
 `specs/003-ideaengineering-manifest-import/quickstart.md`.
 
+### Follow-up correction — 2026-09-24
+
+Authoritative source execution now accepts and preserves non-negative decimal
+actual/remaining effort. The 0.5-hour increment remains a rule for local
+execution proposals only. Negative or non-numeric source effort still fails
+closed. This corrects the prior parser/canonical-validation mismatch that
+rejected the IDEAEngineering P04/P05 values and then reported a false missing
+effort completion error.
+
+The correction is on local branch `codex/fix-idea-manifest-decimal-effort` and
+has not been pushed or merged. Local verification used the exact
+IDEAEngineering source commit `d9948c5672b07eceef545d380a48aa9b055ab626`:
+`dotnet build ... --no-restore` succeeded with 0 warnings/errors, and the full
+test runner completed 310 cases with 0 failures. The regression asserts exact
+P04/P05 effort preservation, canonical reopen, rejection of negative source
+effort, and continued rejection of 1.25-hour local proposals. No remote CI was
+run.
+
 The design increment is:
 
 - commit `67495c1` — `docs: define manifest import authority and specification`;
@@ -102,7 +120,8 @@ replays the seven source-owned fixture outcomes and preserves that warning.
   project with no `ImportMetadata`, checks Git aggregate size before body reads,
   rejects malformed proposal evidence atomically using the source contract,
   removes compatibility-route fake evidence, tightens canonical v2 identity and
-  granularity checks, and keeps mixed-session proposal projections coherent.
+  local-proposal granularity checks, and keeps mixed-session proposal projections
+  coherent.
 - Repository root, manifest path, commit, and preview mode are user inputs;
   no personal absolute path may be committed.
 

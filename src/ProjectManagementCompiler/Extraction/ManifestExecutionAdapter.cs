@@ -466,18 +466,17 @@ public sealed class ManifestExecutionAdapter
         }
 
         if (!value.TryGetDecimal(out var effort)
-            || effort < 0
-            || effort % 0.5m != 0)
+            || effort < 0)
         {
             diagnostics.Add(ManifestCaptureSupport.Diagnostic(
                 "PMC-EFFORT-001",
                 WarningSeverity.Error,
-                $"Effort field '{propertyName}' for '{key.Id}' is negative, non-numeric, or not a 0.5-hour increment.",
+                $"Effort field '{propertyName}' for '{key.Id}' is negative or non-numeric.",
                 sourcePath,
                 propertyName,
                 key.Kind,
                 key.Id,
-                "Record a non-negative effort value in 0.5-hour increments."));
+                "Record a non-negative decimal effort value."));
             return null;
         }
 

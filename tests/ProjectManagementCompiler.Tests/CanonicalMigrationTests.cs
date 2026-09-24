@@ -167,10 +167,21 @@ internal static class CanonicalMigrationTests
         {
             root["sourceExecution"]!["statusDate"] = "2026-09-20";
         }, "Schema 2.0 must reject a source status date that differs from metadata.");
-        AssertTamperedJsonRejected(serializer, validJson, root =>
+        var fractionalSourceProject = project with
         {
-            ((JsonObject)((JsonArray)root["sourceExecution"]!["records"]!)[0]!)!["actualEffortHours"] = 1.25m;
-        }, "Schema 2.0 must reject source effort outside the half-hour granularity.");
+            SourceExecution = project.SourceExecution with
+            {
+                Records = project.SourceExecution.Records
+                    .Select(record => record with
+                    {
+                        ActualEffortHours = 1.25m
+                    })
+                    .ToArray()
+            }
+        };
+        var fractionalSourceReopened = serializer.Deserialize(serializer.Serialize(fractionalSourceProject));
+        TestAssert.Equal(1.25m, fractionalSourceReopened.SourceExecution.Records.Single().ActualEffortHours,
+            "Schema 2.0 must preserve non-negative decimal effort received from the authoritative source.");
 
         var projectWithProposal = project with
         {

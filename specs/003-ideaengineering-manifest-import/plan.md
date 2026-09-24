@@ -180,10 +180,11 @@ Gantt projection and legacy compiler remain in place and consume canonical resul
   draft proposals. The compatibility route stores a safe legacy reference rather
   than fabricated controlled evidence.
 - Canonical v2 validation also checks full commit identity, URI credentials,
-  revision/date/ID relationships, and half-hour effort granularity. The state
-  projection helper updates current and official applicable projections together
-  after a legacy reopen without promoting that document. UI text changes remain
-  semantic wording corrections only.
+  revision/date/ID relationships, and preserves non-negative decimal effort from
+  authoritative source execution. Half-hour granularity remains limited to local
+  execution proposals. The state projection helper updates current and official
+  applicable projections together after a legacy reopen without promoting that
+  document. UI text changes remain semantic wording corrections only.
 
 ## Architecture and State Transitions
 

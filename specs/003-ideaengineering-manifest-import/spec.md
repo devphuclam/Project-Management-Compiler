@@ -344,9 +344,11 @@ executable after an independent audit.
 - **FR-055**: Canonical v2 semantic validation MUST require a full 40-hex
   `SourceIdentity` for `GIT_COMMIT`, reject credential-bearing repository URI
   identities, require source register revision at least `1` (while allowing
-  migrated schema `1.0` proposal revision `0`), enforce half-hour effort
-  granularity, and cross-check metadata project/baseline IDs with the canonical
-  project and source execution IDs plus revision/status date.
+  migrated schema `1.0` proposal revision `0`), accept non-negative decimal
+  actual/remaining effort from authoritative source execution without rounding,
+  retain 0.5-hour increments for local execution proposals, and cross-check
+  metadata project/baseline IDs with the canonical project and source execution
+  IDs plus revision/status date.
 - **FR-056**: When an official import is followed by schema `1.0` reopen and a
   proposal update, the state owner and every applicable current/canonical
   proposal projection MUST update from the same proposal values without aliasing
@@ -448,8 +450,10 @@ executable after an independent audit.
 - **SC-021**: The compatibility execution route never emits
   `COMPATIBILITY_UPDATE` controlled evidence or invented recorder/result data;
   it preserves only a safe legacy reference and remains proposal-only.
-- **SC-022**: Tampered canonical v2 full-SHA, URI, revision, effort-granularity,
-  metadata-ID, source-ID, and register-date values fail closed.
+- **SC-022**: Tampered canonical v2 full-SHA, URI, revision, invalid source
+  effort, proposal effort outside 0.5-hour increments, metadata-ID, source-ID,
+  and register-date values fail closed; valid decimal source effort survives
+  import and reopen without rounding.
 - **SC-023**: An official-import → schema-1.0-reopen → proposal-update →
   save/reopen session keeps state and canonical projections coherent, does not
   promote the reopened legacy document, and does not mutate source execution.

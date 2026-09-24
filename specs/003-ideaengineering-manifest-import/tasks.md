@@ -284,7 +284,7 @@ confirmed failure, smallest fix, focused green run, and related regression run.
   controlled evidence is emitted and unsafe legacy references fail safely
   (FR-054, SC-021).
 - [X] T091 [US5] Add failing canonical v2 tamper regressions for full Git SHA,
-  credential-bearing URI identity, revision minimum, half-hour effort,
+  credential-bearing URI identity, revision minimum, proposal half-hour effort,
   metadata/project/baseline IDs, source IDs, and register revision/status date;
   acceptance: deserialize-successful tampering fails closed (FR-055, SC-022).
 - [X] T092 [US5] Implement the smallest semantic validator/adapter corrections
@@ -330,6 +330,25 @@ confirmed failure, smallest fix, focused green run, and related regression run.
   `main`, merge this branch with `--ff-only`, push `main`, and verify the remote
   SHA; acceptance: no force push, no merge commit, and the final report does not
   claim Feature 003/MVP2.2 closure unless every DoD item is actually green.
+
+## Phase 12: Source decimal-effort compatibility correction
+
+- [X] T100 [US2] Add a failing completed-source regression with minute-derived
+  decimal actual effort and a canonical reopen regression; acceptance: the old
+  importer emits `PMC-EFFORT-001` and the completion diagnostic before the fix,
+  while the tests require exact source precision to survive import/reopen
+  (FR-055, SC-022).
+- [X] T101 [US2] Accept non-negative decimal actual/remaining effort for
+  authoritative source execution in the importer and canonical validator;
+  preserve the 0.5-hour increment rule for local proposals (FR-055, SC-022).
+- [X] T102 [US5] Align the Feature 003 specification, data model, plan, research,
+  canonical contract, and task traceability with the corrected source/proposal
+  distinction; acceptance: no current contract text applies proposal effort
+  granularity to imported source actuals (FR-055, SC-022).
+- [X] T103 [US5] Run focused source-import/canonical/proposal regressions and the
+  full repository test runner; acceptance: fractional source effort passes,
+  malformed/negative source effort still fails, proposal effort `1.25` remains
+  rejected, and the complete suite is green.
 
 ## Dependencies and execution order
 
@@ -408,7 +427,7 @@ more than one requirement.
 | FR-052 | T085, T086 |
 | FR-053 | T087, T088 |
 | FR-054 | T089, T090 |
-| FR-055 | T091, T092 |
+| FR-055 | T091, T092, T100, T101, T102 |
 | FR-056 | T093, T094 |
 | FR-057 | T080, T082, T096, T098 |
 | SC-001 | T007, T011, T013, T043 |
@@ -432,7 +451,7 @@ more than one requirement.
 | SC-019 | T085, T086 |
 | SC-020 | T087, T088 |
 | SC-021 | T089, T090 |
-| SC-022 | T091, T092 |
+| SC-022 | T091, T092, T100, T101, T102, T103 |
 | SC-023 | T093, T094 |
 | SC-024 | T080, T082, T098 |
 

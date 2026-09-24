@@ -169,8 +169,9 @@ not add a product surface or change the source repository.
   the non-authoritative representation; no fake type, recorder, or result is
   acceptable.
 - The canonical validator must enforce the source schema's full commit identity,
-  credential-free URI identity, revision/date/ID relationships, and 0.5-hour
-  granularity. Schema-1.0 migrated proposal revision zero is the deliberate
+  credential-free URI identity, revision/date/ID relationships, and preserve
+  non-negative decimal source effort. The 0.5-hour increment applies to local
+  proposals only. Schema-1.0 migrated proposal revision zero is the deliberate
   compatibility exception.
 - Exact Git capture needs the remaining aggregate budget before the body read;
   checking only after `git show` is too late. A fake runner must prove that the

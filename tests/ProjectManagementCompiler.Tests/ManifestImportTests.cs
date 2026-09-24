@@ -116,6 +116,92 @@ internal static class ManifestImportTests
         TestAssert.True(result.Diagnostics.Any(diagnostic => diagnostic.Code == "PMC-CALENDAR-001"), "The accepted calendar delta must remain a warning.");
     }
 
+    public static void ManifestImportPreservesFractionalSourceEffortForCompletedCards()
+    {
+        const decimal actualEffortHours = 4.3833m;
+        var importer = new IdeaEngineeringManifestImporter(new FakeManifestSourceReader
+        {
+            CompleteP01WithFractionalEffort = true,
+            P01ActualEffortHours = actualEffortHours
+        });
+
+        var result = importer.ImportAsync(new ManifestImportRequest
+        {
+            RepositoryRoot = @"C:\test-source",
+            ManifestPath = "planning/project-management-compiler-manifest.json",
+            Mode = ManifestImportMode.GitCommit,
+            RequestedCommit = "0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4"
+        }).GetAwaiter().GetResult();
+
+        TestAssert.Equal(ManifestImportClassification.OfficialCommit, result.Classification,
+            $"A non-negative decimal source effort must import without false completion errors. Diagnostics: {string.Join(" | ", result.Diagnostics.Select(diagnostic => $"{diagnostic.Code}:{diagnostic.Message}"))}");
+        TestAssert.True(result.Snapshot is not null, "A valid source decimal must produce a snapshot.");
+        var p01 = result.Snapshot!.SourceExecution.Records.Single(record => record.Entity == CanonicalWorkItemKey.DeliveryCard("P01"));
+        TestAssert.Equal(actualEffortHours, p01.ActualEffortHours, "The importer must preserve the exact source decimal effort.");
+        TestAssert.Equal(0m, p01.RemainingEffortHours, "A completed card must preserve zero remaining effort.");
+        TestAssert.False(result.Diagnostics.Any(diagnostic => diagnostic.Code is "PMC-EFFORT-001" or "PMC-COMPLETE-001"),
+            "Valid fractional source effort must not be rejected or make a completed card appear incomplete.");
+
+        var inProgressResult = new IdeaEngineeringManifestImporter(new FakeManifestSourceReader
+        {
+            P01ActualEffortHours = 4.3833m,
+            P01RemainingEffortHours = 2.1667m
+        }).ImportAsync(new ManifestImportRequest
+        {
+            RepositoryRoot = @"C:\test-source",
+            ManifestPath = "planning/project-management-compiler-manifest.json",
+            Mode = ManifestImportMode.GitCommit,
+            RequestedCommit = "0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4"
+        }).GetAwaiter().GetResult();
+
+        TestAssert.Equal(ManifestImportClassification.OfficialCommit, inProgressResult.Classification,
+            "An in-progress source record must accept decimal actual and remaining effort.");
+        var inProgressP01 = inProgressResult.Snapshot!.SourceExecution.Records.Single(record => record.Entity == CanonicalWorkItemKey.DeliveryCard("P01"));
+        TestAssert.Equal(4.3833m, inProgressP01.ActualEffortHours, "Decimal actual effort must remain exact.");
+        TestAssert.Equal(2.1667m, inProgressP01.RemainingEffortHours, "Decimal remaining effort must remain exact.");
+
+        var negativeResult = new IdeaEngineeringManifestImporter(new FakeManifestSourceReader
+        {
+            P01ActualEffortHours = -0.25m
+        }).ImportAsync(new ManifestImportRequest
+        {
+            RepositoryRoot = @"C:\test-source",
+            ManifestPath = "planning/project-management-compiler-manifest.json",
+            Mode = ManifestImportMode.GitCommit,
+            RequestedCommit = "0cf89de164f75fbbfde23d0a24cd5dadb3ac71c4"
+        }).GetAwaiter().GetResult();
+
+        TestAssert.Equal(ManifestImportClassification.Failed, negativeResult.Classification,
+            "A negative source effort must still fail validation.");
+        TestAssert.True(negativeResult.Diagnostics.Any(diagnostic => diagnostic.Code == "PMC-EFFORT-001"),
+            "Negative source effort must retain its validation diagnostic.");
+    }
+
+    public static void CurrentIdeaEngineeringCommitImportsP04AndP05FractionalEffort()
+    {
+        const string sourceCommit = "d9948c5672b07eceef545d380a48aa9b055ab626";
+        var result = new IdeaEngineeringManifestImporter(new ManifestGitObjectReader())
+            .ImportAsync(new ManifestImportRequest
+            {
+                RepositoryRoot = FindIdeaEngineeringRoot(),
+                ManifestPath = "planning/project-management-compiler-manifest.json",
+                Mode = ManifestImportMode.GitCommit,
+                RequestedCommit = sourceCommit
+            })
+            .GetAwaiter()
+            .GetResult();
+
+        TestAssert.Equal(ManifestImportClassification.OfficialCommit, result.Classification,
+            $"The current IDEAEngineering commit must import successfully. Diagnostics: {string.Join(" | ", result.Diagnostics.Select(diagnostic => $"{diagnostic.Code}:{diagnostic.Message}"))}");
+        var records = result.Snapshot!.SourceExecution.Records;
+        var p04 = records.Single(record => record.Entity == CanonicalWorkItemKey.DeliveryCard("P04"));
+        var p05 = records.Single(record => record.Entity == CanonicalWorkItemKey.DeliveryCard("P05"));
+        TestAssert.Equal(4.3833m, p04.ActualEffortHours, "P04 actual effort must retain the exact source value.");
+        TestAssert.Equal(0.8333m, p05.ActualEffortHours, "P05 actual effort must retain the exact source value.");
+        TestAssert.False(result.Diagnostics.Any(diagnostic => diagnostic.Code is "PMC-EFFORT-001" or "PMC-COMPLETE-001"),
+            "Fractional effort on completed P04/P05 must not produce effort or false-completion errors.");
+    }
+
     public static void AcceptedManifestCapturesDeclaredReadinessEvidenceSeparately()
     {
         var result = new IdeaEngineeringManifestImporter(new ManifestGitObjectReader())
@@ -160,11 +246,14 @@ internal static class ManifestImportTests
     private sealed class FakeManifestSourceReader : IManifestSourceReader
     {
         public ManifestSourceCapture? Capture { get; init; }
+        public bool CompleteP01WithFractionalEffort { get; init; }
+        public decimal? P01ActualEffortHours { get; init; }
+        public decimal? P01RemainingEffortHours { get; init; }
 
         public Task<ManifestSourceCapture> CaptureAsync(ManifestImportRequest request, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Capture ?? FixtureCapture(request.Mode));
+            Task.FromResult(Capture ?? FixtureCapture(request.Mode, CompleteP01WithFractionalEffort, P01ActualEffortHours, P01RemainingEffortHours));
 
-        private static ManifestSourceCapture FixtureCapture(ManifestImportMode mode)
+        private static ManifestSourceCapture FixtureCapture(ManifestImportMode mode, bool completeP01WithFractionalEffort, decimal? p01ActualEffortHours, decimal? p01RemainingEffortHours)
         {
             var root = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering-real-shaped");
             var files = new Dictionary<string, ManifestSourceFile>(StringComparer.OrdinalIgnoreCase);
@@ -205,16 +294,16 @@ internal static class ManifestImportTests
             {
                 entity = new { kind = "DeliveryCard", id },
                 recordingState = index == 0 ? "RECORDED" : "NOT_RECORDED",
-                executionState = index == 0 ? "IN_PROGRESS" : null,
-                resultState = index == 0 ? "NOT_APPLICABLE" : null,
+                executionState = index == 0 ? (completeP01WithFractionalEffort ? "COMPLETED" : "IN_PROGRESS") : null,
+                resultState = index == 0 ? (completeP01WithFractionalEffort ? "PASS" : "NOT_APPLICABLE") : null,
                 priority = "NORMAL",
                 forecastPlannedOrder = index + 1,
-                actualStart = (string?)null,
-                actualFinish = (string?)null,
-                actualEffortHours = (decimal?)null,
-                remainingEffortHours = (decimal?)null,
+                actualStart = index == 0 && completeP01WithFractionalEffort ? "2026-09-19" : null,
+                actualFinish = index == 0 && completeP01WithFractionalEffort ? "2026-09-24" : null,
+                actualEffortHours = index == 0 ? p01ActualEffortHours : null,
+                remainingEffortHours = index == 0 ? (completeP01WithFractionalEffort ? (decimal?)0m : p01RemainingEffortHours) : null,
                 forecastFinish = (string?)null,
-                lastUpdatedAt = index == 0 ? "2026-09-19T00:00:00+07:00" : null,
+                lastUpdatedAt = index == 0 ? (completeP01WithFractionalEffort ? "2026-09-24T00:00:00+07:00" : "2026-09-19T00:00:00+07:00") : null,
                 recordedBy = index == 0 ? "LEAD" : null,
                 disposition = "ACTIVE",
                 evidence = index == 0
