@@ -74,7 +74,7 @@ The executive progress workbook remains the primary export action. The CARIO + G
 Show a focused **Mở dự án** state rather than an empty dashboard or blank analysis views.
 
 - If a source was used in this browser before, show its repository path and last successfully loaded official snapshot as a local recent-source entry.
-- The user must explicitly choose **Cập nhật từ nguồn**; merely reopening the app must not import or replace a snapshot in the background.
+- The user must explicitly choose **Đọc phiên bản hiện có trên máy**; merely reopening the app must not import or replace a snapshot in the background.
 - If no source is remembered, guide the user to enter the local repository root once and keep advanced import settings collapsed.
 - Persist only the local repository-root and manifest-path preferences in the browser on this machine. Do not persist credentials, project contents, or source snapshots in browser storage.
 - Keep the advanced exact-commit, working-tree preview, manifest path, as-of override, XLSX preview, legacy capture, and JSON reopening paths accessible without putting them on the first screen.
@@ -85,9 +85,9 @@ Use one project workspace with a single content area. Remove the persistent cont
 
 ## 5. Source update and import behavior
 
-The current official importer requires an exact Git commit SHA. The primary **Cập nhật từ nguồn** action therefore needs a server-side capability to resolve the repository's configured default-branch ref (normally the local `origin/HEAD` symbolic ref) to a commit object, then pass the exact resolved SHA through the existing bounded Git-object capture and validation flow. Do not hard-code a branch name for every future source.
+The current official importer requires an exact Git commit SHA. The primary **Đọc phiên bản hiện có trên máy** action therefore needs a server-side capability to resolve the repository's configured default-branch ref (normally the local `origin/HEAD` symbolic ref) to a commit object, then pass the exact resolved SHA through the existing bounded Git-object capture and validation flow. Do not hard-code a branch name for every future source.
 
-This operation reads only refs and objects already present in the selected local checkout. It does not run `git fetch`, contact the remote, or update Git metadata. The UI must describe this as the newest default-branch commit **available in this local copy**, not as a verified latest remote commit. Show the SHA and make remote freshness unknown unless separately verified. If the local default-branch ref cannot be resolved safely, provide a clear recovery path to the advanced exact-SHA field rather than silently using the current working tree.
+This operation reads only refs and objects already present in the selected local checkout. It does not run `git fetch`, contact the remote, or update Git metadata. The UI must describe this as the newest default-branch commit **available in this local copy**, not as a verified latest remote commit. Show the SHA and say that GitHub freshness has not been checked; explain that the user can update the local repository before reading again if newer source changes are needed. If the local default-branch ref cannot be resolved safely, provide a clear recovery path to the advanced exact-SHA field rather than silently using the current working tree.
 
 On success, show the resolved commit SHA and source date in source details so the loaded snapshot is reproducible. Continue applying the existing authority classification: only a valid official import replaces the official snapshot. A candidate, preview, invalid import, or capture failure must retain the last valid official snapshot and explain the result.
 
