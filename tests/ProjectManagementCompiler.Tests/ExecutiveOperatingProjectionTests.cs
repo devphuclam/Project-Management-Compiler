@@ -19,6 +19,8 @@ internal static class ExecutiveOperatingProjectionTests
             "Operating groups must be ordered by management urgency.");
         TestAssert.True(items.Any(item => item.Category == ExecutiveOperatingCategory.OverdueUnfinished), "Overdue unfinished work must enter the operating agenda.");
         TestAssert.True(items.Any(item => item.Category == ExecutiveOperatingCategory.Active), "Active work must enter the operating agenda.");
+        TestAssert.False(items.Any(item => item.StateLabel is "Hoàn thành" or "Đã hủy"), "Completed or cancelled work must not consume the bounded executive action agenda.");
+        TestAssert.False(items.Any(item => item.Action.StartsWith("Chuẩn bị công việc theo kế hoạch.", StringComparison.Ordinal)), "The executive agenda must use the work name directly instead of a repeated filler prefix.");
     }
 
     private static int CategoryOrder(ExecutiveOperatingCategory category) => category switch

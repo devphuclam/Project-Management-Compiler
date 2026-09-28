@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.IO.Compression;
+using ProjectManagementCompiler.Application;
 using ProjectManagementCompiler.Management;
 using ProjectManagementCompiler.Outputs;
 
@@ -226,10 +227,10 @@ internal static class ExecutiveProgressXlsxTests
         var questions = new[]
         {
             "Vị trí hiện tại",
-            "Tiến độ có bằng chứng",
-            "Thay đổi so với kế hoạch",
+            "Độ phủ ghi nhận",
+            "Tiến độ lịch",
             "Mốc kế tiếp",
-            "Cần quyết định"
+            "Điều kiện mở cổng"
         };
         var positions = questions.Select(question => Array.IndexOf(text, question)).ToArray();
         TestAssert.True(positions.All(position => position >= 0), "The overview must expose all five management questions.");
@@ -241,10 +242,9 @@ internal static class ExecutiveProgressXlsxTests
         foreach (var heading in new[]
         {
             "Tiến độ giai đoạn và mốc",
-            "Kế hoạch bắt đầu",
-            "Kế hoạch kết thúc",
-            "Thực tế bắt đầu",
-            "Thực tế kết thúc/đến"
+            "Bắt đầu",
+            "Kết thúc",
+            "Tuần"
         })
         {
             TestAssert.True(text.Contains(heading, StringComparer.Ordinal), $"The overview schedule must expose '{heading}'.");
@@ -257,6 +257,12 @@ internal static class ExecutiveProgressXlsxTests
 
         TestAssert.True(report.OverviewAttention.Count <= 5, "The overview source projection must remain bounded to five actions.");
         var joined = string.Join('|', text);
+        TestAssert.Contains($"{report.Progress.RecordedCardCount}/{report.Progress.TotalCardCount} công việc đã có ghi nhận.", joined, "The overview must lead with evidence coverage rather than a partial-data percentage.");
+        TestAssert.Contains($"{report.Progress.CompletedCount} công việc hoàn thành", joined, "The overview must state the supported completed-work count.");
+        if (report.Progress.ProgressEligibleCardCount < report.Progress.TotalCardCount)
+        {
+            TestAssert.False(joined.Contains("100%", StringComparison.Ordinal), "Incomplete coverage must never appear as 100% project completion.");
+        }
         foreach (var forbidden in new[]
         {
             "Nguồn chính thức IDEAEngineering",
@@ -274,6 +280,58 @@ internal static class ExecutiveProgressXlsxTests
         var print = ReadRequiredProperty(overview, "PrintSettings");
         TestAssert.Equal("Landscape", ReadRequiredProperty(print, "Orientation").ToString(), "The overview must print in landscape.");
         TestAssert.Equal(1, Convert.ToInt32(ReadRequiredProperty(print, "FitToWidth")), "The overview must target one readable page wide.");
+        TestAssert.True(ReadCollection(overview, "ColumnWidths").Length > 8, "The overview must include a compact weekly phase/milestone Gantt instead of an empty fixed-width block.");
+        TestAssert.True(text.Contains("◆", StringComparer.Ordinal), "The compact overview Gantt must render milestone points explicitly.");
+    }
+
+    public static void ExecutiveWorkbookUsesAConciseVietnameseDecisionAgenda()
+    {
+        var compiler = new ProjectCompiler();
+        var readiness = compiler.CompileAsync(
+            new CompilationRequest
+            {
+                SourcePath = Path.Combine(Directory.GetCurrentDirectory(), "tests", "fixtures", "ideaengineering-real-shaped"),
+                AsOfDate = new DateOnly(2026, 9, 22),
+                IncludeManagementEvidence = true,
+                ManagementEvidenceIncrementPath = "specs/004-technical-pilot-readiness"
+            },
+            CancellationToken.None).GetAwaiter().GetResult();
+        var official = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult(new DateOnly(2026, 9, 22));
+        var report = new ExecutiveProgressReportProjector().Build(official with
+        {
+            Project = official.Project with { ManagementEvidence = readiness.Project.ManagementEvidence },
+            Analysis = official.Analysis with
+            {
+                Alerts = Array.Empty<ProjectManagementCompiler.Domain.Alert>(),
+                CpmNodes = Array.Empty<ProjectManagementCompiler.Domain.CpmNodeMetric>(),
+                CriticalPathIds = Array.Empty<string>()
+            }
+        });
+        var sheets = ReadCollection(Compose(report), "Sheets");
+        var operating = sheets.Single(sheet => string.Equals(ReadRequiredProperty(sheet, "Name").ToString(), "Điều hành 30 ngày", StringComparison.Ordinal));
+        var text = string.Join('|', ReadCollection(operating, "Rows")
+            .SelectMany(row => ReadCollection(row, "Cells"))
+            .Select(cell => ReadRequiredProperty(cell, "Value").ToString() ?? string.Empty));
+
+        TestAssert.Contains("Phê duyệt phạm vi kế nhiệm cho luồng chuyển file qua Vault", text, "The D0 decision must be rewritten as a concrete Vietnamese management action.");
+        TestAssert.Contains("dự án chưa thể qua cổng PG4", text, "A blocking decision must explain its management consequence in plain Vietnamese.");
+        foreach (var forbidden in new[]
+        {
+            "Successor scope disposition",
+            "BLOCKS_PG4",
+            "NOT-RUN",
+            "T016 / P03",
+            "T031 / handoff",
+            "Bounded fixture",
+            "No manufactured blocker",
+            "Chuẩn bị công việc theo kế hoạch."
+        })
+        {
+            TestAssert.False(text.Contains(forbidden, StringComparison.OrdinalIgnoreCase), $"The executive agenda must not expose raw source wording '{forbidden}'.");
+        }
+
+        var bodyRows = ReadCollection(operating, "Rows").Skip(7).Count();
+        TestAssert.True(bodyRows is >= 5 and <= 7, "The executive agenda must stay within five to seven concrete decisions/actions.");
     }
 
     public static void ExecutiveWorkbookDailyGanttUsesPairedDailyLanesAndSemanticStyles()
@@ -362,9 +420,9 @@ internal static class ExecutiveProgressXlsxTests
         var overviewHasCompleteLegend = ReadCollection(overview, "Rows")
             .Any(row => string.Equals(
                 string.Join('|', ReadCollection(row, "Cells").Select(cell => Convert.ToString(ReadRequiredProperty(cell, "Value")))),
-                "Kế hoạch|Thực tế|Dự báo|Ngày báo cáo",
+                "Kế hoạch giai đoạn|◆ Mốc|Tuần báo cáo|Chi tiết kế hoạch / thực tế: xem sheet Gantt",
                 StringComparison.Ordinal));
-        TestAssert.True(overviewHasCompleteLegend, "The overview Gantt must include one explicit legend explaining Plan, Actual, Forecast, and the reporting-date boundary.");
+        TestAssert.True(overviewHasCompleteLegend, "The compact overview Gantt must explain its phase plan, milestones, reporting week, and where to inspect detailed Actual evidence.");
 
         var operating = sheets.Single(sheet => string.Equals(ReadRequiredProperty(sheet, "Name").ToString(), "Điều hành 30 ngày", StringComparison.Ordinal));
         var nearTermText = ReadCollection(operating, "Rows")
@@ -384,14 +442,21 @@ internal static class ExecutiveProgressXlsxTests
         var wbs = sheets.Single(sheet => string.Equals(ReadRequiredProperty(sheet, "Name").ToString(), "WBS", StringComparison.Ordinal));
         var details = sheets.Single(sheet => string.Equals(ReadRequiredProperty(sheet, "Name").ToString(), "Chi tiết công việc", StringComparison.Ordinal));
 
+        var overviewColumnCount = ReadCollection(overview, "ColumnWidths").Length;
         foreach (var row in new[] { 2, 3, 4 })
         {
-            TestAssert.True(HasMergedRange(overview, row, 1, row, 8), "Overview context must span the fixed Gantt columns so project, date, planning, and source context remain readable at 100% zoom.");
+            TestAssert.True(HasMergedRange(overview, row, 1, row, overviewColumnCount), "Overview context must span the complete compact Gantt so project, date, and planning context remain readable at 100% zoom.");
+        }
+
+        var operatingColumnCount = ReadCollection(operating, "ColumnWidths").Length;
+        foreach (var row in new[] { 1, 2, 3, 4 })
+        {
+            TestAssert.True(HasMergedRange(operating, row, 1, row, operatingColumnCount), "Operating title and context must span the full management table instead of wrapping inside the first column.");
         }
 
         foreach (var row in new[] { 2, 3 })
         {
-            TestAssert.True(HasMergedRange(gantt, row, 1, row, 8), "Full daily Gantt context must span the fixed management columns rather than wrapping into the first narrow column.");
+            TestAssert.True(HasMergedRange(gantt, row, 1, row, 9), "Full daily Gantt context must span the fixed management columns rather than wrapping into the first narrow column.");
         }
 
         TestAssert.True(ReadRequiredProperty(operating, "AutoFilterRange") is not null, "The operating view must be filterable.");
@@ -401,9 +466,9 @@ internal static class ExecutiveProgressXlsxTests
         TestAssert.True(ReadRequiredProperty(details, "AutoFilterRange") is not null, "The detail sheet must be filterable.");
 
         var widths = ReadCollection(gantt, "ColumnWidths").Select(Convert.ToDouble).ToArray();
-        TestAssert.True(widths.Take(8).Sum() <= 112d, "The eight fixed Gantt columns must leave a visible daily timeline at the required 100% opening zoom.");
-        TestAssert.True(widths[0] >= 15d && widths[7] >= 10d, "The task identifier and lane columns must remain wide enough to avoid vertical letter-by-letter reader text.");
-        TestAssert.True(widths.Skip(8).All(width => width >= 3d && width <= 3.25d), "Daily axis columns must be wide enough for two-digit typed dates to render without Excel hash marks while remaining compact for the 30-day view.");
+        TestAssert.True(widths.Take(9).Sum() <= 125d, "The nine fixed Gantt columns must leave a visible daily timeline at the required 100% opening zoom.");
+        TestAssert.True(widths[0] >= 15d && widths[8] >= 10d, "The task identifier and lane columns must remain wide enough to avoid vertical letter-by-letter reader text.");
+        TestAssert.True(widths.Skip(9).All(width => width >= 3d && width <= 3.25d), "Daily axis columns must be wide enough for two-digit typed dates to render without Excel hash marks while remaining compact for the 30-day view.");
     }
 
     public static void ExecutiveWorkbookKeepsTypedActualForecastAndEffortDetails()
@@ -413,29 +478,30 @@ internal static class ExecutiveProgressXlsxTests
             .Single(sheet => string.Equals(ReadRequiredProperty(sheet, "Name").ToString(), "Chi tiết công việc", StringComparison.Ordinal));
 
         var inProgress = ReadCollection(details, "Rows")
-            .Single(row => ReadCollection(row, "Cells").Length > 18
-                && string.Equals(ReadRequiredProperty(ReadCollection(row, "Cells")[18], "Value").ToString(), ExecutiveProgressTestFixtures.OpenInProgressCardId, StringComparison.Ordinal));
+            .Single(row => ReadCollection(row, "Cells").Length > 19
+                && string.Equals(ReadRequiredProperty(ReadCollection(row, "Cells")[19], "Value").ToString(), ExecutiveProgressTestFixtures.OpenInProgressCardId, StringComparison.Ordinal));
         var inProgressCells = ReadCollection(inProgress, "Cells");
-        AssertTypedCell(inProgressCells[10], new DateOnly(2026, 9, 21), "Date", "The detail row must retain a recorded Actual start as a typed Excel date.");
-        AssertEmptyUnknownCell(inProgressCells[11], "The detail row must leave an unrecorded Actual finish explicitly empty rather than inventing one.");
-        AssertTypedCell(inProgressCells[12], new DateOnly(2026, 10, 6), "Date", "The detail row must retain an official forecast finish as a typed Excel date.");
-        AssertTypedCell(inProgressCells[13], 1m, "Hours", "The detail row must retain actual effort as a typed Excel number with the hours format.");
-        AssertTypedCell(inProgressCells[14], 7m, "Hours", "The detail row must retain remaining effort as a typed Excel number with the hours format.");
-        AssertTypedCell(inProgressCells[7], 0.13m, "Percentage", "The detail row must retain the approved whole-percent, midpoint-away-from-zero progress calculation as a numeric Excel percentage.");
-        TestAssert.Equal("Có ghi nhận", ReadRequiredProperty(inProgressCells[5], "Value").ToString(), "The detail row must distinguish recorded execution evidence from a missing update.");
-        TestAssert.Equal("Đang thực hiện", ReadRequiredProperty(inProgressCells[4], "Value").ToString(), "The detail row must retain the official execution state.");
+        AssertTypedCell(inProgressCells[3], 4m, "Hours", "The detail row must retain authored planned effort as a typed Excel number with the hours format.");
+        AssertTypedCell(inProgressCells[11], new DateOnly(2026, 9, 21), "Date", "The detail row must retain a recorded Actual start as a typed Excel date.");
+        AssertEmptyUnknownCell(inProgressCells[12], "The detail row must leave an unrecorded Actual finish explicitly empty rather than inventing one.");
+        AssertTypedCell(inProgressCells[13], new DateOnly(2026, 10, 6), "Date", "The detail row must retain an official forecast finish as a typed Excel date.");
+        AssertTypedCell(inProgressCells[14], 1m, "Hours", "The detail row must retain actual effort as a typed Excel number with the hours format.");
+        AssertTypedCell(inProgressCells[15], 7m, "Hours", "The detail row must retain remaining effort as a typed Excel number with the hours format.");
+        AssertTypedCell(inProgressCells[8], 0.13m, "Percentage", "The detail row must retain the approved whole-percent, midpoint-away-from-zero progress calculation as a numeric Excel percentage.");
+        TestAssert.Equal("Có ghi nhận", ReadRequiredProperty(inProgressCells[6], "Value").ToString(), "The detail row must distinguish recorded execution evidence from a missing update.");
+        TestAssert.Equal("Đang thực hiện", ReadRequiredProperty(inProgressCells[5], "Value").ToString(), "The detail row must retain the official execution state.");
 
         var unrecorded = ReadCollection(details, "Rows")
-            .Single(row => ReadCollection(row, "Cells").Length > 18
-                && string.Equals(ReadRequiredProperty(ReadCollection(row, "Cells")[18], "Value").ToString(), ExecutiveProgressTestFixtures.UnrecordedCardId, StringComparison.Ordinal));
+            .Single(row => ReadCollection(row, "Cells").Length > 19
+                && string.Equals(ReadRequiredProperty(ReadCollection(row, "Cells")[19], "Value").ToString(), ExecutiveProgressTestFixtures.UnrecordedCardId, StringComparison.Ordinal));
         var unrecordedCells = ReadCollection(unrecorded, "Cells");
-        foreach (var index in new[] { 10, 11, 12, 13, 14 })
+        foreach (var index in new[] { 11, 12, 13, 14, 15 })
         {
             AssertEmptyUnknownCell(unrecordedCells[index], "An unrecorded delivery card must not gain fabricated Actual, forecast, or effort detail.");
         }
 
-        TestAssert.Equal("Chưa ghi nhận", ReadRequiredProperty(unrecordedCells[7], "Value").ToString(), "An unrecorded delivery card must show explicit unknown progress rather than a false zero percent.");
-        TestAssert.Equal("Chưa ghi nhận", ReadRequiredProperty(unrecordedCells[5], "Value").ToString(), "An unrecorded delivery card must state that no official update is recorded.");
+        TestAssert.Equal("Chưa ghi nhận", ReadRequiredProperty(unrecordedCells[8], "Value").ToString(), "An unrecorded delivery card must show explicit unknown progress rather than a false zero percent.");
+        TestAssert.Equal("Chưa ghi nhận", ReadRequiredProperty(unrecordedCells[6], "Value").ToString(), "An unrecorded delivery card must state that no official update is recorded.");
     }
 
     public static void ExecutiveWorkbookStatesWhenTheThirtyDayWindowIsEmpty()
@@ -489,9 +555,9 @@ internal static class ExecutiveProgressXlsxTests
         TestAssert.Contains("Báo cáo điều hành tiến độ", overview, "The overview must contain the approved executive report title.");
         TestAssert.Contains("Vị trí hiện tại", overview, "The overview must contain the current-position summary block.");
         TestAssert.Contains("Mốc kế tiếp", overview, "The overview must contain the next-milestone summary block.");
-        TestAssert.Contains("Tiến độ có bằng chứng", overview, "The overview must contain the actual-progress summary block.");
-        TestAssert.Contains("Thay đổi so với kế hoạch", overview, "The overview must contain the schedule-change summary block.");
-        TestAssert.Contains("Cần quyết định", overview, "The overview must contain the readiness/decision summary block.");
+        TestAssert.Contains("Độ phủ ghi nhận", overview, "The overview must contain the evidence-coverage summary block.");
+        TestAssert.Contains("Tiến độ lịch", overview, "The overview must contain the schedule-condition summary block.");
+        TestAssert.Contains("Điều kiện mở cổng", overview, "The overview must contain the readiness/gate summary block.");
         TestAssert.Contains("Cập nhật đến", overview, "The overview must text-label the reporting-date marker.");
     }
 
@@ -602,16 +668,16 @@ internal static class ExecutiveProgressXlsxTests
         TestAssert.Equal(1, CountRowsWithFirstCell(bytes, 3, "P01-A"), "Each canonical delivery card must appear once as one logical task band, even when its source title repeats the identifier.");
         TestAssert.Contains("G-D0", gantt, "The detailed Gantt must retain milestone rows independently of delivery-card IDs.");
         TestAssert.Equal(
-            "Mã|Hạng mục|Trạng thái|Đầu mối|% thực tế|Độ phủ|Cập nhật cuối|Làn",
+            "Mã|Hạng mục|Giờ kế hoạch|Trạng thái|Đầu mối|% thực tế|Độ phủ|Cập nhật cuối|Làn",
             string.Join('|', ExecutiveProgressTestFixtures.WorksheetRow(bytes, 3, "Mã")),
             "The detailed daily Gantt must expose the approved fixed management columns in order.");
         TestAssert.Equal(
-            "WBS|Mã|Hạng mục|Loại|Đầu mối|Trạng thái|% thực tế|Cần chú ý",
-            string.Join('|', ExecutiveProgressTestFixtures.WorksheetRow(bytes, 4, "WBS").Take(8)),
-            "The WBS must expose the eight visible reader-facing columns first.");
+            "WBS|Mã|Hạng mục|Loại|Đầu mối|Trạng thái|Giờ kế hoạch|% thực tế|Cần chú ý",
+            string.Join('|', ExecutiveProgressTestFixtures.WorksheetRow(bytes, 4, "WBS").Take(9)),
+            "The WBS must expose the nine visible reader-facing columns first.");
         TestAssert.Contains("Chi tiết công việc", details, "The detail sheet must contain its reader-facing title.");
         TestAssert.Equal(
-            "Hạng mục|Giai đoạn|Gói công việc|Đầu mối|Trạng thái|Ghi nhận|Cần chú ý|% thực tế|Bắt đầu kế hoạch|Kết thúc kế hoạch|Bắt đầu thực tế|Kết thúc thực tế|Kết thúc dự báo|Giờ thực tế|Giờ còn lại|Tiền nhiệm|Phụ thuộc|Cập nhật cuối|Mã tham chiếu|Nguồn tham chiếu",
+            "Hạng mục|Giai đoạn|Gói công việc|Giờ kế hoạch|Đầu mối|Trạng thái|Ghi nhận|Cần chú ý|% thực tế|Bắt đầu kế hoạch|Kết thúc kế hoạch|Bắt đầu thực tế|Kết thúc thực tế|Kết thúc dự báo|Giờ thực tế|Giờ còn lại|Tiền nhiệm|Phụ thuộc|Cập nhật cuối|Mã tham chiếu|Nguồn tham chiếu",
             string.Join('|', ExecutiveProgressTestFixtures.WorksheetRow(bytes, 5, "Hạng mục")),
             "The detail sheet must expose the complete traceable delivery-card contract in order.");
         TestAssert.True(CountOccurrences(details, "P01-A") >= 1, "The detail sheet must retain a stable delivery-card reference and any supported predecessor occurrence.");

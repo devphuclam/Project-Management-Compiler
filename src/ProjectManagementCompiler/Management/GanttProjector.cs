@@ -31,6 +31,7 @@ public sealed record GanttItem
     public string Name { get; init; } = string.Empty;
     public string PhaseId { get; init; } = string.Empty;
     public string WorkPackageId { get; init; } = string.Empty;
+    public decimal? PlannedEffortHours { get; init; }
     public ExecutionState? ExecutionState { get; init; }
     public bool HasExecutionEvidence { get; init; }
     public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
@@ -153,6 +154,7 @@ public sealed class GanttProjector
                 Name = card.Name,
                 PhaseId = card.PhaseId,
                 WorkPackageId = card.WorkPackageId,
+                PlannedEffortHours = card.PlannedEffortHours,
                 ExecutionState = state,
                 HasExecutionEvidence = record?.IsRecorded == true,
                 SourceReferences = card.SourceReferences,
