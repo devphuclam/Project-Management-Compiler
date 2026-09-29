@@ -4,13 +4,13 @@
 
 **Created**: 2026-09-29
 
-**Status**: Draft — specification review required; product/UX design approved
+**Status**: Approved for planning — user approval received 2026-09-29
 
 **Input**: Human-approved Unified Work product/UX design proposal dated 2026-09-29, clarification register UW-01…UW-18, the approved Management UI redesign, Feature 008 workspace-foundation boundary, and existing canonical/source and management-analysis contracts.
 
 ## Authority and scope
 
-This specification converts the approved design into observable behavior. It does not reopen product-design decisions. The 2026-09-29 design review accepted every `PROPOSED DESIGN DECISION` in the reviewed design for Increment 2. The approved design and its UW-01…UW-17 decisions govern the Work experience; this specification makes them testable without changing their meaning.
+This specification converts the approved design into observable behavior. It does not reopen product-design decisions. The 2026-09-29 design review accepted every `PROPOSED DESIGN DECISION` in the reviewed design for Increment 2. The approved design and its UW-01…UW-18 decisions govern the Work experience; this specification makes them testable without changing their meaning.
 
 Canonical identity, hierarchy, source authority, authored state, baseline values, actual evidence, provenance, and derived analysis remain governed by the existing contracts listed under **Contract and authority references**. Work is a read-oriented projection over one imported official project; it is not a second planning or task store.
 
