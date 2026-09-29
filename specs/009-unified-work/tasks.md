@@ -14,7 +14,7 @@
 
 **Purpose**: Lock existing source, execution, dependency, Gantt, and test-harness seams before adding Work.
 
-- [ ] T001 Add a synthetic in-memory Work fixture and fill only missing characterization gaps for official execution versus legacy fallback, dependency `IncludedInAnalysis`/exclusion reasons, and typed Gantt selection/direct-versus-transitive behavior in `tests/ProjectManagementCompiler.Tests/WorkTestFixtures.cs`, `tests/ProjectManagementCompiler.Tests/WorkAuthorityCharacterizationTests.cs`, and `tests/ProjectManagementCompiler.Tests/Program.cs`; use no private IDEAEngineering data, register the tests in the existing runner, and confirm the characterization suite passes before production changes (FR-002, FR-026…FR-029, FR-030, FR-033; SC-008…SC-009).
+- [X] T001 Add a synthetic in-memory Work fixture and fill only missing characterization gaps for official execution versus legacy fallback, dependency `IncludedInAnalysis`/exclusion reasons, and typed Gantt selection/direct-versus-transitive behavior in `tests/ProjectManagementCompiler.Tests/WorkTestFixtures.cs`, `tests/ProjectManagementCompiler.Tests/WorkAuthorityCharacterizationTests.cs`, and `tests/ProjectManagementCompiler.Tests/Program.cs`; use no private IDEAEngineering data, register the tests in the existing runner, and confirm the characterization suite passes before production changes (FR-002, FR-026…FR-029, FR-030, FR-033; SC-008…SC-009).
 
 ---
 
