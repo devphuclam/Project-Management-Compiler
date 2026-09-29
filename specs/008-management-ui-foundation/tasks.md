@@ -64,7 +64,7 @@
 
 - [X] T026 Run the focused test executable, `scripts/test.ps1`, and `scripts/verify.ps1`; record pass/fail/blocker evidence without counting blocked checks as passed. `scripts/verify.ps1` passed on loopback port 5052 with the local IDEAEngineering root: build 0 warnings/errors, test runner PASS, launcher PASS, and web integration/security checks PASS.
 - [X] T027 Perform the quickstart browser checks at 360px and 1280px, including unloaded state, successful official import, missing/default-ref and invalid-manifest recovery, sparse effort coverage, keyboard navigation, and Gantt preservation. Browser QA confirmed 8/53 effort coverage is labeled partial, failed imports retain the official snapshot, valid retry succeeds, keyboard activation opens Gantt, and mobile timeline scrolling stays inside the page while task details remain in-viewport.
-- [ ] T028 Review `git diff --check`, `git status`, changed fixture/document content, public-repository privacy, and generated/temp files; commit only verified cohesive increments on `codex/project-ui-redesign`. Do not push or merge without the applicable approval gate.
+- [X] T028 Review `git diff --check`, `git status`, changed fixture/document content, public-repository privacy, and generated/temp files; commit only verified cohesive increments on `codex/project-ui-redesign`. Do not push or merge without the applicable approval gate. Review found no private IDEA fixture, credentials, secret patterns, or generated/temp files in the repository; the working tree is clean after four cohesive commits.
 
 ## Dependencies and execution order
 
