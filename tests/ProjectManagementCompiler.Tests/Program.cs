@@ -13,6 +13,8 @@ internal static class Program
         ("WorkProjectionPreservesAuthoredExecutionAndRecordedActualAuthority", WorkProjectionTests.WorkProjectionPreservesAuthoredExecutionAndRecordedActualAuthority),
         ("WorkProjectionPreservesPlannedEvidenceStatesRolesAndProvenance", WorkProjectionTests.WorkProjectionPreservesPlannedEvidenceStatesRolesAndProvenance),
         ("WorkProjectionLimitsAttentionToTargetedAllowlistedSignalsAndOrdersItDeterministically", WorkProjectionTests.WorkProjectionLimitsAttentionToTargetedAllowlistedSignalsAndOrdersItDeterministically),
+        ("WorkIsIncludedInAggregateAndNamedRouteReturnsTheSameProjection", WorkApiTests.WorkIsIncludedInAggregateAndNamedRouteReturnsTheSameProjection),
+        ("WorkNamedRouteRetainsTheExistingNoProjectResponse", WorkApiTests.WorkNamedRouteRetainsTheExistingNoProjectResponse),
         ("ManifestImportAcceptsValidatedCapture", ManifestImportTests.ManifestImportAcceptsValidatedCapture),
         ("ManifestImportNeverFallsBackToLegacyCapture", ManifestImportTests.ManifestImportNeverFallsBackToLegacyCapture),
         ("ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation", ManifestImportTests.ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation),
