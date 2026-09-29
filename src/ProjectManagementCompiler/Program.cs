@@ -488,6 +488,7 @@ app.MapGet("/api/views/{viewName}", (string viewName, CompilerApplicationState s
 
     return viewName.ToLowerInvariant() switch
     {
+        "overview" => Results.Ok(current.Views.Overview),
         "dashboard" => Results.Ok(current.Views.Dashboard),
         "wbs" => Results.Ok(current.Views.Wbs),
         "gantt" => Results.Ok(current.Views.Gantt),

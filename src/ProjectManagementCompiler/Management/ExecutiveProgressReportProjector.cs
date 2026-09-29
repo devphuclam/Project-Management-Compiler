@@ -98,7 +98,7 @@ public sealed class ExecutiveProgressReportProjector
                     PlannedDate = nextMilestone.Milestone.PlannedDate,
                     IsMissing = false
                 },
-            Progress = ProjectProgress(result.Analysis, dailyProject),
+            Progress = ProjectProgress(project, result.Analysis, dailyProject),
             DailyGantt = dailyGantt,
             OverviewAttention = allAttention.Where(item => item.OverviewEligible).Take(5).ToArray(),
             AllAttention = allAttention,
@@ -151,18 +151,7 @@ public sealed class ExecutiveProgressReportProjector
                 workPackages.TryGetValue(card.WorkPackageId, out var workPackage);
                 var record = ExecutionTruthResolver.ForCard(project, card.Id);
                 var isRecorded = record?.IsRecorded == true;
-                var progressEligible = isRecorded
-                    && record!.ActualEffortHours is not null
-                    && record.RemainingEffortHours is not null
-                    && record.ActualEffortHours >= 0m
-                    && record.RemainingEffortHours >= 0m
-                    && record.ActualEffortHours + record.RemainingEffortHours > 0m;
-                var progressPercent = progressEligible
-                    ? decimal.ToInt32(decimal.Round(
-                        record!.ActualEffortHours!.Value / (record.ActualEffortHours.Value + record.RemainingEffortHours!.Value) * 100m,
-                        0,
-                        MidpointRounding.AwayFromZero))
-                    : (int?)null;
+                var progressPercent = ProgressCoverageProjector.PercentFor(record);
                 var attentionItem = attention.FirstOrDefault(item =>
                     item.DeduplicationKey.Equals($"work-item:{card.Id}", StringComparison.OrdinalIgnoreCase));
                 return new ExecutiveDeliveryCardDetail
@@ -986,6 +975,7 @@ public sealed class ExecutiveProgressReportProjector
     }
 
     private static ExecutiveProgressSummary ProjectProgress(
+        CanonicalProject project,
         ManagementAnalysis analysis,
         ExecutiveDailyGanttRow dailyProject)
     {
@@ -994,34 +984,23 @@ public sealed class ExecutiveProgressReportProjector
         var inProgress = Math.Max(0, counts.InProgress);
         var notStarted = Math.Max(0, counts.NotStarted);
         var unknown = Math.Max(0, counts.Total - completed - inProgress - notStarted);
-        var actual = analysis.ExecutionEffort.ActualEffortHours;
-        var remaining = analysis.ExecutionEffort.RemainingEffortHours;
-        var effortEligible = actual is not null
-            && remaining is not null
-            && actual >= 0m
-            && remaining >= 0m
-            && actual + remaining > 0m;
-        var coverageComplete = dailyProject.TotalChildCount > 0
-            && dailyProject.ProgressEligibleChildCount == dailyProject.TotalChildCount;
-        var percent = effortEligible && coverageComplete
-            ? (int?)decimal.ToInt32(decimal.Round(actual!.Value / (actual.Value + remaining!.Value) * 100m, 0, MidpointRounding.AwayFromZero))
-            : null;
+        var progress = new ProgressCoverageProjector().Build(project, analysis);
 
         return new ExecutiveProgressSummary
         {
-            RecordedPercent = percent,
+            RecordedPercent = progress.RecordedPercent,
             Statement = dailyProject.TotalChildCount == 0
                 ? "Chưa có công việc để đánh giá."
                 : $"{dailyProject.RecordedChildCount}/{dailyProject.TotalChildCount} công việc đã có ghi nhận.",
-            ActualEffortHours = actual,
-            RemainingEffortHours = remaining,
+            ActualEffortHours = progress.ActualEffortHours,
+            RemainingEffortHours = progress.RemainingEffortHours,
             CompletedCount = completed,
             InProgressCount = inProgress,
             NotStartedCount = notStarted,
             UnknownCount = unknown,
             RecordedCardCount = dailyProject.RecordedChildCount,
-            TotalCardCount = dailyProject.TotalChildCount,
-            ProgressEligibleCardCount = dailyProject.ProgressEligibleChildCount,
+            TotalCardCount = progress.TotalCardCount,
+            ProgressEligibleCardCount = progress.EligibleCardCount,
             LastOfficialUpdate = dailyProject.LastOfficialUpdate
         };
     }

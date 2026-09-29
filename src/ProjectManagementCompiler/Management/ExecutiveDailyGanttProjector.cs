@@ -319,10 +319,8 @@ public sealed class ExecutiveDailyGanttProjector
         var actualDisplayThrough = DirectActualDisplayThrough(state, actualStart, actualFinish, analysisAsOfDate);
         var actualPresentationKind = ClassifyActual(record, state, actualStart, actualFinish, actualDisplayThrough);
         var forecastFinish = isRecorded ? DateOnlyFromOffset(record!.ForecastFinish) : null;
-        var progressEligible = isRecorded && IsProgressEligible(record!);
-        int? progressPercent = progressEligible
-            ? CalculatePercent(record!.ActualEffortHours!.Value, record.RemainingEffortHours!.Value)
-            : null;
+        var progressPercent = ProgressCoverageProjector.PercentFor(record);
+        var progressEligible = progressPercent is not null;
         var phaseName = phasesById.TryGetValue(card.PhaseId, out var phase)
             ? phase.DisplayName
             : "Chưa xác định giai đoạn";
@@ -506,7 +504,7 @@ public sealed class ExecutiveDailyGanttProjector
     {
         var actual = children.Sum(child => child.Record!.ActualEffortHours!.Value);
         var remaining = children.Sum(child => child.Record!.RemainingEffortHours!.Value);
-        return actual + remaining > 0m ? CalculatePercent(actual, remaining) : null;
+        return actual + remaining > 0m ? ProgressCoverageProjector.RoundPercent(actual, remaining) : null;
     }
 
     private static string RollupStateLabel(IReadOnlyList<CardContext> children)
@@ -582,13 +580,6 @@ public sealed class ExecutiveDailyGanttProjector
         "PILOT" => "Đầu mối thử nghiệm",
         _ => null
     };
-
-    private static bool IsProgressEligible(EffectiveExecutionRecord record) =>
-        record.ActualEffortHours is not null
-        && record.RemainingEffortHours is not null
-        && record.ActualEffortHours >= 0m
-        && record.RemainingEffortHours >= 0m
-        && record.ActualEffortHours + record.RemainingEffortHours > 0m;
 
     private static ExecutiveActualPresentationKind ClassifyActual(
         EffectiveExecutionRecord? record,
@@ -671,9 +662,6 @@ public sealed class ExecutiveDailyGanttProjector
         var known = values.Where(value => value is not null).Select(value => value!.Value).ToArray();
         return known.Length == 0 ? null : known.Sum();
     }
-
-    private static int CalculatePercent(decimal actual, decimal remaining) =>
-        decimal.ToInt32(decimal.Round(actual / (actual + remaining) * 100m, 0, MidpointRounding.AwayFromZero));
 
     private static DateOnly? DirectActualDisplayThrough(
         ExecutionState? state,
