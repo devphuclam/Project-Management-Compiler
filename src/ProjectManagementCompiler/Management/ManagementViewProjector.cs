@@ -4,6 +4,7 @@ namespace ProjectManagementCompiler.Management;
 
 public sealed record ManagementViewSet
 {
+    public WorkProjection Work { get; init; } = new();
     public ProjectOverviewProjection Overview { get; init; } = new();
     public WbsProjection Wbs { get; init; } = new();
     public GanttProjection Gantt { get; init; } = new();
@@ -134,6 +135,7 @@ public sealed class ManagementViewProjector
 
         return new ManagementViewSet
         {
+            Work = new WorkProjector().Build(project, analysis),
             Overview = new ProjectOverviewProjector().Build(project, analysis),
             Wbs = new WbsProjector().Build(project),
             Gantt = new GanttProjector().Build(project, analysis, asOfDate),
