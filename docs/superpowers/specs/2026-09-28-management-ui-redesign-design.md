@@ -1,6 +1,6 @@
 # Project Management Compiler — Management UI redesign
 
-**Status:** Conversation design approved; written design review pending.
+**Status:** Written design approved by the user (2026-09-29).
 **Date:** 2026-09-28
 **Scope:** Progressive redesign of the current local Project Management Compiler experience.
 
