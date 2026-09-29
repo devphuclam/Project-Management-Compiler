@@ -1,6 +1,6 @@
 # Feature Specification: Unified Work
 
-**Feature Branch**: `specification-only; implementation branch not selected`
+**Feature Branch**: `codex/feature009-unified-work-spec`
 
 **Created**: 2026-09-29
 
@@ -276,12 +276,12 @@ As a manager using a narrow screen or keyboard, and as a specialist checking leg
 | UW-03 — All phases default, current phase focused, explicit phase scopes both views | FR-005…FR-007; Stories 1–3 |
 | UW-04 — Separate counted `Chưa ghi nhận`, never `Chưa bắt đầu` | FR-020…FR-025; Stories 2–3 |
 | UW-05 — Milestones/decision points remain outside Work cards | FR-003…FR-004, FR-028; Story 1 |
-| UW-06 — Approved design decision retained in the accepted proposal; no standalone wording was restated in the current approval instruction | Mapped to the accepted Work collection/search/filter requirements in FR-008…FR-019 and approved-design §§5–8; no additional semantic rule is inferred here. |
+| UW-06 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
 | UW-07 — Needs Attention is limited to supported item-attributable work/schedule signals | FR-037…FR-039; resolved whitelist under Authority; Story 2 |
-| UW-08 — Approved design decision retained in the accepted proposal; no standalone wording was restated in the current approval instruction | Mapped to accepted Kanban/search/count behavior in FR-020…FR-025 and approved-design §§7–8; no additional semantic rule is inferred here. |
+| UW-08 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
 | UW-09 — Complete Delivery Card inspector; evidence-limited read-only variants for other kinds | FR-026…FR-029; Story 4 |
-| UW-10 — Approved design decision retained in the accepted proposal; no standalone wording was restated in the current approval instruction | Mapped to accepted inspector/detail behavior in FR-026…FR-032 and approved-design §9; no additional semantic rule is inferred here. |
-| UW-11 — Approved design decision retained in the accepted proposal; no standalone wording was restated in the current approval instruction | Mapped to accepted Work/Gantt navigation behavior in FR-033 and approved-design §10; no additional semantic rule is inferred here. |
+| UW-10 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
+| UW-11 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
 | UW-12 — Inspector read-only; no Proposal Workflow redesign; existing Advanced proposal path may remain | FR-027, FR-042…FR-043; Stories 4–5 |
 | UW-13 — Keep legacy WBS under Advanced until hierarchy parity is verified | FR-040…FR-041; Story 5 |
 | UW-14 — Unified Kanban replaces old normal Kanban only after verified parity | FR-041; Story 5 |
@@ -293,8 +293,8 @@ As a manager using a narrow screen or keyboard, and as a specialist checking leg
 | Approved Unified Work design — hierarchy, List/Kanban semantics, deterministic order/count, ancestor visibility, state/focus/scroll separation, inspector, Gantt integration, responsive behavior | FR-003…FR-036; Stories 1–5 |
 | Canonical/source and management-analysis authority — stable kind-qualified IDs, deterministic source order, authored state vs missing, immutable baseline, actual overlay, derived alerts, provenance | FR-002…FR-003, FR-008, FR-013, FR-020…FR-039; Entity definitions and contract references |
 
-The current approval instruction explicitly restated UW-01…UW-05, UW-07, UW-09, and UW-12…UW-17. For UW-06, UW-08, UW-10, and UW-11, the approved design proposal is the trace source; the instruction did not repeat their standalone wording. Their covered requirements above encode the corresponding accepted proposal content without inventing a new numbered decision.
+Repository evidence search on 2026-09-29 found no authoritative original wording for UW-06, UW-08, UW-10, or UW-11. The approved design proposal does not give those identifiers standalone meanings. Searching repository files apart from this matrix and reachable Git history found no independent source; the only prior occurrences were unsupported assertions in the earlier version of this Feature 009 matrix, which are not source evidence. Their semantics and requirement mappings therefore remain unclaimed. Complete UW-01…UW-17 semantic traceability is not established until authoritative evidence for these four decisions is recovered.
 
 ## Remaining Human Decisions
 
-None required to make this specification internally testable. The exact Needs Attention whitelist is contract/source-derived and is not being sent back as a design preference. UW-06, UW-08, UW-10, and UW-11 are traced to the accepted design proposal because their standalone wording was not repeated in the latest approval instruction; this specification does not reinterpret them.
+No new product decision is requested. A source-traceability evidence gap remains for UW-06, UW-08, UW-10, and UW-11; their original authoritative wording/evidence must be located before CHK016 can be satisfied. The accepted Needs Attention whitelist remains unchanged and contract/source-derived.
