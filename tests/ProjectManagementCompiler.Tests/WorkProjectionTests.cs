@@ -37,9 +37,12 @@ internal static class WorkProjectionTests
         TestAssert.Equal("P01|P02|P03|P04", string.Join('|', cards.Select(item => item.GetProperty("key").GetProperty("id").GetString())), "Cards must retain canonical order.");
 
         var phaseA = phases.Single(item => item.GetProperty("id").GetString() == "PH-A");
+        TestAssert.Equal("Foundation", phaseA.GetProperty("name").GetString(), "Reader-facing phase names must use the existing identity-prefix cleanup policy.");
         TestAssert.Equal("WP-A", string.Join('|', StringArray(phaseA, "workPackageIds")), "Phase references must preserve canonical Work Package parentage.");
         var packageA = packages.Single(item => item.GetProperty("id").GetString() == "WP-A");
+        TestAssert.Equal("Foundation package", packageA.GetProperty("name").GetString(), "Reader-facing Work Package names must use the existing cleanup policy.");
         TestAssert.Equal("P01|P02", string.Join('|', StringArray(packageA, "deliveryCardIds")), "Work Package references must preserve canonical card parentage and order.");
+        TestAssert.Equal("Prepare the synthetic workspace", cards[0].GetProperty("name").GetString(), "Reader-facing Delivery Card names must use the existing cleanup policy.");
 
         foreach (var card in cards)
         {
