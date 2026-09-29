@@ -4,6 +4,16 @@ namespace ProjectManagementCompiler.Management;
 
 public sealed class WorkProjector
 {
+    private static readonly HashSet<string> SupportedAttentionCodes = new(StringComparer.Ordinal)
+    {
+        "START_DELAY",
+        "OVERDUE",
+        "SUSPENDED",
+        "AT_RISK"
+    };
+
+    private static readonly IComparer<IReadOnlyList<string>> ReasonIdsComparer = new OrdinalStringSequenceComparer();
+
     public WorkProjection Build(CanonicalProject project, ManagementAnalysis analysis)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -47,8 +57,10 @@ public sealed class WorkProjector
             packageCards[package.Id] = linkedCardIds;
         }
 
+        var attentionByCard = BuildAttentionByCard(analysis);
+
         var cards = project.DeliveryCards
-            .Select((card, sourceIndex) => ToCard(card, cardOrders, sourceIndex))
+            .Select((card, sourceIndex) => ToCard(project, card, cardOrders, attentionByCard, sourceIndex))
             .OrderBy(card => card.Order.Phase ?? int.MaxValue)
             .ThenBy(card => card.Order.WorkPackage ?? int.MaxValue)
             .ThenBy(card => card.Order.Card)
@@ -87,8 +99,10 @@ public sealed class WorkProjector
     }
 
     private static WorkCardProjection ToCard(
+        CanonicalProject project,
         DeliveryCard card,
         IReadOnlyDictionary<string, WorkCardOrder> cardOrders,
+        IReadOnlyDictionary<string, IReadOnlyList<WorkAttentionProjection>> attentionByCard,
         int sourceIndex) => new()
     {
         Key = CanonicalWorkItemKey.DeliveryCard(card.Id),
@@ -102,8 +116,92 @@ public sealed class WorkProjector
         PlannedFinish = ValidDate(card.PlannedFinish) ? card.PlannedFinish : null,
         PlannedEffortHours = card.PlannedEffortHours,
         PlannedEffortState = card.PlannedEffortState,
+        Execution = BuildExecution(project, card.Id),
+        Roles = BuildRoles(project, card.Id),
+        Attention = attentionByCard.TryGetValue(card.Id, out var attention) ? attention : Array.Empty<WorkAttentionProjection>(),
         SourceReferences = card.SourceReferences
     };
+
+    private static WorkExecutionProjection BuildExecution(CanonicalProject project, string cardId)
+    {
+        var record = ExecutionTruthResolver.ForCard(project, cardId);
+        var isRecorded = record?.IsRecorded == true;
+        return new WorkExecutionProjection
+        {
+            Recorded = isRecorded,
+            State = isRecorded ? record!.ExecutionState : null,
+            ResultState = isRecorded ? record!.ResultState : null,
+            ActualStart = isRecorded ? record!.ActualStart : null,
+            ActualFinish = isRecorded ? record!.ActualFinish : null,
+            ActualEffortHours = isRecorded ? record!.ActualEffortHours : null,
+            RemainingEffortHours = isRecorded ? record!.RemainingEffortHours : null,
+            LastUpdatedAt = isRecorded ? record!.LastUpdatedAt : null
+        };
+    }
+
+    private static IReadOnlyList<WorkRoleProjection> BuildRoles(CanonicalProject project, string cardId) => project.Assignments
+        .Where(assignment => string.Equals(assignment.WorkItemId, cardId, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(assignment.CarioRoleCode, "A", StringComparison.OrdinalIgnoreCase))
+        .Select(assignment => new WorkRoleProjection
+        {
+            Label = ResolveRoleLabel(project, assignment.LogicalRoleCode),
+            Person = string.Equals(assignment.MappingStatus, "MAPPED", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(assignment.ConcreteIdentity)
+                    ? assignment.ConcreteIdentity.Trim()
+                    : null
+        })
+        .Where(role => !string.IsNullOrWhiteSpace(role.Label))
+        .Distinct()
+        .OrderBy(role => role.Label, StringComparer.Ordinal)
+        .ThenBy(role => role.Person, StringComparer.Ordinal)
+        .ToArray();
+
+    private static string ResolveRoleLabel(CanonicalProject project, string roleCode)
+    {
+        var mapped = ExecutiveProgressReportProjector.RoleLabel(roleCode);
+        if (!string.IsNullOrWhiteSpace(mapped))
+        {
+            return mapped;
+        }
+
+        var sourceRole = project.ResponsibilityRoles.FirstOrDefault(role =>
+            string.Equals(role.Code, roleCode, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role.LogicalRoleCode, roleCode, StringComparison.OrdinalIgnoreCase));
+        return !string.IsNullOrWhiteSpace(sourceRole?.SourceMeaning)
+            ? ReaderFacingTextPolicy.CleanName(sourceRole.SourceMeaning, sourceRole.Code)
+            : ReaderFacingTextPolicy.CleanName(roleCode);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<WorkAttentionProjection>> BuildAttentionByCard(ManagementAnalysis analysis)
+    {
+        var eligible = analysis.Alerts
+            .Where(alert => SupportedAttentionCodes.Contains(alert.AlertCode)
+                && ProjectOverviewProjector.TryGetSupportedAttentionConsequence(alert.AlertCode, out _))
+            .Select(alert =>
+            {
+                ProjectOverviewProjector.TryGetSupportedAttentionConsequence(alert.AlertCode, out var consequence);
+                return new AlertWithConsequence(
+                    alert,
+                    consequence,
+                    alert.ReasonWorkItemIds.OrderBy(id => id, StringComparer.Ordinal).ToArray());
+            });
+
+        return eligible
+            .GroupBy(item => item.Alert.WorkItemId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<WorkAttentionProjection>)group
+                    .OrderBy(item => item.Alert.AlertCode, StringComparer.Ordinal)
+                    .ThenBy(item => item.Alert.DerivedAt)
+                    .ThenBy(item => item.SortedReasonWorkItemIds, ReasonIdsComparer)
+                    .Select(item => new WorkAttentionProjection
+                    {
+                        Code = item.Alert.AlertCode,
+                        Consequence = item.Consequence
+                    })
+                    .ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+    }
 
     private static string? FindCurrentPhase(CanonicalProject project)
     {
@@ -145,4 +243,28 @@ public sealed class WorkProjector
         && string.Equals(card.PhaseId, package.PhaseId, StringComparison.OrdinalIgnoreCase);
 
     private static bool ValidDate(DateOnly? date) => date is not null && date != DateOnly.MinValue;
+
+    private sealed record AlertWithConsequence(
+        Alert Alert,
+        string Consequence,
+        IReadOnlyList<string> SortedReasonWorkItemIds);
+
+    private sealed class OrdinalStringSequenceComparer : IComparer<IReadOnlyList<string>>
+    {
+        public int Compare(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
+        {
+            if (ReferenceEquals(left, right)) return 0;
+            if (left is null) return -1;
+            if (right is null) return 1;
+
+            var sharedCount = Math.Min(left.Count, right.Count);
+            for (var index = 0; index < sharedCount; index++)
+            {
+                var comparison = StringComparer.Ordinal.Compare(left[index], right[index]);
+                if (comparison != 0) return comparison;
+            }
+
+            return left.Count.CompareTo(right.Count);
+        }
+    }
 }

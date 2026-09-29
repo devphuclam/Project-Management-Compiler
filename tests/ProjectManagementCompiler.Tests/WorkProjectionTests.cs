@@ -153,7 +153,8 @@ internal static class WorkProjectionTests
         TestAssert.Equal("NOT_RUN", knownZero.GetProperty("execution").GetProperty("resultState").GetString(), "A not-run result must remain distinct from the authored execution state.");
 
         var recordedValues = cards["P02"];
-        TestAssert.Equal(4m, recordedValues.GetProperty("plannedEffortHours").GetDecimal(), "The baseline planned effort must remain independent of Actual effort.");
+        TestAssert.Equal("UNKNOWN", recordedValues.GetProperty("plannedEffortState").GetString(), "The missing planned-effort evidence state must remain explicit.");
+        TestAssert.Equal(JsonValueKind.Null, recordedValues.GetProperty("plannedEffortHours").ValueKind, "Missing planned effort must not become a zero or borrow Actual effort.");
         TestAssert.Equal(4m, recordedValues.GetProperty("execution").GetProperty("actualEffortHours").GetDecimal(), "Recorded Actual effort must come from the official source record.");
         TestAssert.Equal(0m, recordedValues.GetProperty("execution").GetProperty("remainingEffortHours").GetDecimal(), "Recorded Remaining effort must preserve known zero.");
         TestAssert.Equal("2026-09-04", recordedValues.GetProperty("plannedFinish").GetString(), "The baseline planned finish must remain a distinct field from Actual finish.");

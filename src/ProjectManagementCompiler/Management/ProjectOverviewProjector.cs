@@ -15,6 +15,9 @@ public sealed class ProjectOverviewProjector
             ["AT_RISK"] = "Có nguy cơ chậm do công việc trước bị trễ."
         };
 
+    internal static bool TryGetSupportedAttentionConsequence(string code, out string consequence) =>
+        Consequences.TryGetValue(code, out consequence!);
+
     public ProjectOverviewProjection Build(CanonicalProject project, ManagementAnalysis analysis)
     {
         ArgumentNullException.ThrowIfNull(project);

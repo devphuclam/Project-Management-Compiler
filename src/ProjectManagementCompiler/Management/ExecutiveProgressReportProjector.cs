@@ -286,7 +286,7 @@ public sealed class ExecutiveProgressReportProjector
         return ReaderFacingTextPolicy.OwnerOrMissing(RoleLabel(distinct[0].Role));
     }
 
-    private static string? RoleLabel(string? role)
+    internal static string? RoleLabel(string? role)
     {
         if (string.IsNullOrWhiteSpace(role))
         {

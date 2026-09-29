@@ -38,6 +38,9 @@ public sealed record WorkCardProjection
     public DateOnly? PlannedFinish { get; init; }
     public decimal? PlannedEffortHours { get; init; }
     public DataState PlannedEffortState { get; init; } = DataState.Unknown;
+    public WorkExecutionProjection Execution { get; init; } = new();
+    public IReadOnlyList<WorkRoleProjection> Roles { get; init; } = Array.Empty<WorkRoleProjection>();
+    public IReadOnlyList<WorkAttentionProjection> Attention { get; init; } = Array.Empty<WorkAttentionProjection>();
     public IReadOnlyList<SourceReference> SourceReferences { get; init; } = Array.Empty<SourceReference>();
 }
 
@@ -46,4 +49,28 @@ public sealed record WorkCardOrder
     public int? Phase { get; init; }
     public int? WorkPackage { get; init; }
     public int Card { get; init; }
+}
+
+public sealed record WorkExecutionProjection
+{
+    public bool Recorded { get; init; }
+    public ExecutionState? State { get; init; }
+    public SourceResultState? ResultState { get; init; }
+    public DateOnly? ActualStart { get; init; }
+    public DateOnly? ActualFinish { get; init; }
+    public decimal? ActualEffortHours { get; init; }
+    public decimal? RemainingEffortHours { get; init; }
+    public DateTimeOffset? LastUpdatedAt { get; init; }
+}
+
+public sealed record WorkRoleProjection
+{
+    public string Label { get; init; } = string.Empty;
+    public string? Person { get; init; }
+}
+
+public sealed record WorkAttentionProjection
+{
+    public string Code { get; init; } = string.Empty;
+    public string Consequence { get; init; } = string.Empty;
 }
