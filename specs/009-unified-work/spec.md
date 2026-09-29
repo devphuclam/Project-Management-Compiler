@@ -302,4 +302,4 @@ As a manager using a narrow screen or keyboard, and as a specialist checking leg
 
 ## Remaining Human Decisions
 
-No new product decision is requested. The provenance matrix distinguishes direct clarification answers from design-resolved clarification topics later accepted through human approval of the complete design. The specification remains Draft pending final human approval. The accepted Needs Attention whitelist remains unchanged and contract/source-derived.
+None. The provenance matrix distinguishes direct clarification answers from design-resolved clarification topics later accepted through human approval of the complete design. The specification is approved for planning; no specification-level human decision remains open. The accepted Needs Attention whitelist remains unchanged and contract-source-derived.
