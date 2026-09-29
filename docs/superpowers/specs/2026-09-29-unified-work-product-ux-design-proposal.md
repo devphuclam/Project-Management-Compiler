@@ -6,9 +6,11 @@
 
 ## Authority and reading guide
 
-This proposal uses the approved [Management UI redesign design](2026-09-28-management-ui-redesign-design.md), the [Feature 008 workspace foundation specification](../../../specs/008-management-ui-foundation/spec.md) for its increment boundary, and the user's Unified Work decisions UW-01 through UW-17. The user's latest decisions take precedence where they refine the earlier design. In particular, the default Work scope is now **All phases** in both modes; the current phase is opened or focused without silently restricting the collection. Earlier language about Kanban defaulting to the current phase is superseded by UW-03.
+This proposal uses the approved [Management UI redesign design](2026-09-28-management-ui-redesign-design.md), the [Feature 008 workspace foundation specification](../../../specs/008-management-ui-foundation/spec.md) for its increment boundary, and the user's Unified Work clarification register UW-01 through UW-18. The user's latest decisions take precedence where they refine the earlier design. In particular, the default Work scope is now **All phases** in both modes; the current phase is opened or focused without silently restricting the collection. Earlier language about Kanban defaulting to the current phase is superseded by UW-03.
 
 **APPROVED HUMAN DECISION** marks a decision supplied in the Unified Work clarification. **ESTABLISHED DESIGN RULE** marks a rule already in the management UI design. Every additional choice made here is explicitly marked **PROPOSED DESIGN DECISION**. In the version reviewed on 2026-09-29, all such proposed decisions were accepted by the human reviewer for Increment 2; the label records their origin and does not mean they remain pending. This document does not change the canonical model, source authority, or the approved Gantt calculations.
+
+**Decision provenance:** UW-01…UW-05, UW-07, UW-09, and UW-12…UW-17 are direct human clarification decisions. UW-06, UW-08, UW-10, UW-11, and UW-18 are clarification topics whose final behaviors were resolved as **PROPOSED DESIGN DECISION**s in this proposal and became authoritative when the human reviewer approved the complete design on 2026-09-29. These five are design-resolved clarification topics, not direct human answers in the original clarification.
 
 ## 1. Purpose
 

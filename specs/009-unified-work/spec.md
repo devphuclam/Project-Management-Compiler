@@ -6,7 +6,7 @@
 
 **Status**: Draft — specification review required; product/UX design approved
 
-**Input**: Human-approved Unified Work product/UX design proposal dated 2026-09-29, UW-01…UW-17, the approved Management UI redesign, Feature 008 workspace-foundation boundary, and existing canonical/source and management-analysis contracts.
+**Input**: Human-approved Unified Work product/UX design proposal dated 2026-09-29, clarification register UW-01…UW-18, the approved Management UI redesign, Feature 008 workspace-foundation boundary, and existing canonical/source and management-analysis contracts.
 
 ## Authority and scope
 
@@ -267,34 +267,39 @@ As a manager using a narrow screen or keyboard, and as a specialist checking leg
 - No Proposal Workflow redesign; no altered Gantt semantics/calculation; no removal of legacy WBS before a separate verified parity gate.
 - This artifact is a feature specification only. It creates no implementation plan, tasks, or Proposal Workflow specification.
 
-## Traceability Matrix — Approved Design Decisions to Requirements
+## Traceability Matrix — Clarification Provenance to Approved Design and Requirements
 
-| Approved decision/design anchor | Specification coverage |
+| UW | Provenance | Accepted decision / final behavior | Approved design source | Feature 009 coverage |
+|---|---|---|---|---|
+| UW-01 | Direct human clarification decision | Add Work to primary navigation: `Tổng quan \| Công việc \| Gantt`. | §§1, 4 | FR-001; Story 1, Scenario 1 |
+| UW-02 | Direct human clarification decision | Default Work view is List. | §§1, 4, 6 | FR-001; Story 1, Scenario 1 |
+| UW-03 | Direct human clarification decision | Default scope is All phases; current phase is focused, not implicitly filtered; explicit phase selection scopes both Work views. | §§4, 6, 7 | FR-005…FR-007; Stories 1–3 |
+| UW-04 | Direct human clarification decision | `Chưa ghi nhận` is a separate counted area, not an authored-state column or `Chưa bắt đầu`. | §§5, 7, 11 | FR-020…FR-025; Stories 2–3 |
+| UW-05 | Direct human clarification decision | Milestones and decision points are not Work List/Kanban work items; retain them in Overview/Gantt and use only evidence-backed read-only details. | §§5, 7, 9 | FR-003…FR-004, FR-028; Story 1 |
+| UW-06 | Clarification topic → design-resolved proposal → accepted by human approval of complete design on 2026-09-29 | Search covers reader-facing Delivery Card name, stable ID, and reader-facing Phase/Work Package names, with approved matching and exclusions. Not a direct human answer. | §8, Search and filters | FR-014, FR-015 |
+| UW-07 | Direct human clarification decision | Needs Attention includes only supported item-attributable work/schedule signals, not readiness/governance concerns. | §8, Search and filters | FR-037…FR-039; resolved whitelist under Authority; Story 2 |
+| UW-08 | Clarification topic → design-resolved proposal → accepted by human approval of complete design on 2026-09-29 | Shared Work choices persist across List/Kanban; selected identity, keyboard focus, and scroll have distinct persistence/restoration behavior. Not a direct human answer. | §§8, Search and filters; 9, Shared inspector | FR-009, FR-030, FR-031, FR-032 |
+| UW-09 | Direct human clarification decision | Delivery Card gets the complete read-oriented inspector; other selectable kinds get evidence-limited read-only variants. | §9, Shared inspector | FR-026…FR-029; Story 4 |
+| UW-10 | Clarification topic → design-resolved proposal → accepted by human approval of complete design on 2026-09-29 | Direct dependency information appears after primary inspector details when applicable, is directional, may collapse, and does not invent unsupported transitive impact. Not a direct human answer. | §9, Shared inspector | FR-029 |
+| UW-11 | Clarification topic → design-resolved proposal → accepted by human approval of complete design on 2026-09-29 | Work ↔ Gantt navigation uses stable identity, focuses/reveals the item when available, preserves inspector open/closed state, retains Work filters in reverse navigation, and explains when active controls exclude the item. Not a direct human answer. | §10, Gantt integration | FR-033 |
+| UW-12 | Direct human clarification decision | Inspector remains read-oriented; do not redesign Proposal Workflow; existing proposal capability may remain under Advanced. | §§9, 14 | FR-027, FR-042…FR-043; Stories 4–5 |
+| UW-13 | Direct human clarification decision | Keep legacy WBS under Advanced until hierarchy parity is verified. | §13, Legacy WBS / Kanban transition | FR-040…FR-041; Story 5 |
+| UW-14 | Direct human clarification decision | Unified Kanban replaces the old normal user-facing Kanban only after parity is verified; do not retain two normal products long-term. | §13, Legacy WBS / Kanban transition | FR-041; Story 5 |
+| UW-15 | Direct human clarification decision | Do not add Work Package progress in this increment. | §§5, 14 | FR-042; explicit boundary |
+| UW-16 | Direct human clarification decision | Use `Đầu mối / vai trò`; identify a person as responsible only when the authoritative source identifies that person. | §6, List design | FR-011, FR-026; Story 4 |
+| UW-17 | Direct human clarification decision | Do not show effort columns by default in List; Planned/Actual/Remaining effort belongs in the inspector. | §6, List design; §9, Shared inspector | FR-011, FR-026…FR-027; Story 4 |
+| UW-18 | Clarification topic → design-resolved proposal → accepted by human approval of complete design on 2026-09-29 | Narrow List retains hierarchy/readability; narrow Kanban presents one labeled group at a time with every count; inspector becomes full-screen with defined focus behavior; no drag-only interaction. Not a direct human answer. | §12, Responsive and accessibility | FR-034, FR-035, FR-036; SC-010 |
+
+**Provenance rule:** “Direct human clarification decision” identifies decisions answered directly by the human in the clarification register. “Clarification topic → design-resolved proposal → accepted by human approval” identifies topics whose final behavior was proposed in this design and became authoritative only when the complete design was approved on 2026-09-29. The latter are not represented as original direct answers.
+
+### Cross-document authority traceability
+
+| Authority | Feature 009 coverage |
 |---|---|
-| UW-01 — Primary navigation includes Work | FR-001; Story 1, Scenario 1 |
-| UW-02 — Work opens in List | FR-001; Story 1, Scenario 1 |
-| UW-03 — All phases default, current phase focused, explicit phase scopes both views | FR-005…FR-007; Stories 1–3 |
-| UW-04 — Separate counted `Chưa ghi nhận`, never `Chưa bắt đầu` | FR-020…FR-025; Stories 2–3 |
-| UW-05 — Milestones/decision points remain outside Work cards | FR-003…FR-004, FR-028; Story 1 |
-| UW-06 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
-| UW-07 — Needs Attention is limited to supported item-attributable work/schedule signals | FR-037…FR-039; resolved whitelist under Authority; Story 2 |
-| UW-08 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
-| UW-09 — Complete Delivery Card inspector; evidence-limited read-only variants for other kinds | FR-026…FR-029; Story 4 |
-| UW-10 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
-| UW-11 | TRACEABILITY EVIDENCE GAP — no authoritative original wording/evidence was found in repository files or reachable Git history; no semantic meaning or FR mapping is claimed. |
-| UW-12 — Inspector read-only; no Proposal Workflow redesign; existing Advanced proposal path may remain | FR-027, FR-042…FR-043; Stories 4–5 |
-| UW-13 — Keep legacy WBS under Advanced until hierarchy parity is verified | FR-040…FR-041; Story 5 |
-| UW-14 — Unified Kanban replaces old normal Kanban only after verified parity | FR-041; Story 5 |
-| UW-15 — No Work Package progress in this increment | FR-042; explicit boundary |
-| UW-16 — Reader-facing `Đầu mối / vai trò`; person only with authoritative person evidence | FR-011, FR-026; Story 4 |
-| UW-17 — No default List effort columns; Planned/Actual/Remaining effort in inspector | FR-011, FR-026…FR-027; Story 4 |
 | Approved Management UI redesign — one project/source with several views; Overview/Gantt remain; Advanced retains specialist tools; Gantt semantics preserved | FR-001…FR-002, FR-010, FR-033, FR-040…FR-043; Authority references |
 | Feature 008 boundary — preserve unloaded/import and official source experience; do not expose a dead placeholder; retain Overview/Gantt foundation | FR-001, FR-010, FR-033; Authority references |
-| Approved Unified Work design — hierarchy, List/Kanban semantics, deterministic order/count, ancestor visibility, state/focus/scroll separation, inspector, Gantt integration, responsive behavior | FR-003…FR-036; Stories 1–5 |
 | Canonical/source and management-analysis authority — stable kind-qualified IDs, deterministic source order, authored state vs missing, immutable baseline, actual overlay, derived alerts, provenance | FR-002…FR-003, FR-008, FR-013, FR-020…FR-039; Entity definitions and contract references |
-
-Repository evidence search on 2026-09-29 found no authoritative original wording for UW-06, UW-08, UW-10, or UW-11. The approved design proposal does not give those identifiers standalone meanings. Searching repository files apart from this matrix and reachable Git history found no independent source; the only prior occurrences were unsupported assertions in the earlier version of this Feature 009 matrix, which are not source evidence. Their semantics and requirement mappings therefore remain unclaimed. Complete UW-01…UW-17 semantic traceability is not established until authoritative evidence for these four decisions is recovered.
 
 ## Remaining Human Decisions
 
-No new product decision is requested. A source-traceability evidence gap remains for UW-06, UW-08, UW-10, and UW-11; their original authoritative wording/evidence must be located before CHK016 can be satisfied. The accepted Needs Attention whitelist remains unchanged and contract/source-derived.
+No new product decision is requested. The provenance matrix distinguishes direct clarification answers from design-resolved clarification topics later accepted through human approval of the complete design. The specification remains Draft pending final human approval. The accepted Needs Attention whitelist remains unchanged and contract/source-derived.

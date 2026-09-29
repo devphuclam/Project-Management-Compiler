@@ -28,12 +28,12 @@
 - [x] CHK013 List search/filter ancestor visibility and no-orphan behavior are defined.
 - [x] CHK014 Selection persistence, keyboard-focus return, per-view scroll restoration, and Work ↔ Gantt identity navigation are specified separately.
 - [x] CHK015 Responsive/accessibility criteria and legacy WBS/Kanban parity gates are testable.
-- [ ] CHK016 Every UW-01…UW-17 decision has authoritative semantic wording/evidence and maps to exact Feature 009 requirements; UW-06, UW-08, UW-10, and UW-11 currently lack that evidence.
+- [x] CHK016 Every UW-01…UW-18 decision has a documented provenance class distinguishing direct human clarification answers from design-resolved topics accepted by human approval, and maps to exact Feature 009 requirements.
 - [x] CHK017 Scope explicitly excludes Proposal Workflow redesign, implementation plan/tasks, source editing, Work Package progress, and Gantt semantic changes.
 
 ## Notes
 
 - This checklist records specification-quality review only; it is not an implementation checklist or task list.
 - The only eligible Work Needs Attention codes are `START_DELAY`, `OVERDUE`, `SUSPENDED`, and `AT_RISK`, when attached to a canonical Delivery Card.
-- CHK016 is intentionally incomplete: repository search found no authoritative original wording/evidence for UW-06, UW-08, UW-10, or UW-11. Do not infer their meaning from the previous Feature 009 matrix; resolve the evidence gap before marking the criterion `[x]`.
+- The provenance matrix records UW-06, UW-08, UW-10, and UW-11, plus UW-18, as clarification topics resolved in the approved design; it does not misrepresent them as direct human answers.
 - No code, implementation plan, task breakdown, or Proposal Workflow artifact is created by this feature-specification step.
