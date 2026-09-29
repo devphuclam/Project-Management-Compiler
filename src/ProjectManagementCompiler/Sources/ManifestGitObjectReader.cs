@@ -21,7 +21,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
 
     public ManifestGitObjectReader(IManifestGitCommandRunner? commandRunner = null)
     {
-        this.commandRunner = commandRunner ?? new ProcessGitCommandRunner();
+        this.commandRunner = commandRunner ?? new ProcessManifestGitCommandRunner();
     }
 
     public async Task<ManifestSourceCapture> CaptureAsync(
@@ -174,7 +174,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
                 recommendedAction: "Use a repository-relative manifest or fixture path inside the source repository."));
             return Failed(request, diagnostics);
         }
-        catch (GitCommandException exception)
+        catch (ManifestGitCommandException exception)
         {
             diagnostics.Add(ManifestCaptureSupport.Diagnostic(
                 "PMC-SNAPSHOT-002",
@@ -221,7 +221,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
         }
 
         using var process = Process.Start(startInfo)
-            ?? throw new GitCommandException("Git could not be started.");
+            ?? throw new ManifestGitCommandException(null, "Git could not be started.");
         var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
@@ -234,7 +234,7 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
 
         if (process.ExitCode != 0)
         {
-            throw new GitCommandException(string.IsNullOrWhiteSpace(stderr) ? "Git command failed." : stderr.Trim());
+            throw new ManifestGitCommandException(process.ExitCode, "Git command failed.");
         }
 
         return (stdout, stderr);
@@ -417,21 +417,4 @@ public sealed class ManifestGitObjectReader : IManifestSourceReader
     private static bool IsCommitToken(string value) =>
         value.Length is >= 7 and <= 64 && value.All(character => Uri.IsHexDigit(character));
 
-    private sealed class ProcessGitCommandRunner : IManifestGitCommandRunner
-    {
-        public Task<(string Stdout, string Stderr)> RunAsync(
-            string repositoryRoot,
-            IReadOnlyList<string> arguments,
-            long maxOutputBytes,
-            CancellationToken cancellationToken) =>
-            RunGitAsync(repositoryRoot, arguments, maxOutputBytes, cancellationToken);
-    }
-
-    private sealed class GitCommandException : IOException
-    {
-        public GitCommandException(string message)
-            : base(message)
-        {
-        }
-    }
 }

@@ -10,7 +10,15 @@ using ProjectManagementCompiler.Sources;
 const long MaximumRequestBodyBytes = 8 * 1024 * 1024;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls("http://127.0.0.1:5050");
+var loopbackPortText = Environment.GetEnvironmentVariable("PMC_LOOPBACK_PORT");
+var loopbackPort = 5050;
+if (!string.IsNullOrWhiteSpace(loopbackPortText)
+    && (!int.TryParse(loopbackPortText, out loopbackPort) || loopbackPort is < 1 or > 65535))
+{
+    throw new InvalidOperationException("PMC_LOOPBACK_PORT must be a valid TCP port from 1 to 65535.");
+}
+var loopbackAddress = $"http://127.0.0.1:{loopbackPort}";
+builder.WebHost.UseUrls(loopbackAddress);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = MaximumRequestBodyBytes);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -21,6 +29,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddSingleton<ProjectCompiler>();
 builder.Services.AddSingleton<IProjectCompiler>(services => services.GetRequiredService<ProjectCompiler>());
 builder.Services.AddSingleton<CompilerApplicationState>();
+builder.Services.AddSingleton<IManifestGitCommandRunner, ProcessManifestGitCommandRunner>();
+builder.Services.AddSingleton<IManifestDefaultBranchResolver, ManifestDefaultBranchResolver>();
 builder.Services.AddSingleton<IManifestSourceReader, ManifestSourceReader>();
 builder.Services.AddSingleton<IIdeaEngineeringManifestImporter, IdeaEngineeringManifestImporter>();
 builder.Services.AddSingleton<ManifestImportApplicationService>();
@@ -50,7 +60,7 @@ app.UseStaticFiles();
 app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
-    binding = "http://127.0.0.1:5050",
+    binding = loopbackAddress,
     publicNetworkBinding = false
 }));
 
@@ -73,6 +83,48 @@ app.MapPost("/api/manifest-import", async (
             MaxTotalBytes = request.MaxTotalBytes
         }, request.Mapping, cancellationToken);
         return Results.Ok(ToManifestImportResponse(result, state));
+    }
+    catch (ProjectCompilationException exception)
+    {
+        return Results.UnprocessableEntity(ToError(exception));
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(new ApiErrorResponse
+        {
+            Code = "INVALID_MANIFEST_IMPORT_REQUEST",
+            Message = exception.Message,
+            Phase = "manifest-import"
+        });
+    }
+});
+
+app.MapPost("/api/manifest-import/default-branch", async (
+    ManifestDefaultBranchApiRequest request,
+    ManifestImportApplicationService service,
+    CompilerApplicationState state,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await service.ImportDefaultBranchAsync(new ManifestDefaultBranchImportRequest
+        {
+            RepositoryRoot = request.RepositoryRoot,
+            ManifestPath = request.ManifestPath,
+            AnalysisAsOfOverride = request.AnalysisAsOfOverride,
+            MaxFileBytes = request.MaxFileBytes,
+            MaxTotalBytes = request.MaxTotalBytes
+        }, request.Mapping, cancellationToken);
+        return Results.Ok(ToManifestImportResponse(result, state));
+    }
+    catch (ManifestDefaultBranchImportException exception)
+    {
+        return Results.UnprocessableEntity(new ApiErrorResponse
+        {
+            Code = exception.Code,
+            Message = exception.Message,
+            Phase = "manifest-import"
+        });
     }
     catch (ProjectCompilationException exception)
     {

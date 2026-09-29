@@ -314,6 +314,14 @@ internal static class Program
         ,("OfficialManifestImportClearsOnlyXlsxPreview", XlsxPreviewApplicationTests.OfficialManifestImportClearsOnlyXlsxPreview)
         ,("UiExposesExplicitReadOnlyPreviewMode", XlsxPreviewUiTests.UiExposesExplicitReadOnlyPreviewMode)
         ,("PreviewUiHidesProposalActionsAndDoesNotPersistWorkbook", XlsxPreviewUiTests.PreviewUiHidesProposalActionsAndDoesNotPersistWorkbook)
+        ,("DefaultBranchResolvesConfiguredOfficialRefToFullCommit", ManifestDefaultBranchResolverTests.DefaultBranchResolvesConfiguredOfficialRefToFullCommit)
+        ,("ResolverDistinguishesGitProcessFailureFromUnavailableDefaultRef", ManifestDefaultBranchResolverTests.ResolverDistinguishesGitProcessFailureFromUnavailableDefaultRef)
+        ,("ResolverUsesTypedSafeFailuresForUnavailableAndUntrustedRefs", ManifestDefaultBranchResolverTests.ResolverUsesTypedSafeFailuresForUnavailableAndUntrustedRefs)
+        ,("ResolverRejectsNonCommitAndOversizedOutputAndPropagatesCancellation", ManifestDefaultBranchResolverTests.ResolverRejectsNonCommitAndOversizedOutputAndPropagatesCancellation)
+        ,("DefaultBranchImportResolvesOnceAndForcesExactOfficialCommit", ManifestDefaultBranchImportTests.DefaultBranchImportResolvesOnceAndForcesExactOfficialCommit)
+        ,("DefaultBranchResolutionFailureRetainsOfficialStateAndSkipsImporter", ManifestDefaultBranchImportTests.DefaultBranchResolutionFailureRetainsOfficialStateAndSkipsImporter)
+        ,("CandidateImportAfterDefaultResolutionDoesNotReplaceOfficialSnapshot", ManifestDefaultBranchImportTests.CandidateImportAfterDefaultResolutionDoesNotReplaceOfficialSnapshot)
+        ,("DefaultBranchApiContractCannotAcceptCallerModeOrCommit", ManifestDefaultBranchImportTests.DefaultBranchApiContractCannotAcceptCallerModeOrCommit)
     ];
 
     public static int Main()
