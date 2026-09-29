@@ -5,6 +5,8 @@ internal static class Program
     private static readonly (string Name, Action Test)[] Tests =
     [
         ("RunnerStarts", RunnerStarts),
+        ("SyntheticOfficialExecutionNeverFallsBackToLegacyOverlay", WorkAuthorityCharacterizationTests.SyntheticOfficialExecutionNeverFallsBackToLegacyOverlay),
+        ("SyntheticDependencyProjectionPreservesEligibilityAndTypedDirectEdges", WorkAuthorityCharacterizationTests.SyntheticDependencyProjectionPreservesEligibilityAndTypedDirectEdges),
         ("ManifestImportAcceptsValidatedCapture", ManifestImportTests.ManifestImportAcceptsValidatedCapture),
         ("ManifestImportNeverFallsBackToLegacyCapture", ManifestImportTests.ManifestImportNeverFallsBackToLegacyCapture),
         ("ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation", ManifestImportTests.ManifestGitReaderCapturesAcceptedCommitWithoutCheckoutMutation),
