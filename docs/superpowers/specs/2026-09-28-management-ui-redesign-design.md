@@ -54,14 +54,14 @@ The user approved a phased redesign inspired by familiar interaction patterns fr
 
 ### Primary navigation
 
-The loaded-project workspace has three routine destinations:
+The workspace foundation keeps the primary navigation limited to destinations that are fully usable in this increment:
 
 - **Tổng quan** — concise project status and next actions.
 - **Gantt** — schedule, actual lane, milestones, and focused dependency impact.
-- **Công việc** — one work collection with **Danh sách** and **Bảng Kanban** modes.
 
 An **Nâng cao** entry groups supporting views without removing them:
 
+- **Công việc hiện có:** current WBS and Kanban screens remain available here until the unified Work List/Kanban destination is delivered in increment 2. Do not show a nonfunctional “Công việc” placeholder in primary navigation.
 - **Phân tích:** dependencies and CPM/critical path.
 - **Nguồn & kiểm tra:** source identity, warnings, and import diagnostics.
 - **Readiness:** shown when readiness evidence is present; otherwise not presented as an empty or failed control center.
@@ -100,9 +100,9 @@ Overview is the default destination after a successful official import and the f
 Show only these primary facts:
 
 1. **Current phase** and a short project identity.
-2. **Recorded progress**, only when actual and remaining effort are both valid and their sum is greater than zero. Calculate `actual effort / (actual effort + remaining effort)`. Otherwise display that effort progress is not yet known. Show completed-card counts separately; never substitute task-count completion or plan percentage.
+2. **Recorded progress**, only when every delivery card has a valid, non-negative actual/remaining effort pair with a positive sum. Calculate `total actual effort / (total actual effort + total remaining effort)`. If coverage is partial or any card is ineligible, withhold the project-wide percentage, show the complete-effort coverage count, and label any effort totals as partial. Show completed-card counts separately; never substitute task-count completion or plan percentage.
 3. **Next milestone/control point**, with its date and source-backed state when known.
-4. **Up to three actionable attention items**, each linking to the affected work item and explaining the consequence without compiler jargon.
+4. **Up to three actionable attention items**, each linking to the affected work item and explaining the consequence in concise Vietnamese without compiler jargon. Clean display names; do not expose raw alert diagnostics, machine codes, or embedded work IDs in the summary.
 
 The official source date and snapshot identity should be findable but secondary. Detailed effort inventory, full warnings, source provenance, CPM numbers, and complete hierarchy belong in their contextual views or inspector disclosures.
 

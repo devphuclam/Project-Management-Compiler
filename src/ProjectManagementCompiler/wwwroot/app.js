@@ -27,8 +27,32 @@
 
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "dashboard", gantt: createGanttState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", gantt: createGanttState() };
   const byId = (id) => document.getElementById(id);
+  const sourcePreferenceKeys = Object.freeze({
+    repositoryRoot: "pmc.source.repositoryRoot",
+    manifestPath: "pmc.source.manifestPath"
+  });
+
+  function restoreSourcePreferences() {
+    try {
+      const repositoryRoot = window.localStorage.getItem(sourcePreferenceKeys.repositoryRoot);
+      const manifestPath = window.localStorage.getItem(sourcePreferenceKeys.manifestPath);
+      if (repositoryRoot && byId("manifest-repository-root")) byId("manifest-repository-root").value = repositoryRoot;
+      if (manifestPath && byId("manifest-path")) byId("manifest-path").value = manifestPath;
+    } catch {
+      // Storage can be disabled by the browser; source entry remains usable for this session.
+    }
+  }
+
+  function persistSourcePreferences() {
+    try {
+      window.localStorage.setItem(sourcePreferenceKeys.repositoryRoot, byId("manifest-repository-root").value.trim());
+      window.localStorage.setItem(sourcePreferenceKeys.manifestPath, byId("manifest-path").value.trim());
+    } catch {
+      // Storage is only a convenience; an unavailable browser store must not block a manual import.
+    }
+  }
 
   // Presentation-only labels. The canonical model and source role codes stay untouched.
   const rolePresentation = Object.freeze({
@@ -517,6 +541,7 @@
 
   function updateWorkspaceMode() {
     const page = document.querySelector(".page");
+    document.body.classList.toggle("is-unloaded", !state.project && !state.xlsxPreview);
     if (page) {
       page.classList.toggle("is-gantt-focus", state.activeView === "gantt" && !state.xlsxPreview);
       page.classList.toggle("is-xlsx-preview", Boolean(state.xlsxPreview));
@@ -564,6 +589,26 @@
     clear(panel);
     if (!summary) {
       panel.appendChild(node("div", "No project loaded. Analyze a local planning source to begin.", "empty-state"));
+      return;
+    }
+    const overview = summary.views && summary.views.overview;
+    const classification = String(summary.manifest && (summary.manifest.classification
+      || summary.manifest.metadata && summary.manifest.metadata.classification) || "").toUpperCase();
+    if (overview && classification === "OFFICIAL_COMMIT") {
+      panel.className = "summary-region official-project-header";
+      const heading = node("div", null, "official-project-heading");
+      const copy = node("div", null, "official-project-copy");
+      copy.appendChild(node("p", "DỰ ÁN ĐANG MỞ", "eyebrow"));
+      copy.appendChild(node("h2", overview.project && overview.project.name || "Dự án chưa có tên"));
+      copy.appendChild(node("p", "Ngày báo cáo · " + displayDate(overview.project && overview.project.reportingDate), "muted"));
+      heading.appendChild(copy);
+      heading.appendChild(node("span", "Nguồn chính thức", "official-project-badge"));
+      panel.appendChild(heading);
+      const provenance = node("details", null, "official-project-provenance");
+      provenance.appendChild(node("summary", "Thông tin phiên bản nguồn"));
+      provenance.appendChild(node("p", "Mã phiên bản · " + ((overview.project && overview.project.sourceIdentity) || "Chưa ghi nhận")));
+      provenance.appendChild(node("p", "Manifest · " + ((summary.manifest.metadata && summary.manifest.metadata.manifestPath) || "Chưa ghi nhận")));
+      panel.appendChild(provenance);
       return;
     }
     const dashboard = summary.views && summary.views.dashboard || {};
@@ -829,6 +874,101 @@
     details.appendChild(renderTable(["View", "Value", "State"], summaryRows));
     fragment.appendChild(details);
     return fragment;
+  }
+
+  function renderOverview(overview) {
+    const section = node("section", null, "overview-workspace");
+    if (!overview || !overview.project) {
+      section.appendChild(node("div", "Chưa có dữ liệu tổng quan cho dự án đang mở.", "empty-state"));
+      return section;
+    }
+
+    const progress = overview.progress || {};
+    const identity = overview.project;
+    const heading = node("header", null, "overview-heading");
+    const headingCopy = node("div");
+    headingCopy.appendChild(node("p", "TỔNG QUAN", "eyebrow"));
+    headingCopy.appendChild(node("h2", identity.name || "Dự án chưa có tên"));
+    headingCopy.appendChild(node("p", "Tình hình theo ngày báo cáo " + displayDate(identity.reportingDate) + ".", "muted"));
+    heading.appendChild(headingCopy);
+    const sourceDetails = node("details", null, "overview-source-details");
+    sourceDetails.appendChild(node("summary", "Nguồn dữ liệu"));
+    sourceDetails.appendChild(node("span", "Phiên bản · " + (identity.sourceIdentity || "Chưa ghi nhận")));
+    heading.appendChild(sourceDetails);
+    section.appendChild(heading);
+
+    const metrics = node("div", null, "overview-metrics");
+    const percent = progress.recordedPercent;
+    const effortCard = node("article", null, "overview-metric overview-metric-primary");
+    effortCard.appendChild(node("span", "Tiến độ theo thời lượng", "overview-metric-label"));
+    effortCard.appendChild(node("strong", percent === null || percent === undefined ? "Chưa đủ dữ liệu" : percent + "%", "overview-metric-value"));
+    const coverageMessage = progress.totalCardCount === 0
+      ? "Chưa có công việc để tính tiến độ."
+      : progress.coverageComplete
+      ? "Đã có ghi nhận cho " + progress.eligibleCardCount + "/" + progress.totalCardCount + " công việc."
+      : "Đã có dữ liệu thời lượng cho " + progress.eligibleCardCount + "/" + progress.totalCardCount + " công việc; tổng giờ hiện có chỉ là một phần.";
+    effortCard.appendChild(node("span", coverageMessage, "overview-metric-note"));
+    effortCard.appendChild(node("span", "Đã làm " + formatOverviewHours(progress.actualEffortHours) + " · còn " + formatOverviewHours(progress.remainingEffortHours), "overview-metric-detail"));
+    metrics.appendChild(effortCard);
+
+    const completedCard = node("article", null, "overview-metric");
+    completedCard.appendChild(node("span", "Công việc hoàn thành", "overview-metric-label"));
+    completedCard.appendChild(node("strong", (progress.completedCardCount || 0) + " / " + (progress.totalCardCount || 0), "overview-metric-value"));
+    completedCard.appendChild(node("span", "Số lượng riêng, không phải phần trăm thời lượng.", "overview-metric-note"));
+    metrics.appendChild(completedCard);
+    section.appendChild(metrics);
+
+    const controls = node("div", null, "overview-control-grid");
+    const phase = overview.currentPhase || {};
+    const phaseCard = node("article", null, "overview-control-card");
+    phaseCard.appendChild(node("span", "GIAI ĐOẠN HIỆN TẠI", "eyebrow"));
+    phaseCard.appendChild(node("h3", phase.state === "KNOWN" && phase.name ? phase.name : "Chưa xác định"));
+    phaseCard.appendChild(node("p", phase.state === "KNOWN"
+      ? displayDate(phase.plannedStart) + " – " + displayDate(phase.plannedFinish)
+      : "Ngày báo cáo không khớp duy nhất với giai đoạn có đủ ngày kế hoạch.", "muted"));
+    controls.appendChild(phaseCard);
+
+    const point = overview.nextControlPoint;
+    const pointCard = node("article", null, "overview-control-card");
+    pointCard.appendChild(node("span", "MỐC TIẾP THEO", "eyebrow"));
+    pointCard.appendChild(node("h3", point && point.name || "Chưa có mốc tiếp theo"));
+    const pointStateLabels = { NOT_STARTED: "Chưa bắt đầu", IN_PROGRESS: "Đang thực hiện", COMPLETED: "Hoàn thành", SUSPENDED: "Tạm dừng", CANCELLED: "Đã hủy" };
+    pointCard.appendChild(node("p", point
+      ? displayDate(point.plannedDate) + " · " + (String(point.kind || "").toUpperCase() === "DECISION" ? "Điểm quyết định" : "Cột mốc") + " · " + (point.sourceState ? pointStateLabels[String(point.sourceState).toUpperCase()] || "Đã ghi nhận" : "Chưa ghi nhận trạng thái")
+      : "Chưa có mốc tiếp theo được ghi trong kế hoạch.", "muted"));
+    controls.appendChild(pointCard);
+    section.appendChild(controls);
+
+    const attention = node("section", null, "overview-attention");
+    const attentionHeading = node("div", null, "overview-attention-heading");
+    attentionHeading.appendChild(node("div", null, "overview-attention-copy"));
+    attentionHeading.lastChild.appendChild(node("p", "VIỆC CẦN CHÚ Ý", "eyebrow"));
+    attentionHeading.lastChild.appendChild(node("h3", "Ưu tiên xem"));
+    attentionHeading.appendChild(node("span", String((overview.attentionItems || []).length), "overview-attention-count"));
+    attention.appendChild(attentionHeading);
+    const attentionItems = overview.attentionItems || [];
+    if (!attentionItems.length) {
+      attention.appendChild(node("p", "Chưa có công việc cần chú ý từ dữ liệu hiện có.", "overview-empty"));
+    } else {
+      attentionItems.forEach(item => {
+        const action = node("button", null, "overview-attention-item");
+        action.type = "button";
+        action.dataset.summaryView = item.destination || "gantt";
+        action.dataset.summaryKey = typedKey("DeliveryCard", item.workItemId);
+        action.appendChild(node("strong", item.workItemName));
+        action.appendChild(node("span", item.consequence, "muted"));
+        action.appendChild(node("span", "Mở Gantt →", "overview-attention-link"));
+        attention.appendChild(action);
+      });
+    }
+    section.appendChild(attention);
+    return section;
+  }
+
+  function formatOverviewHours(value) {
+    return value === null || value === undefined
+      ? "chưa ghi nhận"
+      : Number(value).toLocaleString("vi-VN", { maximumFractionDigits: 2 }) + " giờ";
   }
 
   function appendTree(parent, item) {
@@ -2593,6 +2733,7 @@
 
   function renderActiveView() {
     updateWorkspaceMode();
+    updateActiveTab(state.activeView);
     const content = byId("view-content");
     clear(content);
     if (state.xlsxPreview) {
@@ -2604,7 +2745,8 @@
       content.appendChild(node("div", "Views will appear here after analysis.", "empty-state"));
       return;
     }
-    const view = state.activeView === "management-control" ? renderManagementControl(state.managementControl || state.views.managementControl) :
+    const view = state.activeView === "overview" ? renderOverview(state.views.overview) :
+      state.activeView === "management-control" ? renderManagementControl(state.managementControl || state.views.managementControl) :
       state.activeView === "source" ? renderSource() :
       state.activeView === "dashboard" ? renderDashboard(state.views.dashboard) :
       state.activeView === "wbs" ? renderWbs(state.views.wbs) :
@@ -2667,6 +2809,7 @@
 
     if (response.classification === "OFFICIAL_COMMIT") {
       state.officialManifest = state.manifest;
+      state.activeView = "overview";
     }
     setExportAvailability();
 
@@ -2698,6 +2841,59 @@
     renderSummary(summary);
     renderActiveView();
     return true;
+  }
+
+  async function importDefaultBranch() {
+    showError(null);
+    const repositoryRoot = byId("manifest-repository-root").value.trim();
+    const manifestPath = byId("manifest-path").value.trim();
+    const analysisAsOfOverride = byId("manifest-as-of").value || null;
+    const button = byId("manifest-default-branch-import-button");
+    const note = byId("manifest-import-note");
+    if (!repositoryRoot || !manifestPath) {
+      showError(new Error("Chọn thư mục repository và đường dẫn manifest trước khi đọc."));
+      byId("manifest-repository-root").focus();
+      setStatus("Chưa đọc dự án.");
+      return;
+    }
+
+    persistSourcePreferences();
+    if (button) {
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+    }
+    if (note) note.textContent = "Đang đọc commit mặc định đã có trong bản cục bộ. Không kiểm tra nguồn từ xa.";
+
+    try {
+      setStatus("Đang đọc phiên bản có sẵn trong repository trên máy…");
+      const response = await request("/api/manifest-import/default-branch", jsonOptions({
+        repositoryRoot,
+        manifestPath,
+        analysisAsOfOverride
+      }));
+      if (!applyManifestImport(response)) {
+        setStatus("Không tạo được snapshot mới; dự án chính thức đang mở được giữ nguyên.");
+        return;
+      }
+
+      const classification = String(response.classification || "").toUpperCase();
+      if (classification === "OFFICIAL_COMMIT") {
+        const identity = response.snapshot && response.snapshot.metadata && response.snapshot.metadata.sourceIdentity;
+        setStatus("Đã đọc phiên bản trong bản cục bộ" + (identity ? " · " + identity : "") + ". Không kiểm tra nguồn từ xa.");
+      } else {
+        setStatus(trustLabel(response.classification) + " · Bản xem trước chưa thay thế snapshot chính thức.");
+      }
+    } catch (error) {
+      showError(error);
+      if (note) note.textContent = "Không đọc được nguồn. Snapshot chính thức đang mở, nếu có, được giữ nguyên. " + error.message;
+      setStatus("Đọc nguồn thất bại; dữ liệu chính thức trước đó được giữ nguyên.");
+      setSourceIntakeCollapsed(false);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+      }
+    }
   }
 
   async function importManifest() {
@@ -2925,6 +3121,9 @@
     setExecutionPanelOpen(Boolean(body && body.hidden), false);
   });
   byId("analyze-button").addEventListener("click", analyze);
+  byId("manifest-repository-root").addEventListener("change", persistSourcePreferences);
+  byId("manifest-path").addEventListener("change", persistSourcePreferences);
+  byId("manifest-default-branch-import-button").addEventListener("click", importDefaultBranch);
   byId("manifest-import-button").addEventListener("click", importManifest);
   byId("xlsx-preview-import-button").addEventListener("click", importXlsxPreview);
   byId("refresh-button").addEventListener("click", refresh);
@@ -2933,6 +3132,7 @@
   byId("save-json-button").addEventListener("click", () => { window.location.href = "/api/exports/project.json"; });
   byId("export-executive-button").addEventListener("click", () => { window.location.href = "/api/exports/executive-progress.xlsx"; });
   byId("export-xlsx-button").addEventListener("click", () => { window.location.href = "/api/exports/cario.xlsx"; });
+  restoreSourcePreferences();
   setExportAvailability();
   if (!byId("as-of-date").value) {
     const now = new Date();

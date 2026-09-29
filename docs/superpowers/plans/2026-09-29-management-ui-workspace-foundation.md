@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing ASP.NET Core application and vanilla HTML/CSS/JavaScript client. Add a read-only default-branch resolver over the existing Git command abstraction, and route the primary local-source action through it into the existing exact-commit importer in one server request. Project the Overview from canonical project and execution evidence, sharing existing progress semantics rather than deriving completion from card counts. Reorganize the existing page progressively; preserve all current advanced routes, exports, proposal boundaries, and the approved Gantt behavior.
 
-**Tech stack:** .NET 8 / ASP.NET Core, existing C# test-runner project, vanilla JavaScript, HTML, and CSS. No new runtime or test dependencies.
+**Tech stack:** .NET 10 / ASP.NET Core, existing C# test-runner project, vanilla JavaScript, HTML, and CSS. No new runtime or test dependencies.
 
 **Written design:** [2026-09-28-management-ui-redesign-design.md](../specs/2026-09-28-management-ui-redesign-design.md)
 
@@ -17,7 +17,9 @@
 - Describe the resolved commit as the newest default-branch commit available in this local copy; do not imply GitHub freshness was checked.
 - A valid official import alone may replace the official snapshot. Failed, candidate, preview, and capture-error imports retain the last valid official snapshot.
 - The importer stays read-only with respect to the source repository. A working-tree capture is a non-authoritative preview.
-- Recorded progress is actual effort / (actual effort + remaining effort), only when both values are valid and the denominator is greater than zero. Otherwise show progress as unknown. Completed-card counts are separate and never substitute for progress.
+- Project-wide recorded progress is total actual effort / (total actual effort + total remaining effort) only when every delivery card has a valid, non-negative actual/remaining pair with a positive sum. Otherwise withhold the project-wide percentage, show eligible-card coverage, and label any effort totals as partial. Completed-card counts are separate and never substitute for progress.
+- The Overview reuses `ReaderFacingTextPolicy.CleanName` for project/work display names so internal prefixes and duplicated identifiers do not dominate reader-facing labels.
+- Overview concerns use concise Vietnamese consequences for supported alert types; raw diagnostic messages, machine codes, and embedded work IDs never appear in the main summary.
 - Keep plan, actual, proposal-only scenarios, and derived alerts distinct. Unknown execution is not zero or “not started.”
 - Persist only the local repository-root and manifest-path preferences in browser storage. Never persist credentials, project contents, or source snapshots there; never auto-import on page load.
 - Preserve the existing Gantt schedule/dependency semantics and approved visual behavior. Keep source IDs and provenance available contextually, not as primary labels.
@@ -69,9 +71,9 @@
 
 - Project project identity, current phase as of the source reporting date, next dated milestone, up to three useful attention items, completed-card count, and effort-backed recorded progress.
 - Reuse the current executive progress rules through a shared pure calculation or equivalent centralized logic; do not create a second divergent percentage formula.
-- If actual/remaining effort is missing, negative, invalid, or sums to zero, return an explicit unknown-progress state. Do not infer 100% from a completed state or divide completed cards by total cards.
+- If any delivery card lacks a valid, non-negative actual/remaining pair with a positive sum, return an explicit unknown project-wide percentage and show eligible-card coverage. Any effort totals for the covered subset must be labeled as partial. Do not infer 100% from a completed state or divide completed cards by total cards.
 - Handle absent official reporting date/milestone honestly for non-official or incomplete project states; do not fabricate a date or phase.
-- Test effort-known and effort-unknown cases, rounding, zero denominator, invalid evidence, current-phase boundary, next milestone, and attention cap/link targets.
+- Test complete and partial effort coverage, rounding, zero denominator, invalid evidence, coverage labels, current-phase boundary, next milestone, and attention cap/link targets.
 
 ### 5. Restructure the HTML shell and source-intake states
 
@@ -79,7 +81,7 @@
 
 - Create a focused unloaded state that explains the selected local source and has one explicit primary action: “Đọc phiên bản hiện có trên máy”. Keep exact-SHA, working-tree preview, alternate manifest path, as-of override, legacy/JSON/XLSX paths accessible under clearly named advanced/disclosure areas.
 - Never trigger an import automatically on initial load or when restoring preferences.
-- After official import, present a compact project identity/header and primary navigation: Overview, Công việc placeholder/view entry for the later increment, and Gantt. Group existing technical views and secondary tools under Advanced without deleting their entry points.
+- After official import, present a compact project identity/header and primary navigation for Overview and Gantt. Keep existing WBS/Kanban and technical views under Advanced until the unified Work destination is delivered; do not show a nonfunctional Work placeholder. Do not delete existing entry points.
 - Make Overview the post-import destination. Keep export actions discoverable but subordinate to the primary navigation.
 - Add accessible labels, landmarks, focus order, disclosure semantics, and inline loading/error/success messages; retain stable DOM hooks needed by existing `app.js` behavior until migrated.
 - Tests assert essential existing actions remain available and no screen copy claims a project is loaded before a successful import.

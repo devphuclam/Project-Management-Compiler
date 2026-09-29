@@ -10,10 +10,29 @@ $programPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectMan
 $appJsPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\app.js'))
 $indexHtmlPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\index.html'))
 $stylesCssPath = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'src\ProjectManagementCompiler\wwwroot\styles.css'))
+$loopbackPort = 5050
+$configuredLoopbackPort = [Environment]::GetEnvironmentVariable('PMC_LOOPBACK_PORT')
+if (-not [string]::IsNullOrWhiteSpace($configuredLoopbackPort)) {
+    $parsedLoopbackPort = 0
+    if (-not [int]::TryParse($configuredLoopbackPort, [ref]$parsedLoopbackPort) -or $parsedLoopbackPort -lt 1 -or $parsedLoopbackPort -gt 65535) {
+        throw 'PMC_LOOPBACK_PORT must be a valid TCP port from 1 to 65535.'
+    }
+    $loopbackPort = $parsedLoopbackPort
+}
+$baseUrl = "http://127.0.0.1:$loopbackPort"
 
 if (-not (Test-Path -LiteralPath $appDll -PathType Leaf)) {
     throw "Built application was not found at '$appDll'."
 }
+
+$portProbe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $loopbackPort)
+try {
+    $portProbe.Start()
+}
+catch {
+    throw "Verification port $loopbackPort is already in use. Choose a free PMC_LOOPBACK_PORT; refusing to contact another local app instance."
+}
+$portProbe.Stop()
 
 function Assert-Condition {
     param(
@@ -118,7 +137,7 @@ try {
     $health = $null
     for ($attempt = 0; $attempt -lt 40 -and $null -eq $health; $attempt++) {
         try {
-            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/health' -TimeoutSec 2
+            $health = Invoke-RestMethod -Uri "$baseUrl/api/health" -TimeoutSec 2
         }
         catch {
             Start-Sleep -Milliseconds 250
@@ -126,10 +145,10 @@ try {
     }
 
     Assert-Condition ($null -ne $health) 'Loopback API did not become ready.'
-    Assert-Condition ($health.binding -eq 'http://127.0.0.1:5050') 'API binding must be the loopback MVP binding.'
+    Assert-Condition ($health.binding -eq $baseUrl) 'API binding must be the selected loopback endpoint.'
     Assert-Condition (-not $health.publicNetworkBinding) 'API must not advertise a public network binding.'
 
-    $summary = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/compile' -Method Post -Body @{
+    $summary = Invoke-JsonApi -Uri "$baseUrl/api/compile" -Method Post -Body @{
         sourcePath = $fixture
         asOfDate = '2026-09-28'
     }
@@ -141,7 +160,7 @@ try {
     Assert-Condition (-not ($summaryJson -match '"content"\s*:')) 'Application source metadata must not expose captured document content.'
     Assert-Condition (@($summary.sources.documents.relativeFile | Where-Object { [IO.Path]::IsPathRooted($_) }).Count -eq 0) 'Application source metadata must expose relative document paths only.'
 
-    $disabledReadinessSummary = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/compile' -Method Post -Body @{
+    $disabledReadinessSummary = Invoke-JsonApi -Uri "$baseUrl/api/compile" -Method Post -Body @{
         sourcePath = $fixture
         asOfDate = '2026-09-28'
         includeManagementEvidence = $false
@@ -151,7 +170,7 @@ try {
     Assert-Condition (@($disabledReadinessSummary.managementEvidence.observations).Count -eq 0) 'A disabled readiness switch must not attach management evidence.'
     Assert-Condition (@($disabledReadinessSummary.sources.documents.relativeFile | Where-Object { $_ -like 'specs/004-technical-pilot-readiness/*' }).Count -eq 0) 'A disabled readiness switch must not capture readiness increment files.'
 
-    $readinessSummary = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/compile' -Method Post -Body @{
+    $readinessSummary = Invoke-JsonApi -Uri "$baseUrl/api/compile" -Method Post -Body @{
         sourcePath = $fixture
         asOfDate = '2026-09-28'
         includeManagementEvidence = $true
@@ -171,7 +190,7 @@ try {
     Assert-Condition (-not $readinessJson.Contains($fixture, [StringComparison]::OrdinalIgnoreCase)) 'Readiness API output must not expose an absolute source path.'
     Assert-Condition (-not $readinessJson.Contains('Reviewer evidence pending', [StringComparison]::Ordinal)) 'Readiness API output must not expose raw source content.'
 
-    $project = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/project' -Method Get
+    $project = Invoke-JsonApi -Uri "$baseUrl/api/project" -Method Get
     Assert-Condition ($project.phases.Count -eq 6) 'Canonical project did not preserve six phases.'
     Assert-Condition ($project.workPackages.Count -eq 35) 'Canonical project did not preserve 35 work packages.'
     Assert-Condition ($project.deliveryCards.Count -eq 53) 'Canonical project did not preserve 53 delivery cards.'
@@ -183,7 +202,7 @@ try {
     Assert-Condition (@($project.deliveryCards | Where-Object { $_.id -eq 'P04' }).Count -eq 1) 'DeliveryCard P04 must remain present.'
     Assert-Condition (-not @($summary.warnings | Where-Object { $_.code -in @('INVALID_DEPENDENCY_SUBJECT_KIND', 'INVALID_DEPENDENCY_PREDECESSOR_KIND', 'DUPLICATE_DEPENDENCY') }).Count) 'Real-shaped compile reported a false typed-ID collision diagnostic.'
 
-    $views = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/views' -Method Get
+    $views = Invoke-JsonApi -Uri "$baseUrl/api/views" -Method Get
     Assert-Condition ($views.gantt.items.Count -eq 53) 'API views did not expose the shared Gantt projection.'
     Assert-Condition ($views.gantt.milestones.Count -eq 7) 'API views did not expose milestone markers.'
     $ganttP04 = @($views.gantt.items | Where-Object { $_.workItemId -eq 'P04' })
@@ -198,7 +217,7 @@ try {
     Assert-Condition (@($views.gantt.milestones | Where-Object { @($_.sourceReferences).Count -gt 0 }).Count -eq 7) 'Gantt milestones must expose safe item-level source references.'
     Assert-Condition (@($views.dependencyNetwork.nodes | Where-Object { $_.id -eq 'P04' }).Count -eq 2) 'Dependency network must retain both typed P04 nodes.'
 
-    $jsonResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/exports/project.json' -TimeoutSec 30
+    $jsonResponse = Invoke-WebRequest -Uri "$baseUrl/api/exports/project.json" -TimeoutSec 30
     $jsonText = [string] $jsonResponse.Content
     $contentDisposition = [string] $jsonResponse.Headers['Content-Disposition']
     Assert-Condition ($contentDisposition -match '_project\.json') 'JSON export filename must follow the <ProjectName>_project.json contract.'
@@ -208,7 +227,7 @@ try {
     Assert-Condition ($jsonText.Contains('"executionOverlay"', [StringComparison]::Ordinal)) 'Persisted JSON must include the execution overlay.'
     Assert-Condition ($jsonText.Contains('"managementEvidence"', [StringComparison]::Ordinal)) 'Persisted JSON must include the management evidence layer.'
 
-    $reopened = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/reopen' -Method Post -Body @{
+    $reopened = Invoke-JsonApi -Uri "$baseUrl/api/reopen" -Method Post -Body @{
         json = $jsonText
         asOfDate = '2026-09-28'
     }
@@ -219,7 +238,7 @@ try {
     Assert-Condition ($reopened.analysis.executionStatus.overdue -eq 0 -and $reopened.analysis.executionStatus.atRisk -eq 0) 'Planning-only API reopen must not fabricate execution alerts.'
 
     $temporaryXlsx = [IO.Path]::Combine([IO.Path]::GetTempPath(), ('pmc-verify-{0}.xlsx' -f [Guid]::NewGuid().ToString('N')))
-    Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/exports/cario.xlsx' -OutFile $temporaryXlsx -TimeoutSec 30
+    Invoke-WebRequest -Uri "$baseUrl/api/exports/cario.xlsx" -OutFile $temporaryXlsx -TimeoutSec 30
     $fileStream = [IO.File]::OpenRead($temporaryXlsx)
     $archive = [IO.Compression.ZipArchive]::new($fileStream, [IO.Compression.ZipArchiveMode]::Read)
     try {
@@ -314,25 +333,25 @@ try {
         $fileStream.Dispose()
     }
 
-    $previewUpload = Invoke-XlsxPreviewUpload -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -FilePath $temporaryXlsx
+    $previewUpload = Invoke-XlsxPreviewUpload -Uri "$baseUrl/api/xlsx-preview" -FilePath $temporaryXlsx
     Assert-Condition ($previewUpload.StatusCode -eq 200) "XLSX preview upload must return 200; got $($previewUpload.StatusCode)."
     $previewPayload = $previewUpload.Body | ConvertFrom-Json
     Assert-Condition ($previewPayload.readOnly -eq $true -and $previewPayload.authoritative -eq $false) 'XLSX preview must be explicitly read-only and non-authoritative.'
     Assert-Condition ($previewPayload.projectId -eq $summary.project.id -and $previewPayload.contractVersion -eq '1.0') 'XLSX preview must preserve the exported project identity and contract version.'
     Assert-Condition (@($previewPayload.dateAxis).Count -gt 0 -and @($previewPayload.tasks).Count -gt 0) 'XLSX preview must expose the daily axis and task rows.'
 
-    $activePreview = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    $activePreview = Invoke-RestMethod -Uri "$baseUrl/api/xlsx-preview" -TimeoutSec 30
     Assert-Condition ($activePreview.snapshotId -eq $previewPayload.snapshotId) 'XLSX preview GET must return the active uploaded snapshot.'
-    $previewOnlyExecutiveResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -SkipHttpErrorCheck -TimeoutSec 30
+    $previewOnlyExecutiveResponse = Invoke-WebRequest -Uri "$baseUrl/api/exports/executive-progress.xlsx" -SkipHttpErrorCheck -TimeoutSec 30
     Assert-Condition ([int]$previewOnlyExecutiveResponse.StatusCode -eq 404) 'A technical-preview-only session must not download a management workbook.'
     $previewOnlyExecutiveError = $previewOnlyExecutiveResponse.Content | ConvertFrom-Json
     Assert-Condition ($previewOnlyExecutiveError.code -eq 'NO_OFFICIAL_SNAPSHOT' -and $previewOnlyExecutiveError.phase -eq 'executive-export') 'A technical-preview-only management export rejection must identify the missing official snapshot.'
 
-    $clearPreviewResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -Method Delete -TimeoutSec 30
+    $clearPreviewResponse = Invoke-WebRequest -Uri "$baseUrl/api/xlsx-preview" -Method Delete -TimeoutSec 30
     Assert-Condition ([int]$clearPreviewResponse.StatusCode -eq 204) 'XLSX preview clear must return 204.'
     $emptyPreviewStatus = $null
     try {
-        Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30 | Out-Null
+        Invoke-RestMethod -Uri "$baseUrl/api/xlsx-preview" -TimeoutSec 30 | Out-Null
     }
     catch {
         if ($_.Exception.Response) {
@@ -366,7 +385,7 @@ try {
     & git -C $sourceRoot cat-file -e ($acceptedCommit + '^{commit}')
     Assert-Condition ($LASTEXITCODE -eq 0) 'The accepted IDEAEngineering compatibility commit is not available as a commit object.'
 
-    $manifestImport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
+    $manifestImport = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import" -Method Post -Body @{
         repositoryRoot = $sourceRoot
         manifestPath = 'planning/project-management-compiler-manifest.json'
         mode = 'GIT_COMMIT'
@@ -388,28 +407,28 @@ try {
     Assert-Condition (-not $manifestJson.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Manifest response must not expose the local source root.'
     Assert-Condition (-not ($manifestJson -match '"content"\s*:')) 'Manifest response must not expose raw source bodies.'
 
-    $officialSnapshot = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    $officialSnapshot = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import/official" -Method Get
     Assert-Condition ($officialSnapshot.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Official snapshot inspection returned a different snapshot.'
     $officialDigestBeforeExecutiveExport = [string]$officialSnapshot.semanticDigest
     $officialExecutionBeforeExecutiveExport = ($officialSnapshot.sourceExecution | ConvertTo-Json -Depth 30 -Compress)
-    $officialExport = Invoke-WebRequest -Uri 'http://127.0.0.1:5050/api/manifest-import/exports/official.json' -TimeoutSec 30
+    $officialExport = Invoke-WebRequest -Uri "$baseUrl/api/manifest-import/exports/official.json" -TimeoutSec 30
     $officialExportText = [string]$officialExport.Content
     Assert-Condition ([string]$officialExport.Headers['Content-Disposition'] -match 'manifest-official\.json') 'Official manifest export must use an authority-specific filename.'
     Assert-Condition ($officialExportText.Contains('"schema":"2.0"', [StringComparison]::Ordinal)) 'Official manifest export must use canonical schema 2.0.'
     Assert-Condition (-not $officialExportText.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Official manifest export must not expose the local source root.'
     Assert-Condition (-not ($officialExportText -match '"content"\s*:')) 'Official manifest export must not expose raw source bodies.'
 
-    $technicalPreviewBeforeExecutiveExport = Invoke-XlsxPreviewUpload -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -FilePath $temporaryXlsx
+    $technicalPreviewBeforeExecutiveExport = Invoke-XlsxPreviewUpload -Uri "$baseUrl/api/xlsx-preview" -FilePath $temporaryXlsx
     Assert-Condition ($technicalPreviewBeforeExecutiveExport.StatusCode -eq 200) "Technical XLSX preview must remain accepted before executive export; got $($technicalPreviewBeforeExecutiveExport.StatusCode)."
     $technicalPreviewBeforeExecutiveExportPayload = $technicalPreviewBeforeExecutiveExport.Body | ConvertFrom-Json
-    $activeXlsxPreviewBeforeExecutiveExport = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    $activeXlsxPreviewBeforeExecutiveExport = Invoke-RestMethod -Uri "$baseUrl/api/xlsx-preview" -TimeoutSec 30
     Assert-Condition ($activeXlsxPreviewBeforeExecutiveExport.snapshotId -eq $technicalPreviewBeforeExecutiveExportPayload.snapshotId) 'The active XLSX preview must be the accepted technical workbook before executive export.'
     $activeXlsxPreviewBeforeExecutiveExportJson = $activeXlsxPreviewBeforeExecutiveExport | ConvertTo-Json -Depth 30 -Compress
-    $proposalsBeforeExecutiveExport = @(Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/proposals' -TimeoutSec 30)
+    $proposalsBeforeExecutiveExport = @(Invoke-RestMethod -Uri "$baseUrl/api/proposals" -TimeoutSec 30)
     $proposalsBeforeExecutiveExportJson = ConvertTo-Json -InputObject $proposalsBeforeExecutiveExport -Depth 30 -Compress
 
     $temporaryExecutiveXlsx = [IO.Path]::Combine([IO.Path]::GetTempPath(), ('pmc-executive-verify-{0}.xlsx' -f [Guid]::NewGuid().ToString('N')))
-    $executiveDownload = Invoke-BinaryDownload -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -FilePath $temporaryExecutiveXlsx
+    $executiveDownload = Invoke-BinaryDownload -Uri "$baseUrl/api/exports/executive-progress.xlsx" -FilePath $temporaryExecutiveXlsx
     $executiveDisposition = [string]$executiveDownload.ContentDisposition
     $executiveContentType = [string]$executiveDownload.ContentType
     Assert-Condition ($executiveDisposition -match 'BaoCaoTienDo_2026-09-19\.xlsx') 'Executive report filename must use the safe project name and source reporting date.'
@@ -463,20 +482,20 @@ try {
     $executiveFileStream.Dispose()
     $executiveFileStream = $null
 
-    $managementPreviewUpload = Invoke-XlsxPreviewUpload -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -FilePath $temporaryExecutiveXlsx
+    $managementPreviewUpload = Invoke-XlsxPreviewUpload -Uri "$baseUrl/api/xlsx-preview" -FilePath $temporaryExecutiveXlsx
     Assert-Condition ($managementPreviewUpload.StatusCode -eq 422) "The management workbook must be rejected by the technical preview endpoint; got $($managementPreviewUpload.StatusCode)."
     $managementPreviewError = $managementPreviewUpload.Body | ConvertFrom-Json
     Assert-Condition ($managementPreviewError.code -eq 'INVALID_XLSX_PREVIEW') 'Management workbook rejection must identify the technical preview boundary.'
-    $activeXlsxPreviewAfterManagementAttempt = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    $activeXlsxPreviewAfterManagementAttempt = Invoke-RestMethod -Uri "$baseUrl/api/xlsx-preview" -TimeoutSec 30
     Assert-Condition (($activeXlsxPreviewAfterManagementAttempt | ConvertTo-Json -Depth 30 -Compress) -eq $activeXlsxPreviewBeforeExecutiveExportJson) 'A rejected management upload must not replace the last valid technical preview.'
 
-    $officialAfterExecutiveExport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    $officialAfterExecutiveExport = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import/official" -Method Get
     Assert-Condition ($officialAfterExecutiveExport.semanticDigest -eq $officialDigestBeforeExecutiveExport) 'Executive export must not mutate the official semantic digest.'
     Assert-Condition (($officialAfterExecutiveExport.sourceExecution | ConvertTo-Json -Depth 30 -Compress) -eq $officialExecutionBeforeExecutiveExport) 'Executive export must not mutate official source execution.'
-    $proposalsAfterExecutiveExport = @(Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/proposals' -TimeoutSec 30)
+    $proposalsAfterExecutiveExport = @(Invoke-RestMethod -Uri "$baseUrl/api/proposals" -TimeoutSec 30)
     Assert-Condition ((ConvertTo-Json -InputObject $proposalsAfterExecutiveExport -Depth 30 -Compress) -eq $proposalsBeforeExecutiveExportJson) 'Executive export must not mutate proposal state.'
 
-    $workingTreePreview = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
+    $workingTreePreview = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import" -Method Post -Body @{
         repositoryRoot = $sourceRoot
         manifestPath = 'planning/project-management-compiler-manifest.json'
         mode = 'UNCOMMITTED_PREVIEW'
@@ -488,24 +507,24 @@ try {
     else {
         Assert-Condition ($null -eq $workingTreePreview.snapshot) 'An invalid working-tree source must fail closed without creating a preview snapshot.'
     }
-    $executiveAfterPreview = Invoke-BinaryDownload -Uri 'http://127.0.0.1:5050/api/exports/executive-progress.xlsx' -FilePath $temporaryExecutiveXlsx
+    $executiveAfterPreview = Invoke-BinaryDownload -Uri "$baseUrl/api/exports/executive-progress.xlsx" -FilePath $temporaryExecutiveXlsx
     Assert-Condition ([string]$executiveAfterPreview.ContentDisposition -match 'BaoCaoTienDo_2026-09-19\.xlsx') 'Executive export must continue using the official source date while a working-tree preview is active.'
-    $officialAfterPreview = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    $officialAfterPreview = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import/official" -Method Get
     Assert-Condition ($officialAfterPreview.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId -and $officialAfterPreview.semanticDigest -eq $officialDigestBeforeExecutiveExport) 'Working-tree preview must not replace the official executive export state.'
-    $activeXlsxPreviewAfterWorkingTreePreview = Invoke-RestMethod -Uri 'http://127.0.0.1:5050/api/xlsx-preview' -TimeoutSec 30
+    $activeXlsxPreviewAfterWorkingTreePreview = Invoke-RestMethod -Uri "$baseUrl/api/xlsx-preview" -TimeoutSec 30
     Assert-Condition (($activeXlsxPreviewAfterWorkingTreePreview | ConvertTo-Json -Depth 30 -Compress) -eq $activeXlsxPreviewBeforeExecutiveExportJson) 'A manifest preview must not replace the active technical workbook preview.'
 
-    $failedManifestImport = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import' -Method Post -Body @{
+    $failedManifestImport = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import" -Method Post -Body @{
         repositoryRoot = $sourceRoot
         manifestPath = 'planning/project-management-compiler-manifest.json'
         mode = 'GIT_COMMIT'
         requestedCommit = ('0' * 40)
     }
     Assert-Condition ($failedManifestImport.classification -eq 'FAILED' -and $null -eq $failedManifestImport.snapshot) 'An invalid source commit must fail without producing a snapshot.'
-    $officialAfterFailure = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get
+    $officialAfterFailure = Invoke-JsonApi -Uri "$baseUrl/api/manifest-import/official" -Method Get
     Assert-Condition ($officialAfterFailure.metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'A failed candidate must retain the last valid official snapshot.'
 
-    $proposal = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/proposals' -Method Post -Body @{
+    $proposal = Invoke-JsonApi -Uri "$baseUrl/api/proposals" -Method Post -Body @{
         targetKind = 'DeliveryCard'
         targetId = 'P01'
         proposedChanges = @{ executionState = 'COMPLETED'; actualFinish = '2026-09-20' }
@@ -513,14 +532,14 @@ try {
     }
     Assert-Condition ($proposal.lifecycle -eq 'DRAFT') 'An incomplete completion proposal must remain DRAFT.'
     Assert-Condition (@($proposal.diagnostics | Where-Object { $_.code -eq 'PMC-PROPOSAL-002' }).Count -eq 1) 'Proposal completion rules must explain missing evidence.'
-    $proposalPreview = Invoke-JsonApi -Uri ('http://127.0.0.1:5050/api/proposals/{0}/preview' -f $proposal.id) -Method Post
+    $proposalPreview = Invoke-JsonApi -Uri ("$baseUrl/api/proposals/{0}/preview" -f $proposal.id) -Method Post
     Assert-Condition (-not $proposalPreview.isAuthoritative -and $proposalPreview.isEstimated) 'Proposal preview must be visibly estimated and non-authoritative.'
-    $proposalExport = Invoke-WebRequest -Uri ('http://127.0.0.1:5050/api/proposals/{0}/export' -f $proposal.id) -TimeoutSec 30
+    $proposalExport = Invoke-WebRequest -Uri ("$baseUrl/api/proposals/{0}/export" -f $proposal.id) -TimeoutSec 30
     $proposalExportText = [string]$proposalExport.Content
     $proposalExportPayload = $proposalExportText | ConvertFrom-Json
     Assert-Condition ($proposalExportPayload.proposalOnly -and $proposalExportPayload.authority -eq 'LOCAL_PROPOSAL') 'Proposal export must retain local proposal authority.'
     Assert-Condition (-not $proposalExportText.Contains($sourceRoot, [StringComparison]::OrdinalIgnoreCase)) 'Proposal export must not expose the local source root.'
-    $compatibilityProposal = Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/execution' -Method Post -Body @{
+    $compatibilityProposal = Invoke-JsonApi -Uri "$baseUrl/api/execution" -Method Post -Body @{
         workItemId = 'P02'
         executionState = 'IN_PROGRESS'
         actualStart = '2026-09-19'
@@ -531,7 +550,7 @@ try {
     Assert-Condition (@($compatibilityProposal.proposal.evidence).Count -eq 0) '/api/execution must not fabricate controlled evidence from a legacy reference.'
     Assert-Condition (-not ($compatibilityProposal | ConvertTo-Json -Depth 30 -Compress).Contains('COMPATIBILITY_UPDATE', [StringComparison]::Ordinal)) '/api/execution must not emit the retired COMPATIBILITY_UPDATE evidence type.'
     Assert-Condition ($compatibilityProposal.proposal.proposedChanges.legacyEvidenceReference -eq 'planning/idea-technical-pilot-execution-register.json') '/api/execution must preserve a legacy evidence reference as a proposal field.'
-    Assert-Condition ((Invoke-JsonApi -Uri 'http://127.0.0.1:5050/api/manifest-import/official' -Method Get).metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Creating and previewing proposals must not change official snapshot identity.'
+    Assert-Condition ((Invoke-JsonApi -Uri "$baseUrl/api/manifest-import/official" -Method Get).metadata.snapshotId -eq $manifestImport.snapshot.metadata.snapshotId) 'Creating and previewing proposals must not change official snapshot identity.'
 
     $appJs = Get-Content -LiteralPath $appJsPath -Raw
     $indexHtml = Get-Content -LiteralPath $indexHtmlPath -Raw
@@ -618,9 +637,9 @@ try {
     Assert-Condition ($stylesCss.Contains('.manifest-trust-strip', [StringComparison]::Ordinal) -and $stylesCss.Contains('.proposal-result-panel', [StringComparison]::Ordinal)) 'Browser UI must style trust metadata and proposal review surfaces.'
     Assert-Condition ($indexHtml.Contains('id="source-intake-panel"', [StringComparison]::Ordinal)) 'Loaded projects must have a collapsible source-intake panel.'
     Assert-Condition ($indexHtml.Contains('id="manifest-repository-root"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="manifest-path"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="manifest-source-commit"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="manifest-mode"', [StringComparison]::Ordinal)) 'Manifest import form must expose repository, manifest, commit and mode inputs.'
-    Assert-Condition ($indexHtml.Contains('No write-back', [StringComparison]::Ordinal) -and $indexHtml.Contains('review artifact', [StringComparison]::OrdinalIgnoreCase)) 'Manifest and execution UI must state the no-write-back boundary.'
+    Assert-Condition ($indexHtml.Contains('Không ghi ngược', [StringComparison]::Ordinal) -and $indexHtml.Contains('Không ghi ngược vào nguồn dự án.', [StringComparison]::Ordinal)) 'Manifest and execution UI must state the no-write-back boundary in the current Vietnamese UI.'
     Assert-Condition ($indexHtml.Contains('id="source-intake-toggle"', [StringComparison]::Ordinal)) 'Source-intake collapse control must be keyboard-addressable.'
-    Assert-Condition ($indexHtml.Contains('data-nav-group="plan"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="execution"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-nav-group="analysis"', [StringComparison]::Ordinal)) 'Primary navigation must group plan, execution, and analysis views.'
+    Assert-Condition ($indexHtml.Contains('data-view="overview" data-nav-group="primary"', [StringComparison]::Ordinal) -and $indexHtml.Contains('data-view="gantt" data-nav-group="primary"', [StringComparison]::Ordinal) -and $indexHtml.Contains('id="advanced-navigation"', [StringComparison]::Ordinal)) 'Primary navigation must keep Overview and Gantt prominent while disclosing specialist views separately.'
     Assert-Condition ($appJs.Contains('No active schedule alerts', [StringComparison]::Ordinal)) 'Project health must stay scoped to derived schedule alerts rather than whole-project health.'
     Assert-Condition ($appJs.Contains('No execution evidence', [StringComparison]::Ordinal)) 'Planning-only projects must not present missing execution evidence as zero completion.'
     Assert-Condition ($appJs.Contains('health.overall', [StringComparison]::Ordinal)) 'Execution evidence display must use the canonical health indicator rather than a Gantt-lane heuristic.'
@@ -696,7 +715,7 @@ try {
     Assert-Condition ($stylesCss.Contains('.gantt-preset', [StringComparison]::Ordinal) -and $stylesCss.Contains('.execution-panel-body', [StringComparison]::Ordinal)) 'Management workspace must style presets and the progressive execution updater.'
     Assert-Condition ($stylesCss.Contains('.app-header { flex-direction: column;', [StringComparison]::Ordinal)) 'Mobile workspace header must stack identity and actions.'
     $program = Get-Content -LiteralPath $programPath -Raw
-    Assert-Condition ($program.Contains('http://127.0.0.1:5050', [StringComparison]::Ordinal)) 'Program must bind to the loopback address.'
+    Assert-Condition ($program.Contains('http://127.0.0.1:{loopbackPort}', [StringComparison]::Ordinal) -and $program.Contains('PMC_LOOPBACK_PORT', [StringComparison]::Ordinal)) 'Program must support an optional port while remaining bound to the loopback address.'
     Assert-Condition (-not $program.Contains('0.0.0.0', [StringComparison]::Ordinal)) 'Program must not bind to all interfaces.'
 
     [PSCustomObject]@{

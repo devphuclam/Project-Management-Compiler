@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Project Management Compiler</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
+<body class="is-unloaded">
   <header class="app-header">
     <div class="app-header-brand">
       <span class="brand-mark" aria-hidden="true">PM</span>
@@ -22,9 +22,6 @@
         <button id="export-executive-button" class="primary" type="button" disabled aria-describedby="export-availability">Xuất báo cáo tiến độ</button>
         <span id="export-availability" class="export-availability" role="status">Cần import source commit chính thức trước khi xuất báo cáo tiến độ.</span>
       </div>
-      <button id="export-xlsx-button" class="secondary" type="button">Xuất dữ liệu CARIO + Gantt</button>
-      <button id="refresh-button" class="secondary" type="button">Refresh</button>
-      <button id="save-json-button" class="secondary" type="button">Save JSON</button>
     </div>
   </header>
 
@@ -32,12 +29,12 @@
     <section id="source-intake-panel" class="panel controls-panel source-intake-panel" aria-labelledby="source-intake-heading">
       <div class="panel-heading">
         <div>
-          <p class="eyebrow">SOURCE INTAKE</p>
-          <h2 id="source-intake-heading">Start with the planning evidence</h2>
-          <p class="panel-subtitle">Choose a local source, set the reporting date, then move from signal to action.</p>
+          <p class="eyebrow">NGUỒN DỰ ÁN</p>
+          <h2 id="source-intake-heading">Mở kế hoạch từ repository trên máy</h2>
+          <p class="panel-subtitle">PMC chỉ đọc dữ liệu đã có trong bản cục bộ; không sửa nguồn và không tự tải dữ liệu.</p>
         </div>
         <div class="panel-heading-actions">
-          <span class="local-only">Loopback only</span>
+          <span class="local-only">Chỉ đọc · chạy cục bộ</span>
           <button id="source-intake-toggle" class="secondary compact-action" type="button" aria-expanded="true" aria-controls="source-intake-body">Hide setup</button>
         </div>
       </div>
@@ -45,47 +42,51 @@
         <section class="manifest-import-block" aria-labelledby="manifest-import-heading">
           <div class="manifest-import-heading">
             <div>
-              <p class="eyebrow">SOURCE-OF-TRUTH IMPORT</p>
-              <h3 id="manifest-import-heading">Import IDEAEngineering manifest</h3>
-              <p class="muted">Read one exact commit as official, or inspect a stable working tree as a non-authoritative preview. The source repository is never modified.</p>
+              <p class="eyebrow">BẮT ĐẦU TỪ KẾ HOẠCH</p>
+              <h3 id="manifest-import-heading">Đọc phiên bản đã lưu trong bản cục bộ</h3>
+              <p class="muted">App dùng commit mặc định đã có trong repository trên máy. Không kiểm tra nguồn từ xa để tìm phiên bản mới hơn.</p>
             </div>
-            <span class="local-only">No write-back</span>
+            <span class="local-only">Không ghi ngược</span>
           </div>
-          <div class="controls-grid manifest-controls-grid">
-            <label class="wide">
-              Repository root
-              <input id="manifest-repository-root" type="text" autocomplete="off" placeholder="C:\\path\\to\\IDEAEngineering">
-              <small>Local checkout used only as a bounded read source.</small>
-            </label>
-            <label>
-              Import context
-              <select id="manifest-mode">
-                <option value="GIT_COMMIT">Official Git commit</option>
-                <option value="UNCOMMITTED_PREVIEW">Working-tree preview</option>
-              </select>
-              <small>Preview never replaces the current official snapshot.</small>
-            </label>
-            <label>
-              Source commit
-              <input id="manifest-source-commit" type="text" autocomplete="off" placeholder="Required for official commit">
-              <small>Use an exact commit object, not a branch name.</small>
-            </label>
-            <label class="wide">
-              Manifest path
-              <input id="manifest-path" type="text" value="planning/project-management-compiler-manifest.json" autocomplete="off">
-              <small>The manifest is the sole discovery entry point.</small>
-            </label>
-            <label>
-              Analysis as-of override
-              <input id="manifest-as-of" type="date">
-              <small>Leave blank to use the Execution Register status date.</small>
-            </label>
-            <div class="control-submit manifest-submit">
-              <button id="manifest-import-button" class="primary" type="button">Import manifest</button>
+          <label class="wide source-root-field">
+            Thư mục repository dự án
+            <input id="manifest-repository-root" type="text" autocomplete="off" placeholder="C:\\Projects\\IDEAEngineering" aria-describedby="source-root-help">
+            <small id="source-root-help">Dán đường dẫn thư mục repository đã có trên máy này.</small>
+          </label>
+          <div class="control-submit manifest-submit">
+            <button id="manifest-default-branch-import-button" class="primary" type="button">Đọc phiên bản mới nhất có sẵn trong bản cục bộ</button>
+          </div>
+          <p id="manifest-import-note" class="manifest-import-note" role="status">Chưa đọc dự án. Hành động đọc chỉ chạy khi bạn nhấn nút.</p>
+          <details id="source-advanced-settings" class="source-advanced-settings">
+            <summary>Tùy chọn nguồn nâng cao</summary>
+            <div class="controls-grid manifest-controls-grid">
+              <label class="wide">
+                Đường dẫn manifest
+                <input id="manifest-path" type="text" value="planning/project-management-compiler-manifest.json" autocomplete="off">
+                <small>Manifest là điểm vào duy nhất để tìm thông tin kế hoạch.</small>
+              </label>
+              <label>
+                Ngữ cảnh nhập
+                <select id="manifest-mode">
+                  <option value="GIT_COMMIT">Commit chính thức</option>
+                  <option value="UNCOMMITTED_PREVIEW">Xem trước working tree</option>
+                </select>
+                <small>Bản xem trước không thay thế snapshot chính thức.</small>
+              </label>
+              <label>
+                Commit chính xác
+                <input id="manifest-source-commit" type="text" autocomplete="off" placeholder="Chỉ dùng cho nhập thủ công">
+                <small>Dùng khi cần chọn rõ phiên bản nguồn để khôi phục.</small>
+              </label>
+              <label>
+                Ngày phân tích tùy chọn
+                <input id="manifest-as-of" type="date">
+                <small>Để trống để dùng ngày báo cáo trong Execution Register.</small>
+              </label>
+              <div class="control-submit manifest-submit">
+                <button id="manifest-import-button" class="secondary" type="button">Nhập nguồn đã chọn</button>
+              </div>
             </div>
-          </div>
-          <p id="manifest-import-note" class="manifest-import-note" role="status">Official source metadata will appear above the management views after import.</p>
-        </section>
         <div class="intake-divider" aria-hidden="true"></div>
         <section class="xlsx-preview-import-block" aria-labelledby="xlsx-preview-import-heading">
           <div class="manifest-import-heading">
@@ -146,6 +147,8 @@
             <button id="reopen-button" class="secondary" type="button">Reopen JSON</button>
           </div>
         </div>
+          </details>
+        </section>
       </div>
       <p id="error-message" class="error" role="alert" hidden></p>
     </section>
@@ -156,67 +159,64 @@
 
     <section class="panel views-panel">
       <nav id="view-tabs" class="tabs" aria-label="Project views">
-        <div class="tab-group">
-          <span class="tab-group-label">Overview</span>
-          <button class="tab active" data-view="dashboard" data-nav-group="overview">Dashboard</button>
-        </div>
-        <div class="tab-group">
-          <span class="tab-group-label">Plan</span>
-          <button class="tab" data-view="wbs" data-nav-group="plan">WBS</button>
-          <button class="tab" data-view="gantt" data-nav-group="plan">Gantt</button>
-        </div>
-        <div class="tab-group">
-          <span class="tab-group-label">Execution</span>
-          <button class="tab" data-view="kanban" data-nav-group="execution">Kanban</button>
-        </div>
-        <div class="tab-group">
-          <span class="tab-group-label">Analysis</span>
-          <button class="tab" data-view="dependencies" data-nav-group="analysis">Dependencies</button>
-          <button class="tab" data-view="cpm" data-nav-group="analysis">CPM</button>
-        </div>
-        <div class="tab-group">
-          <span class="tab-group-label">Evidence</span>
-          <button class="tab" data-view="management-control" data-nav-group="evidence">Readiness control</button>
-          <button class="tab" data-view="source" data-nav-group="evidence">Source / Warnings</button>
-        </div>
+        <button class="tab active" data-view="overview" data-nav-group="primary">Tổng quan</button>
+        <button class="tab" data-view="gantt" data-nav-group="primary">Gantt</button>
       </nav>
+      <details id="advanced-navigation" class="advanced-navigation">
+        <summary>Nâng cao <span>WBS, Kanban, phân tích và công cụ khác</span></summary>
+        <div class="advanced-navigation-body">
+          <nav class="advanced-view-tabs" aria-label="Công cụ quản lý nâng cao">
+            <button class="tab" data-view="dashboard" data-nav-group="advanced">Dashboard</button>
+            <button class="tab" data-view="wbs" data-nav-group="advanced">WBS</button>
+            <button class="tab" data-view="kanban" data-nav-group="advanced">Kanban</button>
+            <button class="tab" data-view="dependencies" data-nav-group="advanced">Dependencies</button>
+            <button class="tab" data-view="cpm" data-nav-group="advanced">CPM</button>
+            <button class="tab" data-view="management-control" data-nav-group="advanced">Readiness control</button>
+            <button class="tab" data-view="source" data-nav-group="advanced">Source / Warnings</button>
+          </nav>
+          <div class="advanced-actions" aria-label="Công cụ dự án khác">
+            <button id="export-xlsx-button" class="secondary" type="button">Xuất dữ liệu CARIO + Gantt</button>
+            <button id="refresh-button" class="secondary" type="button">Refresh</button>
+            <button id="save-json-button" class="secondary" type="button">Save JSON</button>
+          </div>
+          <section id="execution-panel" class="panel execution-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ĐỀ XUẤT CẬP NHẬT</p>
+                <h2>Tạo đề xuất tiến độ thực tế</h2>
+                <p class="panel-subtitle">Tạo bản đề xuất để duyệt. Không ghi ngược vào nguồn dự án.</p>
+              </div>
+              <div class="panel-heading-actions">
+                <span class="muted">Dữ liệu nguồn giữ nguyên</span>
+                <button id="execution-panel-toggle" class="secondary compact-action" type="button" aria-expanded="false" aria-controls="execution-panel-body">Mở cập nhật</button>
+              </div>
+            </div>
+            <div id="execution-panel-body" class="execution-panel-body" hidden>
+              <form id="execution-form" class="execution-grid">
+                <label>Delivery card ID<input id="execution-work-item" required placeholder="P04-A"></label>
+                <label>Trạng thái
+                  <select id="execution-state">
+                    <option value="NOT_STARTED">Chưa bắt đầu</option>
+                    <option value="IN_PROGRESS">Đang thực hiện</option>
+                    <option value="COMPLETED">Hoàn thành</option>
+                    <option value="SUSPENDED">Tạm dừng</option>
+                    <option value="CANCELLED">Đã hủy</option>
+                  </select>
+                </label>
+                <label>Bắt đầu thực tế<input id="actual-start" type="date"></label>
+                <label>Hoàn thành thực tế<input id="actual-finish" type="date"></label>
+                <label>Thời lượng đã làm (giờ)<input id="actual-effort" type="number" min="0" step="0.25"></label>
+                <label>Thời lượng còn lại (giờ)<input id="remaining-effort" type="number" min="0" step="0.25"></label>
+                <label class="wide">Ghi chú<textarea id="execution-note" rows="2"></textarea></label>
+                <div class="control-submit"><button class="primary" type="submit">Tạo đề xuất</button></div>
+              </form>
+              <section id="proposal-result-panel" class="proposal-result-panel" hidden aria-live="polite"></section>
+            </div>
+          </section>
+        </div>
+      </details>
       <div id="view-content" class="view-content">
         <div class="empty-state">Views will appear here after analysis.</div>
-      </div>
-    </section>
-
-    <section id="execution-panel" class="panel execution-panel">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">LOCAL PROPOSAL</p>
-          <h2>Draft an execution proposal</h2>
-          <p class="panel-subtitle">This creates a review artifact against the current official snapshot. It never changes IDEAEngineering actuals.</p>
-        </div>
-        <div class="panel-heading-actions">
-          <span class="muted">Source actuals stay immutable</span>
-          <button id="execution-panel-toggle" class="secondary compact-action" type="button" aria-expanded="false" aria-controls="execution-panel-body">Open updater</button>
-        </div>
-      </div>
-      <div id="execution-panel-body" class="execution-panel-body" hidden>
-        <form id="execution-form" class="execution-grid">
-          <label>Delivery card ID<input id="execution-work-item" required placeholder="P04-A"></label>
-          <label>State
-            <select id="execution-state">
-              <option value="NOT_STARTED">Not started</option>
-              <option value="IN_PROGRESS">In progress</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="SUSPENDED">Suspended</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </label>
-          <label>Actual start<input id="actual-start" type="date"></label>
-          <label>Actual finish<input id="actual-finish" type="date"></label>
-          <label>Actual effort (hours)<input id="actual-effort" type="number" min="0" step="0.25"></label>
-          <label>Remaining effort (hours)<input id="remaining-effort" type="number" min="0" step="0.25"></label>
-          <label class="wide">Note<textarea id="execution-note" rows="2"></textarea></label>
-          <div class="control-submit"><button class="primary" type="submit">Create proposal</button></div>
-        </form>
-        <section id="proposal-result-panel" class="proposal-result-panel" hidden aria-live="polite"></section>
       </div>
     </section>
   </main>
