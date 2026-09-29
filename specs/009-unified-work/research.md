@@ -75,11 +75,31 @@ This research records the repository evidence used for the implementation approa
 
 ## Decision: Reuse the dependency projection; do not compute a second graph
 
-**Evidence**: `ManagementViewProjector.BuildDependencyNetwork` creates typed `DependencyNetworkNode` and `DependencyNetworkEdge` projections from canonical items/dependencies, including validation and analysis-inclusion information. `GanttProjector` and management analysis have their own established scheduling/dependency calculations.
+**Evidence**: `ManagementViewProjector.BuildDependencyNetwork` creates typed `DependencyNetworkNode` and `DependencyNetworkEdge` projections from canonical items/dependencies, including `IncludedInAnalysis`, validation, and reason fields. Its current inclusion predicate requires both endpoints to exist, excludes any Work Package traceability edge, requires `AnalysisEligible`, excludes `InvalidSourceEvidence`, and requires `FinishToStart`. `DependencyNetworkAnalyzer` likewise limits CPM edges to analysis-eligible Finish-to-Start dependencies, excludes Work Package traceability and invalid-source evidence, and requires both endpoints in the graph. The network deliberately retains excluded edges for traceability. `GanttProjector` and management analysis have established scheduling/dependency calculations that this feature must not alter.
 
-**Decision**: The shared inspector reads direct predecessor/successor relations and names from the existing dependency projection. It identifies direction in reader-facing text. It does not walk transitive impact or replace Gantt/CPM analysis.
+**Decision**: Primary Work inspector claims read direct predecessor/successor relations and names only from dependency-network edges where `IncludedInAnalysis == true` (or the exact equivalent eligibility predicate already authoritative in the current Gantt/management path). Do not promote excluded invalid-source-evidence, unsupported dependency type, Work Package traceability-only, missing-endpoint, or otherwise non-analysis-eligible edges to primary `Phụ thuộc vào` / `Ảnh hưởng trực tiếp đến` claims. If excluded edges are surfaced for audit/provenance, they remain Advanced evidence and are clearly marked excluded. Work does not walk transitive impact or replace Gantt/CPM analysis.
 
-**Rejected**: Recompute dependencies in browser code, infer edge validity, or conflate a successor chain with direct impact.
+**Rejected**: Recompute dependencies in browser code, treat every retained traceability edge as an authoritative dependency, infer edge validity, or conflate a successor chain with direct impact.
+
+## Decision: Use one canonical identity field in the serialized WorkCard
+
+**Evidence**: `CanonicalWorkItemKey` is the existing kind-qualified key with `Kind` and `Id`; both `DependencyNetworkEdge` and the approved Feature 009 identity requirement use typed identity. The Work contract example already serializes `key.kind` and `key.id` and has no top-level card `id`.
+
+**Decision**: `key.kind` plus `key.id` is the sole serialized WorkCard identity. Do not add a duplicate top-level `id`. Use `key.id` as the technical display-secondary and searchable ID; hierarchy references may continue to use canonical IDs.
+
+**Why**: A single source of identity eliminates divergence risk and satisfies cross-view identity without an alias field.
+
+**Rejected**: A duplicated top-level ID without a demonstrated compatibility need.
+
+## Decision: Give attention entries a minimal, deterministic wire shape
+
+**Evidence**: Existing `ManagementAnalysis.Alerts` supplies `AlertCode`, target ID, `DerivedAt`, and reason IDs; `ProjectOverviewProjector` already maps the four approved codes to concise Vietnamese reader-facing consequences. Feature 009 authorizes only those codes for Work.
+
+**Decision**: Each projected `attention[]` entry contains only `code` (the exact allowlisted structured alert code) and `consequence` (existing reader-facing mapped copy). If multiple entries are present, sort by `code` ordinal ascending, then `DerivedAt` ascending, then the ordinal-sorted `ReasonWorkItemIds` sequence as deterministic tie-breaks. The UI presents `consequence` as the primary text; it does not present `code` or raw analysis `Message` as primary copy. Attention remains separate from authored execution state.
+
+**Why**: This keeps enough structured identity for exact filtering and testing while avoiding machine wording as user-facing content.
+
+**Rejected**: A generic warning payload, arbitrary alert details/messages, or adding new attention meanings.
 
 ## Decision: Keep List/Kanban interaction state in the existing browser session
 

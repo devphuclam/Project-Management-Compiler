@@ -30,8 +30,8 @@ ManagementAnalysis ─────┘                                  └─ Ka
 
 | Field | Meaning | Truth rule |
 |---|---|---|
-| `key.kind`, `key.id` | Typed stable identity | `DeliveryCard` plus canonical card ID; selection and view joins use both. |
-| `id`, `name` | Stable technical ID and cleaned reader-facing name | Name leads in UI; ID remains secondary/searchable. Clean via existing reader-facing text policy. |
+| `key.kind`, `key.id` | Sole serialized typed stable identity | `DeliveryCard` plus canonical card ID; selection and view joins use both. `key.id` is the technical display-secondary and searchable ID. There is no duplicate top-level `id`. |
+| `name` | Cleaned reader-facing name | Name leads in UI; clean via existing reader-facing text policy. |
 | `phaseId`, `workPackageId` | Canonical parent identities | Link to hierarchy references; do not infer a missing parent. |
 | canonical order | Source/canonical ordering information | Used for deterministic ordering; no browser insertion order. A stable ordinal ID comparison resolves equal or absent positions. |
 | `plannedStart`, `plannedFinish`, `plannedEffortHours`, applicable planned data state | Immutable baseline values | Planned finish is never recast as a due date. A null or non-known state does not become zero. |
@@ -39,7 +39,7 @@ ManagementAnalysis ─────┘                                  └─ Ka
 | `executionState` | Nullable effective authored state | Null remains null and goes to the separate `Chưa ghi nhận` group. Do not infer from baseline, alerts, or readiness. |
 | `resultState`, actual dates, actual effort, remaining effort, update time, supported execution evidence | Backed execution details when the record is recorded and the field exists | Null remains absent/unknown; numeric zero remains numeric zero. Do not emit values from an unrecorded record. Do not manufacture a per-field state absent from the authoritative imported record. |
 | `roles` | Source-backed logical role labels and, only if authoritatively mapped, a concrete person identity | Reader-facing column label is `Đầu mối / vai trò`; reuse the existing executive-report role-label mapping if applicable. An unresolved or unknown role stays a role/source value, never a named person. |
-| `attention` | Supported reader-facing attention consequences for the card | Only alerts targeted to this canonical card with code in the approved exact whitelist. No warnings/readiness/governance/diagnostics. |
+| `attention[]` | Zero or more minimal `{ code, consequence }` entries | Only alerts targeted to this canonical card with code in the approved exact whitelist. `consequence` is primary reader-facing copy; `code` is a technical signal identifier, never primary UI text. No warning/readiness/governance/diagnostic payloads. |
 | `sourceReferences` | Existing provenance/source references | Preserve existing references; keep technical provenance secondary to reader-facing work details. |
 
 The projection may add a narrowly required field only when an approved FR cannot be represented from the listed fields or the existing shared projections. Any such addition remains derived and read-only; it must not become a second source of truth.
@@ -51,7 +51,8 @@ The projection may add a narrowly required field only when an approved FR cannot
 - One shared filter function produces the post-filter Delivery Card set for both views. Group counts are computed from that set and stay visible at zero.
 - Canonical hierarchy order is retained by phase, package, and card positions. Kanban places the known current phase first as presentation-only; remaining phases follow canonical order, then package/card order, with ordinal ID tie-break. This never changes membership.
 - Needs Attention is a separate derived boolean/reason collection, not an authored state. Eligible alert codes: `START_DELAY`, `OVERDUE`, `SUSPENDED`, `AT_RISK` only.
-- Direct predecessor/successor relationships are obtained from existing `DependencyNetworkProjection` edges and node labels. No transitive impact is added to Work.
+- If multiple attention entries exist, order them by `code` ordinal ascending, then source `DerivedAt` ascending, then the ordinal-sorted `ReasonWorkItemIds` sequence. This stabilizes presentation only; the entry shape is `{ "code": "<allowlisted code>", "consequence": "<existing reader-facing mapping>" }`.
+- Primary direct predecessor/successor relationships are obtained only from existing `DependencyNetworkProjection` edges with `IncludedInAnalysis == true`, and use the typed edge endpoints and node labels. Excluded invalid-source-evidence, unsupported-type, Work Package traceability-only, missing-endpoint, or otherwise non-analysis-eligible edges are not primary Work dependency claims. If exposed for audit/provenance, they remain clearly distinguished Advanced evidence. No transitive impact is added to Work.
 
 ## Browser-session state
 

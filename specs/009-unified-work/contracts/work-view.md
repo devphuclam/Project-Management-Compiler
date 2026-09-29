@@ -51,7 +51,9 @@ The following is illustrative JSON. The exact serialized names follow the reposi
 }
 ```
 
-The illustrative phase IDs and count are not product contracts. The projection includes every phase in the imported canonical hierarchy. Cards are emitted once in canonical order; hierarchy arrays refer to card IDs and do not create alternate card identities.
+The illustrative phase IDs and count are not product contracts. The projection includes every phase in the imported canonical hierarchy. Cards are emitted once in canonical order; hierarchy arrays refer to canonical card IDs and do not create alternate card identities.
+
+`key.kind` plus `key.id` is the sole serialized Delivery Card identity. There is no top-level `id` alias. `key.id` is sufficient for the technical display-secondary ID and ID search; hierarchy references may use canonical IDs.
 
 ## Projection rules
 
@@ -95,7 +97,22 @@ The illustrative phase IDs and count are not product contracts. The projection i
 ### Needs Attention
 
 - A card matches only if an existing structured `ManagementAnalysis` alert targets its canonical Delivery Card identity and its code is exactly `START_DELAY`, `OVERDUE`, `SUSPENDED`, or `AT_RISK`.
-- Use the existing concise supported consequence wording. Raw machine codes/messages are not primary labels.
+- Each serialized `attention[]` entry has exactly this minimal shape:
+
+  ```json
+  { "code": "START_DELAY", "consequence": "Chưa bắt đầu đúng kế hoạch." }
+  ```
+
+- The only permitted codes and existing reader-facing consequences are:
+
+  | `code` | `consequence` |
+  |---|---|
+  | `START_DELAY` | `Chưa bắt đầu đúng kế hoạch.` |
+  | `OVERDUE` | `Đang kéo dài quá ngày dự kiến.` |
+  | `SUSPENDED` | `Đang tạm dừng.` |
+  | `AT_RISK` | `Có nguy cơ chậm do công việc trước bị trễ.` |
+
+- If multiple entries are present, order by `code` ordinal ascending, then source `DerivedAt` ascending, then the ordinal-sorted `ReasonWorkItemIds` sequence. `consequence` is the primary UI copy. `code` is a technical signal/filter identifier only; do not present it or raw analysis `Message` as primary UI text.
 - Do not include `COMPLETED_LATE`, `COMPLETED_ON_TIME`, `CANCELLED`, `BLOCKED`, arbitrary warnings, readiness/gate/decision/human-action evidence, import diagnostics, governance signals, or unlisted codes.
 - Attention remains a derived signal separate from authored state, baseline, and actuals. An empty result means no supported matching signal, not guaranteed risk-free work.
 
@@ -103,7 +120,7 @@ The illustrative phase IDs and count are not product contracts. The projection i
 
 - Selecting a card from List, Kanban, or Gantt resolves the same kind-qualified identity and opens the same read-oriented Delivery Card detail shell.
 - The browser composes details from `work.cards` plus existing Gantt/source/provenance and `dependencyNetwork` projections. Other selectable hierarchy/control kinds use only their existing evidence-backed fields and omit Delivery Card-only semantics.
-- Direct predecessor/successor links use existing typed dependency edges and node labels, titled `Phụ thuộc vào` and `Ảnh hưởng trực tiếp đến`. No transitive impact is inferred.
+- Primary `Phụ thuộc vào` / `Ảnh hưởng trực tiếp đến` links use only existing typed dependency-network edges where `IncludedInAnalysis == true` (or the exact equivalent predicate already authoritative in the current Gantt/management path), and use the existing node labels. The current `IncludedInAnalysis` contract excludes invalid-source-evidence edges, unsupported dependency types, Work Package traceability-only edges, missing endpoints, and edges otherwise not eligible for analysis. Retained-but-excluded edges MUST NOT be promoted to primary dependency claims. If exposed for audit/provenance, they remain Advanced evidence and are clearly distinguished as excluded. No transitive impact is inferred.
 - The inspector cannot edit baseline, record actuals, modify source, create proposals, or change Gantt calculations. Existing proposal actions remain in their existing Advanced path.
 
 ### Selection, focus, scroll, and Gantt navigation
