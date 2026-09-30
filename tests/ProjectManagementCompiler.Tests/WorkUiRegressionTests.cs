@@ -180,6 +180,7 @@ internal static class WorkUiRegressionTests
     public static void WorkSearchControlsExposeOnlyApprovedReaderFacingCriteria()
     {
         var app = File.ReadAllText(AppJsPath());
+        var html = File.ReadAllText(IndexHtmlPath());
         var filters = ExtractFunction(app, "function renderWorkFilters(");
         var normalize = ExtractFunction(app, "function normalizeWorkSearchValue(");
         var searchMatch = ExtractFunction(app, "function workEntryMatchesQuery(");
@@ -188,7 +189,11 @@ internal static class WorkUiRegressionTests
             "Work search and filter controls must have explicit, testable presentation and matching seams.");
 
         foreach (var controlId in new[] { "work-search", "work-authored-state", "work-needs-attention", "work-include-unrecorded" })
+        {
             Require(filters!, controlId, $"The Work filter surface must expose the shared '{controlId}' control.");
+            Require(html, $"id=\"{controlId}\"", $"The approved Work filter control '{controlId}' must be defined in the existing HTML shell.");
+        }
+        Require(html, "id=\"work-filters-template\"", "Work filter controls must be semantic HTML in a reusable native template.");
 
         Require(normalize!, "normalize(\"NFD\")", "Search normalization must decompose Vietnamese diacritics before matching.");
         Require(normalize!, "đĐ", "Search normalization must account for Vietnamese đ/Đ, which NFD does not decompose.");
@@ -212,4 +217,5 @@ internal static class WorkUiRegressionTests
         TestAssert.True(source.Contains(expected, StringComparison.Ordinal), message);
 
     private static string AppJsPath() => Path.Combine(Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "app.js");
+    private static string IndexHtmlPath() => Path.Combine(Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "index.html");
 }
