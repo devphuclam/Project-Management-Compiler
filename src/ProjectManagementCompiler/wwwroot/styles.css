@@ -1081,6 +1081,10 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .work-entry-heading .eyebrow, .work-entry-heading h2, .work-entry-heading p { margin: 0; }
 .work-entry-heading h2 { font-size: 20px; }
 .work-entry-note { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--muted); }
+.work-mode-switch { display: inline-flex; gap: 3px; width: max-content; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.work-mode-button { min-height: 34px; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.work-mode-button[aria-pressed="true"] { border-color: var(--line); background: #fff; color: var(--accent-strong); box-shadow: 0 1px 2px rgba(29, 55, 48, .08); }
+.work-mode-button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 .work-list { display: grid; gap: 10px; min-width: 0; }
 .work-list-controls { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .work-scope-label { min-width: min(100%, 280px); color: var(--text); font-size: 12px; }
@@ -1103,6 +1107,25 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .work-card-state, .work-card-roles, .work-card-finish { min-width: 0; overflow-wrap: anywhere; }
 .work-cell-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .work-list-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+.work-kanban { display: grid; gap: 12px; min-width: 0; }
+.work-kanban-controls { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
+.work-kanban-columns { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); align-items: start; gap: 10px; max-width: 100%; min-width: 0; overflow-x: auto; padding: 1px 1px 8px; }
+.work-kanban-group { display: grid; align-content: start; gap: 9px; min-width: 0; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+.work-kanban-columns > .work-kanban-group { min-width: 220px; }
+.work-kanban-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; color: var(--text); font-size: 12px; }
+.work-kanban-count { min-width: 24px; padding: 2px 7px; border-radius: 999px; background: #eaf1ed; color: var(--muted); font-size: 10px; text-align: center; }
+.work-kanban-cards { display: grid; gap: 7px; min-width: 0; }
+.work-kanban-card { display: grid; gap: 5px; min-width: 0; padding: 10px; border: 1px solid rgba(205, 218, 209, .9); border-radius: 7px; background: #fff; }
+.work-kanban-card-phase { color: var(--accent-strong); font-size: 10px; font-weight: 700; }
+.work-kanban-card-name { overflow-wrap: anywhere; color: var(--text); font-size: 12px; line-height: 1.45; }
+.work-kanban-card-id, .work-kanban-card-finish { color: var(--muted); font-size: 10px; }
+.work-kanban-empty { margin: 0; padding: 8px 4px; color: var(--muted); font-size: 11px; }
+.work-kanban-secondary { display: grid; gap: 9px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #f8faf8; }
+.work-kanban-secondary > summary { cursor: pointer; list-style-position: inside; }
+.work-kanban-secondary-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text); font-size: 12px; }
+.work-kanban-secondary-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 10px; }
+.work-kanban-secondary > .work-kanban-group { margin-left: 18px; }
+.work-kanban-group-unrecorded { border-style: dashed; background: #f7f8f7; }
 .advanced-navigation { margin-top: 10px; border-top: 1px solid #e2eae5; }
 .advanced-navigation > summary { display: flex; align-items: center; gap: 10px; padding: 11px 2px 2px; color: #334b50; cursor: pointer; font-size: 12px; font-weight: 750; }
 .advanced-navigation > summary span { color: #76888b; font-size: 10px; font-weight: 450; }
@@ -1145,4 +1168,6 @@ body.is-unloaded #execution-panel { display: none; }
   .work-list-columns { display: none; }
   .work-list-row { grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 11px 8px; }
   .work-cell-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; color: var(--muted); font-size: 10px; }
+  .work-kanban-columns { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+  .work-kanban-secondary-summary { align-items: flex-start; flex-direction: column; gap: 6px; }
 }

@@ -609,19 +609,37 @@
     const section = node("section", null, "work-entry");
     const heading = node("header", null, "work-entry-heading");
     heading.appendChild(node("p", "CÔNG VIỆC", "eyebrow"));
-    heading.appendChild(node("h2", "Danh sách công việc"));
+    heading.appendChild(node("h2", "Công việc"));
     section.appendChild(heading);
     if (!work) {
       section.appendChild(node("p", "Công việc chỉ hiển thị từ snapshot commit chính thức. Bản xem trước không thay thế dữ liệu chính thức.", "work-entry-note"));
       return section;
     }
-    section.appendChild(renderWorkList(work));
+    const modeSwitch = node("div", null, "work-mode-switch");
+    modeSwitch.setAttribute("role", "group");
+    modeSwitch.setAttribute("aria-label", "Kiểu hiển thị công việc");
+    [
+      { mode: "list", label: "Danh sách" },
+      { mode: "kanban", label: "Kanban" }
+    ].forEach(option => {
+      const button = node("button", option.label, "work-mode-button");
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(state.work.mode === option.mode));
+      button.dataset.workMode = option.mode;
+      button.addEventListener("click", () => {
+        state.work.mode = option.mode;
+        renderActiveView();
+        const restored = document.querySelector('[data-work-mode="' + option.mode + '"]');
+        if (restored) restored.focus();
+      });
+      modeSwitch.appendChild(button);
+    });
+    section.appendChild(modeSwitch);
+    section.appendChild(state.work.mode === "kanban" ? renderWorkKanban(work) : renderWorkList(work));
     return section;
   }
 
-  function renderWorkList(work) {
-    const list = node("section", null, "work-list");
-    const controls = node("div", null, "work-list-controls");
+  function renderWorkPhaseScopeControl(work) {
     const scopeLabel = node("label", "Giai đoạn", "work-scope-label");
     const scope = node("select");
     scope.id = "work-phase-scope";
@@ -643,7 +661,154 @@
       if (restoredScope) restoredScope.focus();
     });
     scopeLabel.appendChild(scope);
-    controls.appendChild(scopeLabel);
+    return scopeLabel;
+  }
+
+  function workCardScopeEntries(work) {
+    const cardByKey = new Map();
+    (Array.isArray(work.cards) ? work.cards : []).forEach(card => {
+      if (!card || !card.key || !card.key.kind || !card.key.id) return;
+      const identity = card.key.kind + ":" + card.key.id;
+      if (!cardByKey.has(identity)) cardByKey.set(identity, card);
+    });
+    const workPackages = new Map();
+    (Array.isArray(work.workPackages) ? work.workPackages : []).forEach(workPackage => {
+      if (workPackage && workPackage.id && !workPackages.has(workPackage.id)) workPackages.set(workPackage.id, workPackage);
+    });
+    const phases = Array.isArray(work.phases) ? work.phases : [];
+    const scopedPhases = state.work.phaseScope && state.work.phaseScope.kind === "phase"
+      ? phases.filter(phase => phase && phase.id === state.work.phaseScope.phaseId)
+      : phases;
+    const entries = [];
+    const seenIdentities = new Set();
+
+    scopedPhases.forEach((phase, phaseOrder) => {
+      if (!phase || !phase.id) return;
+      (Array.isArray(phase.workPackageIds) ? phase.workPackageIds : []).forEach((workPackageId, workPackageOrder) => {
+        const workPackage = workPackages.get(workPackageId);
+        if (!workPackage || workPackage.phaseId !== phase.id) return;
+        (Array.isArray(workPackage.deliveryCardIds) ? workPackage.deliveryCardIds : []).forEach((cardId, cardOrder) => {
+          const identity = "DeliveryCard:" + cardId;
+          const card = cardByKey.get(identity);
+          if (!card || card.key.kind !== "DeliveryCard" || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || seenIdentities.has(identity)) return;
+          seenIdentities.add(identity);
+          entries.push({ card, identity, phaseOrder, workPackageOrder, cardOrder });
+        });
+      });
+    });
+    return entries;
+  }
+
+  function compareOrdinalWorkIds(leftId, rightId) {
+    const left = String(leftId || "");
+    const right = String(rightId || "");
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
+  }
+
+  function compareWorkPosition(left, right, key) {
+    const leftPosition = Number.isFinite(left[key]) ? left[key] : null;
+    const rightPosition = Number.isFinite(right[key]) ? right[key] : null;
+    if (leftPosition === null && rightPosition === null) return 0;
+    if (leftPosition === null) return 1;
+    if (rightPosition === null) return -1;
+    return leftPosition - rightPosition;
+  }
+
+  function sortWorkKanbanEntries(entries, currentPhaseId) {
+    return [...entries].sort((left, right) => {
+      const leftPhasePriority = currentPhaseId && left.card.phaseId === currentPhaseId ? 0 : 1;
+      const rightPhasePriority = currentPhaseId && right.card.phaseId === currentPhaseId ? 0 : 1;
+      if (leftPhasePriority !== rightPhasePriority) return leftPhasePriority - rightPhasePriority;
+      for (const key of ["phaseOrder", "workPackageOrder", "cardOrder"]) {
+        const position = compareWorkPosition(left, right, key);
+        if (position !== 0) return position;
+      }
+      return compareOrdinalWorkIds(left.card.key.id, right.card.key.id);
+    });
+  }
+
+  function buildWorkKanbanGroups(entries) {
+    const groups = [
+      { executionState: "NOT_STARTED", label: "Chưa bắt đầu", kind: "primary", cards: [], count: 0 },
+      { executionState: "IN_PROGRESS", label: "Đang làm", kind: "primary", cards: [], count: 0 },
+      { executionState: "COMPLETED", label: "Hoàn thành", kind: "primary", cards: [], count: 0 },
+      { executionState: "SUSPENDED", label: "Tạm dừng", kind: "secondary", cards: [], count: 0 },
+      { executionState: "CANCELLED", label: "Đã hủy", kind: "secondary", cards: [], count: 0 },
+      { executionState: null, label: "Chưa ghi nhận", kind: "unrecorded", cards: [], count: 0 }
+    ];
+    entries.forEach(entry => {
+      const executionState = entry.card.execution && entry.card.execution.state
+        ? String(entry.card.execution.state).toUpperCase()
+        : null;
+      const group = groups.find(candidate => candidate.executionState === executionState);
+      if (group) group.cards.push(entry.card);
+    });
+    groups.forEach(group => { group.count = group.cards.length; });
+    return groups;
+  }
+
+  function renderWorkKanbanGroup(group, work) {
+    const section = node("section", null, "work-kanban-group work-kanban-group-" + group.kind);
+    section.setAttribute("aria-label", group.label + ": " + group.count + " công việc");
+    const heading = node("h3", null, "work-kanban-group-heading");
+    heading.appendChild(node("span", group.label));
+    heading.appendChild(node("span", String(group.count), "work-kanban-count"));
+    section.appendChild(heading);
+    const cards = node("div", null, "work-kanban-cards");
+    group.cards.forEach(card => cards.appendChild(renderWorkKanbanCard(card, work)));
+    if (group.count === 0) cards.appendChild(node("p", "Không có công việc.", "work-kanban-empty"));
+    section.appendChild(cards);
+    return section;
+  }
+
+  function renderWorkKanbanCard(card, work) {
+    const item = node("article", null, "work-kanban-card");
+    item.dataset.workKind = card.key.kind;
+    item.dataset.workId = card.key.id;
+    const phase = (Array.isArray(work.phases) ? work.phases : []).find(candidate => candidate && candidate.id === card.phaseId);
+    item.appendChild(node("span", phase && phase.name ? phase.name : "Giai đoạn chưa có tên", "work-kanban-card-phase"));
+    item.appendChild(node("strong", card.name || "Công việc chưa có tên", "work-kanban-card-name"));
+    item.appendChild(node("span", card.key.id, "work-kanban-card-id"));
+    if (card.plannedFinish) item.appendChild(node("span", "Kết thúc kế hoạch · " + formatDate(card.plannedFinish), "work-kanban-card-finish"));
+    return item;
+  }
+
+  function renderWorkKanban(work) {
+    const board = node("section", null, "work-kanban");
+    board.setAttribute("aria-label", "Bảng Kanban công việc");
+    const controls = node("div", null, "work-kanban-controls");
+    controls.appendChild(renderWorkPhaseScopeControl(work));
+    board.appendChild(controls);
+
+    const entries = sortWorkKanbanEntries(workCardScopeEntries(work), work.currentPhaseId);
+    const groups = buildWorkKanbanGroups(entries);
+    const unrecorded = groups.find(group => group.kind === "unrecorded");
+    if (unrecorded) board.appendChild(renderWorkKanbanGroup(unrecorded, work));
+
+    const primaryGroups = groups.filter(group => group.kind === "primary");
+    const columns = node("div", null, "work-kanban-columns");
+    primaryGroups.forEach(group => columns.appendChild(renderWorkKanbanGroup(group, work)));
+    board.appendChild(columns);
+
+    const secondaryGroups = groups.filter(group => group.kind === "secondary");
+    const secondary = node("details", null, "work-kanban-secondary");
+    const summary = node("summary", null, "work-kanban-secondary-summary");
+    summary.appendChild(node("strong", "Trạng thái khác"));
+    const secondaryCounts = node("span", null, "work-kanban-secondary-counts");
+    secondaryGroups.forEach(group => secondaryCounts.appendChild(node("span", group.label + ": " + group.count)));
+    summary.appendChild(secondaryCounts);
+    secondary.appendChild(summary);
+    secondaryGroups.forEach(group => secondary.appendChild(renderWorkKanbanGroup(group, work)));
+    board.appendChild(secondary);
+    return board;
+  }
+
+  function renderWorkList(work) {
+    const list = node("section", null, "work-list");
+    const controls = node("div", null, "work-list-controls");
+    controls.appendChild(renderWorkPhaseScopeControl(work));
     list.appendChild(controls);
 
     const columns = node("div", null, "work-list-columns");
@@ -663,6 +828,7 @@
       const identity = card.key.kind + ":" + card.key.id;
       if (!cardByKey.has(identity)) cardByKey.set(identity, card);
     });
+    const inScopeCardIdentities = new Set(workCardScopeEntries(work).map(entry => entry.identity));
     const renderedCardKeys = new Set();
     const phases = Array.isArray(work.phases) ? work.phases : [];
     const scopedPhases = state.work.phaseScope.kind === "phase"
@@ -699,7 +865,7 @@
         (Array.isArray(workPackage.deliveryCardIds) ? workPackage.deliveryCardIds : []).forEach(cardId => {
           const identity = "DeliveryCard:" + cardId;
           const card = cardByKey.get(identity);
-          if (!card || card.key.kind !== "DeliveryCard" || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || renderedCardKeys.has(identity)) return;
+          if (!card || card.key.kind !== "DeliveryCard" || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || !inScopeCardIdentities.has(identity) || renderedCardKeys.has(identity)) return;
           renderedCardKeys.add(identity);
           cards.appendChild(renderWorkCard(card));
         });
