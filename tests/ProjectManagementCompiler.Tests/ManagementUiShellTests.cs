@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ProjectManagementCompiler.Tests;
 
 internal static class ManagementUiShellTests
@@ -112,7 +114,7 @@ internal static class ManagementUiShellTests
         TestAssert.Contains("renderOverview", renderer, "Selecting Overview must invoke its dedicated renderer.");
     }
 
-    public static void PrimaryNavigationContainsOnlyOverviewAndGantt()
+    public static void PrimaryNavigationContainsOnlyOverviewWorkAndGantt()
     {
         var index = File.ReadAllText(IndexPath());
         var navStart = index.IndexOf("<nav id=\"view-tabs\"", StringComparison.Ordinal);
@@ -120,13 +122,45 @@ internal static class ManagementUiShellTests
         TestAssert.True(navStart >= 0 && navEnd > navStart, "The primary view navigation must remain a semantic navigation landmark.");
         var primaryNavigation = index[navStart..navEnd];
 
-        TestAssert.Contains("data-view=\"overview\"", primaryNavigation, "Overview must remain in primary navigation.");
-        TestAssert.Contains("data-view=\"gantt\"", primaryNavigation, "Gantt must remain in primary navigation.");
+        var destinations = Regex.Matches(primaryNavigation, "<button\\b[^>]*data-view=\"([^\"]+)\"[^>]*>([^<]*)</button>", RegexOptions.Singleline)
+            .Cast<Match>()
+            .Select(match => match.Groups[1].Value + ":" + match.Groups[2].Value.Trim());
+        TestAssert.Equal("overview:Tổng quan|work:Công việc|gantt:Gantt", string.Join('|', destinations), "Loaded primary navigation must contain exactly the three approved destinations in order.");
         foreach (var advancedView in new[] { "dashboard", "wbs", "kanban", "dependencies", "cpm", "management-control", "source" })
         {
             TestAssert.False(primaryNavigation.Contains($"data-view=\"{advancedView}\"", StringComparison.Ordinal), $"The specialist {advancedView} view belongs under Advanced.");
         }
-        TestAssert.False(index.Contains("data-view=\"work\"", StringComparison.Ordinal), "The navigation must not expose a nonfunctional Work placeholder.");
+    }
+
+    public static void WorkEntryDefaultsToAllPhaseListWithIndependentCurrentPhaseFocus()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var index = File.ReadAllText(IndexPath());
+
+        TestAssert.True(app.Contains("work: createWorkState()", StringComparison.Ordinal), "Work interaction state must live in the existing transient browser state object.");
+        TestAssert.True(app.Contains("mode: \"list\"", StringComparison.Ordinal), "The first Work mode must be List.");
+        TestAssert.True(app.Contains("phaseScope: { kind: \"all\", phaseId: null }", StringComparison.Ordinal), "Work must start with an explicit All phases scope.");
+        TestAssert.True(app.Contains("focusedPhaseId", StringComparison.Ordinal), "Current-phase focus must have a state field separate from phase scope.");
+        TestAssert.True(app.Contains("initializeWorkFocus", StringComparison.Ordinal), "Work must initialize focus from the projected current phase rather than choosing one in the browser.");
+        TestAssert.True(app.Contains("setWorkPhaseScope", StringComparison.Ordinal), "Explicit phase selection must update the shared Work scope rather than mode-specific state.");
+        TestAssert.True(app.Contains("state.work.phaseScope", StringComparison.Ordinal), "Explicit phase scope must be owned by shared Work view state.");
+        TestAssert.True(app.Contains("state.views.work", StringComparison.Ordinal), "The Work destination must consume the additive Work projection from the existing aggregate.");
+        TestAssert.Contains("data-view=\"work\"", index, "Công việc must be a real destination rather than a dead or absent placeholder.");
+        TestAssert.False(app.Contains("pmc.work.", StringComparison.Ordinal), "Work scope/focus state must not be persisted to localStorage.");
+    }
+
+    public static void WorkUsesOnlyOfficialProjectionCardsAndKeepsControlPointsOutOfTheCollection()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var workProjectionStart = app.IndexOf("function activeWorkProjection(", StringComparison.Ordinal);
+        var workProjectionEnd = app.IndexOf("\n  function ", workProjectionStart + 10, StringComparison.Ordinal);
+        TestAssert.True(workProjectionStart >= 0 && workProjectionEnd > workProjectionStart, "Work must have a discoverable projection-selection boundary.");
+        var workProjection = app[workProjectionStart..workProjectionEnd];
+
+        TestAssert.True(workProjection.Contains("OFFICIAL_COMMIT", StringComparison.Ordinal), "Candidate and uncommitted previews must not be presented as the official Work collection.");
+        TestAssert.True(workProjection.Contains("state.views.work", StringComparison.Ordinal), "Work must read the server-projected Work collection from the active aggregate.");
+        TestAssert.False(workProjection.Contains("state.views.gantt", StringComparison.Ordinal), "Gantt control points must not be added to the Work card collection.");
+        TestAssert.False(workProjection.Contains("milestones", StringComparison.Ordinal), "Milestones and decision points remain outside Work items.");
     }
 
     public static void AdvancedDisclosureRetainsSpecialistViewsAndTools()
