@@ -335,6 +335,8 @@ internal static class Program
         ,("PrimaryNavigationContainsOnlyOverviewWorkAndGantt", ManagementUiShellTests.PrimaryNavigationContainsOnlyOverviewWorkAndGantt)
         ,("WorkEntryDefaultsToAllPhaseListWithIndependentCurrentPhaseFocus", ManagementUiShellTests.WorkEntryDefaultsToAllPhaseListWithIndependentCurrentPhaseFocus)
         ,("WorkUsesOnlyOfficialProjectionCardsAndKeepsControlPointsOutOfTheCollection", ManagementUiShellTests.WorkUsesOnlyOfficialProjectionCardsAndKeepsControlPointsOutOfTheCollection)
+        ,("WorkListUsesCanonicalHierarchyAndOneTypedDeliveryCardIdentity", WorkUiRegressionTests.WorkListUsesCanonicalHierarchyAndOneTypedDeliveryCardIdentity)
+        ,("WorkListLeadsWithReaderCopyAndKeepsTechnicalEvidenceOutOfDefaultRows", WorkUiRegressionTests.WorkListLeadsWithReaderCopyAndKeepsTechnicalEvidenceOutOfDefaultRows)
         ,("AdvancedDisclosureRetainsSpecialistViewsAndTools", ManagementUiShellTests.AdvancedDisclosureRetainsSpecialistViewsAndTools)
         ,("UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools", ManagementUiShellTests.UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools)
         ,("AdvancedGroupingPreservesExistingGanttControls", ManagementUiShellTests.AdvancedGroupingPreservesExistingGanttControls)
