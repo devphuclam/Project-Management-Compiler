@@ -341,6 +341,8 @@ internal static class Program
         ,("WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy", WorkUiRegressionTests.WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy)
         ,("WorkSearchAndFiltersUseOneSharedTransientPipeline", WorkUiRegressionTests.WorkSearchAndFiltersUseOneSharedTransientPipeline)
         ,("WorkSearchControlsExposeOnlyApprovedReaderFacingCriteria", WorkUiRegressionTests.WorkSearchControlsExposeOnlyApprovedReaderFacingCriteria)
+        ,("WorkFilteredListProjectionKeepsOnlyRequiredAncestorPaths", WorkUiRegressionTests.WorkFilteredListProjectionKeepsOnlyRequiredAncestorPaths)
+        ,("WorkFilteredListHasScopedEmptyRecoveryAndExpansionRestoration", WorkUiRegressionTests.WorkFilteredListHasScopedEmptyRecoveryAndExpansionRestoration)
         ,("AdvancedDisclosureRetainsSpecialistViewsAndTools", ManagementUiShellTests.AdvancedDisclosureRetainsSpecialistViewsAndTools)
         ,("UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools", ManagementUiShellTests.UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools)
         ,("AdvancedGroupingPreservesExistingGanttControls", ManagementUiShellTests.AdvancedGroupingPreservesExistingGanttControls)

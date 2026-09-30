@@ -207,6 +207,47 @@ internal static class WorkUiRegressionTests
             TestAssert.False(searchMatch!.Contains(forbidden, StringComparison.OrdinalIgnoreCase), $"Work search must not inspect '{forbidden}'.");
     }
 
+    public static void WorkFilteredListProjectionKeepsOnlyRequiredAncestorPaths()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var hierarchy = ExtractFunction(app, "function buildWorkListHierarchy(");
+        var list = ExtractFunction(app, "function renderWorkList(");
+
+        TestAssert.True(hierarchy is not null, "Missing approved behavior: filtered Work List ancestry has no shared hierarchy projection.");
+        TestAssert.True(list is not null, "The Work List renderer must remain available.");
+        Require(list!, "buildWorkListHierarchy(work)", "List rows and ancestor visibility must come from one filtered hierarchy projection.");
+        Require(hierarchy!, "filterWorkEntries(work)", "List hierarchy visibility must use the shared surviving-card result set.");
+        Require(hierarchy!, "workCardScopeEntries(work)", "The projection must distinguish cards absent from scope from scoped cards removed by result filters.");
+        Require(hierarchy!, "hasWorkResultFilters", "Phase scope alone must not activate result-filter ancestor pruning.");
+        Require(hierarchy!, "phaseScope", "An explicit phase scope must not be widened while revealing search results.");
+        Require(hierarchy!, "workPackageIds", "Phase ancestry must use canonical Work Package references.");
+        Require(hierarchy!, "deliveryCardIds", "Work Package ancestry must use canonical Delivery Card references.");
+        Require(hierarchy!, "cardCount", "Only surviving Delivery Cards may contribute to the displayed result count.");
+        Require(hierarchy!, "temporarilyExpanded", "Search expansion must be transient and separate from saved expansion state.");
+    }
+
+    public static void WorkFilteredListHasScopedEmptyRecoveryAndExpansionRestoration()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var emptyState = ExtractFunction(app, "function renderWorkEmptyState(");
+        var clearCriterion = ExtractFunction(app, "function clearWorkCriterion(");
+
+        TestAssert.True(emptyState is not null && clearCriterion is not null,
+            "Work empty states need explicit, testable recovery actions that do not erase unrelated criteria.");
+        Require(emptyState!, "empty-phase", "A selected Phase with no canonical Delivery Cards must have its own empty state.");
+        Require(emptyState!, "no-results", "A query/filter combination with no matches must have a distinct empty state.");
+        Require(emptyState!, "Xem tất cả giai đoạn", "The empty-Phase recovery must act on Phase scope only.");
+        Require(emptyState!, "Xóa tìm kiếm", "No-match recovery must offer a query-only reset when a query is active.");
+        Require(emptyState!, "Bỏ lọc trạng thái", "No-match recovery must offer a status-only reset when selected.");
+        Require(emptyState!, "Cần chú ý", "No-match recovery must offer an attention-only reset when selected.");
+        Require(emptyState!, "Chưa ghi nhận", "No-match recovery must offer an unrecorded-only reset when excluded.");
+        Require(emptyState!, "setWorkPhaseScope(null)", "The Phase recovery action must not clear query or other filters.");
+        Require(emptyState!, "clearWorkCriterion", "Each filter recovery action must clear only its named criterion.");
+        foreach (var criterion in new[] { "query", "authoredStateFilter", "needsAttentionOnly", "includeUnrecorded" })
+            Require(clearCriterion!, criterion, $"The recovery helper must support resetting only '{criterion}'.");
+        Require(clearCriterion!, "switch", "Only explicitly requested filter criteria may be cleared.");
+    }
+
     private static string? ExtractFunction(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);

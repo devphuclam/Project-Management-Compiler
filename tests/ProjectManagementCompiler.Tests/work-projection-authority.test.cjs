@@ -22,7 +22,9 @@ function createAppHarness() {
     activeWorkProjection,
     applyManifestImport,
     workCardScopeEntries,
-    filterWorkEntries: typeof filterWorkEntries === "function" ? filterWorkEntries : null
+    filterWorkEntries: typeof filterWorkEntries === "function" ? filterWorkEntries : null,
+    buildWorkListHierarchy: typeof buildWorkListHierarchy === "function" ? buildWorkListHierarchy : null,
+    clearWorkCriterion: typeof clearWorkCriterion === "function" ? clearWorkCriterion : null
   };
   return;
 `;
@@ -76,11 +78,13 @@ function workSearchFixture() {
     currentPhaseId: "PH1",
     phases: [
       { id: "PH0", name: "Chuẩn Bị Nền Tảng", order: 0, workPackageIds: ["WP0"] },
-      { id: "PH1", name: "Đảm Bảo Vận Hành", order: 1, workPackageIds: ["WP1"] }
+      { id: "PH1", name: "Đảm Bảo Vận Hành", order: 1, workPackageIds: ["WP1"] },
+      { id: "PH2", name: "Giai Đoạn Trống", order: 2, workPackageIds: ["WP_EMPTY"] }
     ],
     workPackages: [
       { id: "WP0", phaseId: "PH0", name: "Hồ Sơ Kỹ Thuật", order: 0, deliveryCardIds: ["P01", "P02"] },
-      { id: "WP1", phaseId: "PH1", name: "Kiểm Thử Tích Hợp", order: 0, deliveryCardIds: ["P03", "P04"] }
+      { id: "WP1", phaseId: "PH1", name: "Kiểm Thử Tích Hợp", order: 0, deliveryCardIds: ["P03", "P04"] },
+      { id: "WP_EMPTY", phaseId: "PH2", name: "Chưa có gói giao việc", order: 0, deliveryCardIds: [] }
     ],
     cards: [
       {
@@ -172,4 +176,71 @@ test("Work search and authored, attention, and unrecorded filters intersect with
   assert.strictEqual(app.state.project, project, "Filtering must not mutate the canonical project authority.");
   assert.strictEqual(app.state.views, views, "Filtering must not mutate analysis or other view projections.");
   assert.strictEqual(app.state.gantt, gantt, "Filtering must not mutate Gantt-specific filters, range, or scroll state.");
+});
+
+test("filtered Work List keeps only surviving ancestor paths and does not count ancestors as cards", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.buildWorkListHierarchy, "function", "Missing approved behavior: the filtered List hierarchy projection is not implemented.");
+  const work = workSearchFixture();
+  app.state.work.query = "P02";
+  const projection = app.buildWorkListHierarchy(work);
+
+  assert.equal(projection.resultFilterActive, true);
+  assert.equal(projection.cardCount, 1, "Only the surviving Delivery Card contributes to the result count.");
+  assert.deepEqual(Array.from(projection.phases, item => item.phase.id), ["PH0"]);
+  assert.deepEqual(Array.from(projection.phases[0].workPackages, item => item.workPackage.id), ["WP0"]);
+  assert.deepEqual(Array.from(projection.phases[0].workPackages[0].cards, card => card.key.id), ["P02"]);
+  assert.equal(projection.phases.some(item => item.phase.id === "PH2"), false, "Empty phases must not become orphan filter results.");
+
+  app.state.work.query = "not-a-real-card";
+  const noMatches = app.buildWorkListHierarchy(work);
+  assert.equal(noMatches.cardCount, 0);
+  assert.deepEqual(Array.from(noMatches.phases), [], "No-match results must contain no orphan Phase or Work Package ancestors.");
+  assert.equal(noMatches.emptyKind, "no-results");
+});
+
+test("phase scope alone keeps normal hierarchy and search temporarily opens paths without changing saved expansion", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.buildWorkListHierarchy, "function", "Missing approved behavior: the filtered List hierarchy projection is not implemented.");
+  const work = workSearchFixture();
+  app.state.work.phaseScope = { kind: "phase", phaseId: "PH2" };
+  const emptyPhase = app.buildWorkListHierarchy(work);
+  assert.equal(emptyPhase.resultFilterActive, false, "Phase scope is a collection boundary, not a result filter.");
+  assert.equal(emptyPhase.emptyKind, "empty-phase", "An explicitly selected phase with no canonical cards is a distinct empty phase.");
+  assert.deepEqual(Array.from(emptyPhase.phases, item => item.phase.id), ["PH2"], "The normal hierarchy keeps the selected empty phase visible.");
+  assert.deepEqual(Array.from(emptyPhase.phases[0].workPackages, item => item.workPackage.id), ["WP_EMPTY"]);
+
+  app.state.work.phaseScope = { kind: "all", phaseId: null };
+  app.state.work.expandedPhaseIds = new Set(["PH1"]);
+  app.state.work.expandedWorkPackageIds = new Set(["WP1"]);
+  const savedPhaseExpansion = Array.from(app.state.work.expandedPhaseIds);
+  const savedPackageExpansion = Array.from(app.state.work.expandedWorkPackageIds);
+  app.state.work.query = "P02";
+  const searchResults = app.buildWorkListHierarchy(work);
+  assert.equal(searchResults.phases[0].temporarilyExpanded, true, "Search must reveal the matching collapsed Phase path.");
+  assert.equal(searchResults.phases[0].workPackages[0].temporarilyExpanded, true, "Search must reveal the matching collapsed Work Package path.");
+  assert.deepEqual(Array.from(app.state.work.expandedPhaseIds), savedPhaseExpansion, "Temporary search opening must not overwrite user Phase expansion.");
+  assert.deepEqual(Array.from(app.state.work.expandedWorkPackageIds), savedPackageExpansion, "Temporary search opening must not overwrite user Work Package expansion.");
+
+  app.state.work.query = "";
+  const restored = app.buildWorkListHierarchy(work);
+  assert.equal(restored.resultFilterActive, false);
+  assert.equal(restored.phases[0].temporarilyExpanded, false);
+  assert.equal(restored.phases.find(item => item.phase.id === "PH1").temporarilyExpanded, false);
+  assert.deepEqual(Array.from(app.state.work.expandedPhaseIds), savedPhaseExpansion, "Clearing search must restore the exact saved Phase expansion state.");
+  assert.deepEqual(Array.from(app.state.work.expandedWorkPackageIds), savedPackageExpansion, "Clearing search must restore the exact saved Work Package expansion state.");
+});
+
+test("empty-state recovery clears only its named criterion or widens only the empty phase scope", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.clearWorkCriterion, "function", "Missing approved behavior: empty-state recovery does not expose criterion-scoped clearing.");
+  app.state.work.query = "no-match";
+  app.state.work.authoredStateFilter = "IN_PROGRESS";
+  app.state.work.needsAttentionOnly = true;
+  app.state.work.includeUnrecorded = false;
+  app.clearWorkCriterion("query");
+  assert.equal(app.state.work.query, "");
+  assert.equal(app.state.work.authoredStateFilter, "IN_PROGRESS");
+  assert.equal(app.state.work.needsAttentionOnly, true);
+  assert.equal(app.state.work.includeUnrecorded, false);
 });
