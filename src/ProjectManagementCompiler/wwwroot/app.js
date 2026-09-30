@@ -635,6 +635,9 @@
       modeSwitch.appendChild(button);
     });
     section.appendChild(modeSwitch);
+    const scopedCards = workCardScopeEntries(work).map(entry => entry.card);
+    const attentionSummary = renderWorkAttentionSummary(scopedCards);
+    if (attentionSummary) section.appendChild(attentionSummary);
     section.appendChild(state.work.mode === "kanban" ? renderWorkKanban(work) : renderWorkList(work));
     return section;
   }
@@ -772,6 +775,8 @@
     item.appendChild(node("strong", card.name || "Công việc chưa có tên", "work-kanban-card-name"));
     item.appendChild(node("span", card.key.id, "work-kanban-card-id"));
     if (card.plannedFinish) item.appendChild(node("span", "Kết thúc kế hoạch · " + formatDate(card.plannedFinish), "work-kanban-card-finish"));
+    const attention = renderWorkAttention(card);
+    if (attention) item.appendChild(attention);
     return item;
   }
 
@@ -803,6 +808,31 @@
     secondaryGroups.forEach(group => secondary.appendChild(renderWorkKanbanGroup(group, work)));
     board.appendChild(secondary);
     return board;
+  }
+
+  function renderWorkAttention(card) {
+    const entries = Array.isArray(card.attention) ? card.attention : [];
+    const supportedEntries = entries.filter(entry => entry && typeof entry.consequence === "string" && entry.consequence.trim());
+    if (!supportedEntries.length) return null;
+    const attention = node("div", null, "work-card-attention");
+    attention.setAttribute("aria-label", "Tín hiệu cần chú ý được hỗ trợ");
+    supportedEntries.forEach(entry => {
+      const consequence = node("span", entry.consequence, "work-card-attention-copy");
+      if (entry.code) consequence.dataset.attentionCode = entry.code;
+      attention.appendChild(consequence);
+    });
+    return attention;
+  }
+
+  function renderWorkAttentionSummary(cards) {
+    if (!Array.isArray(cards) || cards.length === 0) return null;
+    const attentionCardCount = cards.filter(card => Array.isArray(card.attention) && card.attention.some(entry => entry && typeof entry.consequence === "string" && entry.consequence.trim())).length;
+    const copy = attentionCardCount > 0
+      ? attentionCardCount + " công việc có tín hiệu cần chú ý được hỗ trợ."
+      : "Không có tín hiệu cần chú ý được hỗ trợ trong phạm vi hiện tại; điều này không khẳng định là không có rủi ro.";
+    const summary = node("p", copy, "work-attention-summary");
+    summary.setAttribute("role", "status");
+    return summary;
   }
 
   function renderWorkList(work) {
@@ -889,6 +919,8 @@
     const stableId = node("span", card.key.id, "work-card-id");
     stableId.setAttribute("aria-label", "Mã công việc " + card.key.id);
     identity.appendChild(stableId);
+    const attention = renderWorkAttention(card);
+    if (attention) identity.appendChild(attention);
     const stateLabels = {
       NOT_STARTED: "Chưa bắt đầu",
       IN_PROGRESS: "Đang làm",

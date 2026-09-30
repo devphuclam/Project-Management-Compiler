@@ -1104,6 +1104,9 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .work-card-identity { display: grid; min-width: 0; gap: 2px; }
 .work-card-name { overflow-wrap: anywhere; font-size: 12px; font-weight: 650; }
 .work-card-id { color: var(--muted); font-size: 10px; }
+.work-attention-summary { margin: 0; padding: 8px 10px; border-left: 3px solid #9a6a21; border-radius: 4px; background: #fff9ed; color: #59451f; font-size: 11px; line-height: 1.5; }
+.work-card-attention { display: grid; gap: 3px; }
+.work-card-attention-copy { padding: 3px 6px; border-left: 2px solid #9a6a21; background: #fff9ed; color: #59451f; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
 .work-card-state, .work-card-roles, .work-card-finish { min-width: 0; overflow-wrap: anywhere; }
 .work-cell-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .work-list-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
