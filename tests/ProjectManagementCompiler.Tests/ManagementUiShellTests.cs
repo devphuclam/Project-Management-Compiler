@@ -144,7 +144,7 @@ internal static class ManagementUiShellTests
         TestAssert.True(app.Contains("initializeWorkFocus", StringComparison.Ordinal), "Work must initialize focus from the projected current phase rather than choosing one in the browser.");
         TestAssert.True(app.Contains("setWorkPhaseScope", StringComparison.Ordinal), "Explicit phase selection must update the shared Work scope rather than mode-specific state.");
         TestAssert.True(app.Contains("state.work.phaseScope", StringComparison.Ordinal), "Explicit phase scope must be owned by shared Work view state.");
-        TestAssert.True(app.Contains("state.views.work", StringComparison.Ordinal), "The Work destination must consume the additive Work projection from the existing aggregate.");
+        TestAssert.True(app.Contains("renderWorkEntry(activeWorkProjection())", StringComparison.Ordinal), "The Work destination must consume the retained official Work projection through its shared selector.");
         TestAssert.Contains("data-view=\"work\"", index, "Công việc must be a real destination rather than a dead or absent placeholder.");
         TestAssert.False(app.Contains("pmc.work.", StringComparison.Ordinal), "Work scope/focus state must not be persisted to localStorage.");
 
@@ -173,8 +173,9 @@ internal static class ManagementUiShellTests
         TestAssert.True(workProjectionStart >= 0 && workProjectionEnd > workProjectionStart, "Work must have a discoverable projection-selection boundary.");
         var workProjection = app[workProjectionStart..workProjectionEnd];
 
-        TestAssert.True(workProjection.Contains("OFFICIAL_COMMIT", StringComparison.Ordinal), "Candidate and uncommitted previews must not be presented as the official Work collection.");
-        TestAssert.True(workProjection.Contains("state.views.work", StringComparison.Ordinal), "Work must read the server-projected Work collection from the active aggregate.");
+        TestAssert.True(workProjection.Contains("state.officialWorkProjection", StringComparison.Ordinal), "Work must resolve the separately retained last official Work projection.");
+        TestAssert.False(workProjection.Contains("state.activeViewsClassification", StringComparison.Ordinal), "Candidate classification of other active views must not hide official Work.");
+        TestAssert.False(workProjection.Contains("state.views.work", StringComparison.Ordinal), "Work must not resolve from candidate or uncommitted preview views.");
         TestAssert.False(workProjection.Contains("state.views.gantt", StringComparison.Ordinal), "Gantt control points must not be added to the Work card collection.");
         TestAssert.False(workProjection.Contains("milestones", StringComparison.Ordinal), "Milestones and decision points remain outside Work items.");
     }

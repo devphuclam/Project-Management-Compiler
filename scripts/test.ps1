@@ -18,6 +18,11 @@ function Invoke-CheckedDotnet {
 
 Push-Location -LiteralPath $repositoryRoot
 try {
+    & node --test '.\tests\ProjectManagementCompiler.Tests\work-projection-authority.test.cjs'
+    if ($LASTEXITCODE -ne 0) {
+        throw "Work projection authority tests failed with exit code $LASTEXITCODE."
+    }
+
     Invoke-CheckedDotnet @(
         'run',
         '--project',

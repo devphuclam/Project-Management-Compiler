@@ -39,7 +39,7 @@
 
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, activeViewsClassification: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", gantt: createGanttState(), work: createWorkState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, officialWorkProjection: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, activeViewsClassification: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", gantt: createGanttState(), work: createWorkState() };
   const byId = (id) => document.getElementById(id);
   const sourcePreferenceKeys = Object.freeze({
     repositoryRoot: "pmc.source.repositoryRoot",
@@ -570,8 +570,7 @@
   }
 
   function activeWorkProjection() {
-    if (state.activeViewsClassification !== "OFFICIAL_COMMIT") return null;
-    return state.views && state.views.work || null;
+    return state.officialWorkProjection;
   }
 
   function initializeWorkFocus(work) {
@@ -3005,6 +3004,7 @@
     state.activeViewsClassification = response.classification || "FAILED";
 
     if (response.classification === "OFFICIAL_COMMIT") {
+      state.officialWorkProjection = snapshot.views.work || null;
       state.officialManifest = state.manifest;
       state.activeView = "overview";
     }
