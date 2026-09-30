@@ -116,6 +116,35 @@ internal static class WorkUiRegressionTests
         TestAssert.False(ordering!.Contains("localeCompare", StringComparison.Ordinal), "Kanban order must not depend on locale-sensitive sorting.");
     }
 
+    public static void WorkListKanbanAndInspectorKeepOneCanonicalSelectionPath()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var listCard = ExtractFunction(app, "function renderWorkCard(");
+        var kanbanCard = ExtractFunction(app, "function renderWorkKanbanCard(");
+        var inspector = ExtractFunction(app, "function buildWorkInspectorModel(");
+        var listHierarchy = ExtractFunction(app, "function buildWorkListHierarchy(");
+        var collection = ExtractFunction(app, "function workCardScopeEntries(");
+        var filter = ExtractFunction(app, "function filterWorkEntries(");
+        var kanban = ExtractFunction(app, "function renderWorkKanban(");
+
+        TestAssert.True(listCard is not null && kanbanCard is not null && inspector is not null
+            && listHierarchy is not null && collection is not null && filter is not null && kanban is not null,
+            "Parity requires one canonical Delivery Card collection, shared filters, and a reachable shared inspector.");
+        foreach (var renderer in new[] { listCard!, kanbanCard! })
+        {
+            Require(renderer, "typedKey(card.key.kind, card.key.id)", "Both normal Work modes must expose the same kind-qualified Delivery Card identity.");
+            Require(renderer, "selectWorkItem", "Both normal Work modes must open the shared inspector for the selected canonical item.");
+        }
+        Require(inspector!, "work.cards", "The Delivery Card inspector must resolve only from the canonical Work projection.");
+        Require(inspector!, "typedKey(item.key.kind, item.key.id) === key", "Inspector lookup must use the same canonical identity as List and Kanban.");
+        Require(listHierarchy!, "filterWorkEntries(work)", "List hierarchy and search/filter parity must use the shared Work filter pipeline.");
+        Require(filter!, "workCardScopeEntries(work)", "Shared filters must begin with the explicit phase-scoped canonical collection.");
+        Require(collection!, "workPackageIds", "Work paths must follow the projected Phase-to-Work-Package hierarchy.");
+        Require(collection!, "deliveryCardIds", "Work paths must follow the projected Work-Package-to-Delivery-Card hierarchy.");
+        Require(kanban!, "filterWorkEntries(work)", "Kanban and List parity must be evaluated over the same post-filter identities.");
+        Require(kanban!, "buildWorkKanbanGroups(entries)", "Kanban states and counts must derive from the shared post-filter collection.");
+    }
+
     public static void WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy()
     {
         var app = File.ReadAllText(AppJsPath());

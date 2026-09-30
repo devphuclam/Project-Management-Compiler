@@ -55,6 +55,68 @@ internal static class WorkProjectionTests
         TestAssert.False(cards.Any(card => card.GetProperty("key").GetProperty("kind").GetString() != "DeliveryCard"), "Milestones and decision points must remain outside the Work card collection.");
     }
 
+    public static void WorkProjectionMatchesCanonicalCardsLegacyKanbanStatesAndWbsPaths()
+    {
+        var canonical = WorkTestFixtures.SyntheticProject() with
+        {
+            ImportMetadata = WorkTestFixtures.OfficialMetadata(),
+            SourceExecution = new SourceExecutionSnapshot
+            {
+                Records =
+                [
+                    WorkTestFixtures.SourceRecord("P01", ExecutionState.Completed),
+                    WorkTestFixtures.SourceRecord("P02", ExecutionState.InProgress),
+                    WorkTestFixtures.SourceRecord("P04", ExecutionState.Suspended)
+                ]
+            }
+        };
+        var analysis = new ManagementAnalysis { AsOfDate = WorkTestFixtures.ReportingDate };
+        var views = new ManagementViewProjector().Build(canonical, analysis, WorkTestFixtures.ReportingDate);
+
+        var expectedKeys = canonical.DeliveryCards.Select(card => CanonicalWorkItemKey.DeliveryCard(card.Id)).ToArray();
+        var workCards = views.Work.Cards.ToDictionary(card => card.Key);
+        var legacyKanbanItems = views.Kanban.Columns.SelectMany(column => column.Items).ToDictionary(
+            item => CanonicalWorkItemKey.DeliveryCard(item.WorkItemId));
+        TestAssert.Equal(string.Join('|', expectedKeys), string.Join('|', views.Work.Cards.Select(card => card.Key)),
+            "Unified Work must contain each canonical Delivery Card identity exactly once in canonical collection order.");
+        TestAssert.Equal(string.Join('|', expectedKeys.Select(key => key.ToString()).OrderBy(identity => identity, StringComparer.Ordinal)),
+            string.Join('|', legacyKanbanItems.Keys.Select(key => key.ToString()).OrderBy(identity => identity, StringComparer.Ordinal)),
+            "Legacy Kanban must retain the same canonical Delivery Card identity set without duplicates, independent of state-column order.");
+
+        foreach (var key in expectedKeys)
+        {
+            TestAssert.True(workCards.TryGetValue(key, out var workCard), $"Work must project canonical identity '{key}'.");
+            TestAssert.True(legacyKanbanItems.TryGetValue(key, out var legacyItem), $"Legacy Kanban must project canonical identity '{key}'.");
+            TestAssert.Equal(workCard!.Execution.State, legacyItem!.ExecutionState,
+                $"Work and legacy Kanban must preserve the same source-authoritative authored state for '{key}'.");
+            TestAssert.Equal(workCard.Execution.Recorded, legacyItem.ExecutionState is not null,
+                $"Recorded versus unrecorded execution must remain distinguishable for '{key}'.");
+        }
+
+        TestAssert.Equal(ExecutionState.Completed, workCards[CanonicalWorkItemKey.DeliveryCard("P01")].Execution.State,
+            "A source-authored completed state must agree across Work and legacy Kanban.");
+        TestAssert.Equal(ExecutionState.InProgress, workCards[CanonicalWorkItemKey.DeliveryCard("P02")].Execution.State,
+            "A source-authored in-progress state must agree across Work and legacy Kanban.");
+        TestAssert.Equal(ExecutionState.Suspended, workCards[CanonicalWorkItemKey.DeliveryCard("P04")].Execution.State,
+            "A source-authored suspended state must agree across Work and legacy Kanban.");
+        var unrecorded = workCards[CanonicalWorkItemKey.DeliveryCard("P03")];
+        TestAssert.False(unrecorded.Execution.Recorded, "A Delivery Card without a source execution record must remain unrecorded in Work.");
+        TestAssert.Equal<ExecutionState?>(null, unrecorded.Execution.State,
+            "Missing execution must not be converted to NOT_STARTED in Work.");
+        TestAssert.Equal<ExecutionState?>(null, legacyKanbanItems[CanonicalWorkItemKey.DeliveryCard("P03")].ExecutionState,
+            "The legacy projection must preserve missing execution rather than authoring NOT_STARTED.");
+
+        var workPaths = workCards.Values.ToDictionary(card => card.Key.Id, card => (card.PhaseId, card.WorkPackageId), StringComparer.Ordinal);
+        var legacyWbsPaths = WbsDeliveryCardPaths(views.Wbs.Root);
+        TestAssert.Equal(string.Join('|', expectedKeys.Select(key => key.Id)), string.Join('|', legacyWbsPaths.Keys),
+            "Legacy WBS must retain every Delivery Card while keeping same-raw-ID control points kind-distinct.");
+        foreach (var key in expectedKeys)
+        {
+            TestAssert.Equal(workPaths[key.Id], legacyWbsPaths[key.Id],
+                $"The Work and legacy WBS hierarchy paths must agree for canonical Delivery Card '{key}'.");
+        }
+    }
+
     public static void WorkProjectionDoesNotGuessMalformedOrMissingParents()
     {
         var canonical = WorkTestFixtures.SyntheticProject();
@@ -330,6 +392,21 @@ internal static class WorkProjectionTests
         var result = build!.Invoke(projector, [project, analysis]);
         TestAssert.True(result is not null, "The WorkProjector must return its read-only projection.");
         return JsonDocument.Parse(JsonSerializer.Serialize(result, WebJsonOptions));
+    }
+
+    private static Dictionary<string, (string PhaseId, string WorkPackageId)> WbsDeliveryCardPaths(WbsNode root)
+    {
+        var paths = new Dictionary<string, (string PhaseId, string WorkPackageId)>(StringComparer.Ordinal);
+        void Visit(WbsNode node, string phaseId, string workPackageId)
+        {
+            if (node.Kind == WbsNodeKind.Phase) phaseId = node.Id;
+            if (node.Kind == WbsNodeKind.WorkPackage) workPackageId = node.Id;
+            if (node.Kind == WbsNodeKind.DeliveryCard) paths.Add(node.Id, (phaseId, workPackageId));
+            foreach (var child in node.Children) Visit(child, phaseId, workPackageId);
+        }
+
+        Visit(root, string.Empty, string.Empty);
+        return paths;
     }
 
     private static string[] StringArray(JsonElement element, string propertyName) =>

@@ -198,6 +198,34 @@ internal static class ManagementUiShellTests
         TestAssert.Contains("querySelectorAll(\".tab\")", File.ReadAllText(AppJsPath()), "Primary and Advanced buttons must share the keyboard-operable activation behavior.");
     }
 
+    public static void WorkParityGateKeepsLegacyWbsAndKanbanUnderAdvanced()
+    {
+        var index = File.ReadAllText(IndexPath());
+        var app = File.ReadAllText(AppJsPath());
+        var navStart = index.IndexOf("<nav id=\"view-tabs\"", StringComparison.Ordinal);
+        var navEnd = index.IndexOf("</nav>", navStart, StringComparison.Ordinal);
+        var advancedStart = index.IndexOf("<details id=\"advanced-navigation\"", StringComparison.Ordinal);
+        var advancedEnd = index.IndexOf("</details>", advancedStart, StringComparison.Ordinal);
+        TestAssert.True(navStart >= 0 && navEnd > navStart && advancedStart >= 0 && advancedEnd > advancedStart,
+            "Parity-gated specialist routes require the approved primary and Advanced navigation regions.");
+        var primary = index[navStart..navEnd];
+        var advanced = index[advancedStart..advancedEnd];
+        TestAssert.False(primary.Contains("data-view=\"kanban\"", StringComparison.Ordinal),
+            "Unified Work must remain the only normal Kanban destination.");
+        TestAssert.False(primary.Contains("data-view=\"wbs\"", StringComparison.Ordinal),
+            "Legacy WBS must not return to primary navigation during the parity gate.");
+        TestAssert.Contains("data-view=\"kanban\"", advanced,
+            "Legacy Kanban must remain reachable under Advanced until its parity evidence passes.");
+        TestAssert.Contains("data-view=\"wbs\"", advanced,
+            "Legacy WBS must not be retired until hierarchy parity evidence passes.");
+        TestAssert.Contains("renderWbs(state.views.wbs)", app,
+            "The legacy WBS route must continue to render from its existing projection.");
+        TestAssert.Contains("renderKanban(state.views.kanban)", app,
+            "The legacy Kanban route must continue to render from its existing projection.");
+        TestAssert.Contains("renderWorkKanban(work)", app,
+            "Unified Kanban must remain available inside the normal Work destination.");
+    }
+
     public static void UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools()
     {
         var index = File.ReadAllText(IndexPath());
