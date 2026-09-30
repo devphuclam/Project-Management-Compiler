@@ -606,25 +606,147 @@
     if (matches.length === 1) state.work.expandedPhaseIds.add(matches[0].id);
   }
 
-  function workPhaseScopeLabel(work) {
-    if (state.work.phaseScope.kind !== "phase" || !work || !Array.isArray(work.phases)) return "Tất cả giai đoạn";
-    const matches = work.phases.filter(phase => phase && phase.id === state.work.phaseScope.phaseId);
-    return matches.length === 1 ? matches[0].name : "Tất cả giai đoạn";
-  }
-
   function renderWorkEntry(work) {
     const section = node("section", null, "work-entry");
     const heading = node("header", null, "work-entry-heading");
     heading.appendChild(node("p", "CÔNG VIỆC", "eyebrow"));
     heading.appendChild(node("h2", "Danh sách công việc"));
-    heading.appendChild(node("p", workPhaseScopeLabel(work), "work-entry-scope"));
     section.appendChild(heading);
     if (!work) {
       section.appendChild(node("p", "Công việc chỉ hiển thị từ snapshot commit chính thức. Bản xem trước không thay thế dữ liệu chính thức.", "work-entry-note"));
       return section;
     }
-    section.appendChild(node("p", "Danh sách", "work-entry-mode"));
+    section.appendChild(renderWorkList(work));
     return section;
+  }
+
+  function renderWorkList(work) {
+    const list = node("section", null, "work-list");
+    const controls = node("div", null, "work-list-controls");
+    const scopeLabel = node("label", "Giai đoạn", "work-scope-label");
+    const scope = node("select");
+    scope.id = "work-phase-scope";
+    scope.setAttribute("aria-label", "Phạm vi giai đoạn");
+    const allPhases = node("option", "Tất cả giai đoạn");
+    allPhases.value = "all";
+    scope.appendChild(allPhases);
+    (Array.isArray(work.phases) ? work.phases : []).forEach(phase => {
+      if (!phase || !phase.id) return;
+      const option = node("option", phase.name || "Giai đoạn chưa có tên");
+      option.value = "phase:" + phase.id;
+      scope.appendChild(option);
+    });
+    scope.value = state.work.phaseScope.kind === "phase" ? "phase:" + state.work.phaseScope.phaseId : "all";
+    scope.addEventListener("change", () => {
+      setWorkPhaseScope(scope.value.startsWith("phase:") ? scope.value.slice("phase:".length) : null);
+      renderActiveView();
+      const restoredScope = byId("work-phase-scope");
+      if (restoredScope) restoredScope.focus();
+    });
+    scopeLabel.appendChild(scope);
+    controls.appendChild(scopeLabel);
+    list.appendChild(controls);
+
+    const columns = node("div", null, "work-list-columns");
+    columns.setAttribute("aria-hidden", "true");
+    ["Công việc", "Trạng thái", "Đầu mối / vai trò", "Kết thúc kế hoạch"].forEach(label => {
+      columns.appendChild(node("span", label));
+    });
+    list.appendChild(columns);
+
+    const packageById = new Map();
+    (Array.isArray(work.workPackages) ? work.workPackages : []).forEach(workPackage => {
+      if (workPackage && workPackage.id && !packageById.has(workPackage.id)) packageById.set(workPackage.id, workPackage);
+    });
+    const cardByKey = new Map();
+    (Array.isArray(work.cards) ? work.cards : []).forEach(card => {
+      if (!card || !card.key || !card.key.kind || !card.key.id) return;
+      const identity = card.key.kind + ":" + card.key.id;
+      if (!cardByKey.has(identity)) cardByKey.set(identity, card);
+    });
+    const renderedCardKeys = new Set();
+    const phases = Array.isArray(work.phases) ? work.phases : [];
+    const scopedPhases = state.work.phaseScope.kind === "phase"
+      ? phases.filter(phase => phase && phase.id === state.work.phaseScope.phaseId)
+      : phases;
+
+    scopedPhases.forEach(phase => {
+      if (!phase || !phase.id) return;
+      const phaseGroup = node("details", null, "work-phase");
+      phaseGroup.dataset.workPhaseId = phase.id;
+      phaseGroup.open = state.work.expandedPhaseIds.has(phase.id);
+      phaseGroup.addEventListener("toggle", () => {
+        if (phaseGroup.open) state.work.expandedPhaseIds.add(phase.id);
+        else state.work.expandedPhaseIds.delete(phase.id);
+      });
+      const phaseSummary = node("summary", null, "work-phase-summary");
+      phaseSummary.appendChild(node("strong", phase.name || "Giai đoạn chưa có tên"));
+      if (state.work.focusedPhaseId === phase.id) phaseSummary.appendChild(node("span", "Giai đoạn hiện tại", "work-current-phase"));
+      phaseGroup.appendChild(phaseSummary);
+
+      const packages = node("div", null, "work-phase-packages");
+      (Array.isArray(phase.workPackageIds) ? phase.workPackageIds : []).forEach(workPackageId => {
+        const workPackage = packageById.get(workPackageId);
+        if (!workPackage || workPackage.phaseId !== phase.id) return;
+        const packageGroup = node("details", null, "work-package");
+        packageGroup.dataset.workPackageId = workPackage.id;
+        packageGroup.open = state.work.expandedWorkPackageIds.has(workPackage.id);
+        packageGroup.addEventListener("toggle", () => {
+          if (packageGroup.open) state.work.expandedWorkPackageIds.add(workPackage.id);
+          else state.work.expandedWorkPackageIds.delete(workPackage.id);
+        });
+        packageGroup.appendChild(node("summary", workPackage.name || "Gói công việc chưa có tên", "work-package-summary"));
+        const cards = node("div", null, "work-package-cards");
+        (Array.isArray(workPackage.deliveryCardIds) ? workPackage.deliveryCardIds : []).forEach(cardId => {
+          const identity = "DeliveryCard:" + cardId;
+          const card = cardByKey.get(identity);
+          if (!card || card.key.kind !== "DeliveryCard" || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || renderedCardKeys.has(identity)) return;
+          renderedCardKeys.add(identity);
+          cards.appendChild(renderWorkCard(card));
+        });
+        packageGroup.appendChild(cards);
+        packages.appendChild(packageGroup);
+      });
+      phaseGroup.appendChild(packages);
+      list.appendChild(phaseGroup);
+    });
+
+    if (scopedPhases.length === 0) list.appendChild(node("p", "Chưa có giai đoạn trong nguồn đã nhập.", "work-list-empty"));
+    return list;
+  }
+
+  function renderWorkCard(card) {
+    const row = node("article", null, "work-list-row");
+    row.dataset.workKind = card.key.kind;
+    row.dataset.workId = card.key.id;
+    const identity = node("div", null, "work-card-identity");
+    identity.appendChild(node("strong", card.name || "Công việc chưa có tên", "work-card-name"));
+    const stableId = node("span", card.key.id, "work-card-id");
+    stableId.setAttribute("aria-label", "Mã công việc " + card.key.id);
+    identity.appendChild(stableId);
+    const stateLabels = {
+      NOT_STARTED: "Chưa bắt đầu",
+      IN_PROGRESS: "Đang làm",
+      COMPLETED: "Hoàn thành",
+      SUSPENDED: "Tạm dừng",
+      CANCELLED: "Đã hủy"
+    };
+    const executionState = card.execution && card.execution.state ? String(card.execution.state).toUpperCase() : null;
+    row.appendChild(identity);
+    row.appendChild(workCell("Trạng thái", executionState ? stateLabels[executionState] || "Trạng thái chưa hỗ trợ" : "Chưa ghi nhận", "work-card-state"));
+    const roles = (Array.isArray(card.roles) ? card.roles : [])
+      .filter(role => role && role.label)
+      .map(role => role.person ? role.label + " · " + role.person : role.label);
+    row.appendChild(workCell("Đầu mối / vai trò", roles.length ? roles.join(", ") : "Chưa ghi nhận", "work-card-roles"));
+    row.appendChild(workCell("Kết thúc kế hoạch", card.plannedFinish ? formatDate(card.plannedFinish) : "Chưa ghi nhận", "work-card-finish"));
+    return row;
+  }
+
+  function workCell(label, value, className) {
+    const cell = node("span", null, className);
+    cell.appendChild(node("span", label + ": ", "work-cell-label"));
+    cell.appendChild(document.createTextNode(value));
+    return cell;
   }
 
   function openSummaryView(view, key, attention) {

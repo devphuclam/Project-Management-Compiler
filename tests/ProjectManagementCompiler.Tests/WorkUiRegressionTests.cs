@@ -16,6 +16,12 @@ internal static class WorkUiRegressionTests
         Require(renderer, "deliveryCardIds", "List package ancestry and order must follow the projection's Delivery Card references.");
         Require(renderer, "key.kind", "Rendered card identity must preserve its canonical kind.");
         Require(renderer, "key.id", "Rendered card identity must preserve its canonical stable ID.");
+        Require(renderer, "renderedCardKeys.has(identity)", "A canonical Delivery Card identity must not be rendered twice through hierarchy references.");
+        Require(renderer, "renderedCardKeys.add(identity)", "The canonical typed identity must be recorded after its single List row is rendered.");
+        Require(renderer, "cards.appendChild(renderWorkCard(card))", "Each eligible canonical Delivery Card reference must create exactly one card row.");
+        Require(renderer, "card.key.kind !== \"DeliveryCard\"", "Only canonical Delivery Cards may become Work rows.");
+        Require(renderer, "card.phaseId !== phase.id || card.workPackageId !== workPackage.id", "A card must remain under its authoritative Phase and Work Package.");
+        TestAssert.False(renderer.Contains(".sort(", StringComparison.Ordinal), "List traversal must retain the canonical order supplied by hierarchy references.");
         TestAssert.False(renderer.Contains("state.views.wbs", StringComparison.Ordinal), "The browser must not independently reconstruct Work from WBS.");
         TestAssert.False(renderer.Contains("state.views.gantt", StringComparison.Ordinal), "Gantt control points must not be added to the Work List.");
         TestAssert.False(renderer.Contains("milestones", StringComparison.OrdinalIgnoreCase), "Milestones and decision points are not Work List items.");
@@ -35,8 +41,8 @@ internal static class WorkUiRegressionTests
         Require(readerCopy, "execution", "The List may show only the canonical effective execution state.");
         Require(readerCopy, "roles", "The List must show source-backed roles without inventing an owner.");
 
-        var nameIndex = card!.IndexOf("card.name", StringComparison.Ordinal);
-        var idIndex = card.IndexOf("card.key.id", StringComparison.Ordinal);
+        var nameIndex = card!.IndexOf("identity.appendChild(node(\"strong\", card.name", StringComparison.Ordinal);
+        var idIndex = card.IndexOf("identity.appendChild(stableId)", StringComparison.Ordinal);
         TestAssert.True(nameIndex >= 0 && idIndex > nameIndex, "The reader-facing Delivery Card name must precede its technical stable ID.");
         foreach (var technicalField in new[] { "plannedEffortHours", "actualEffortHours", "remainingEffortHours", "sourceReferences", "sourceSha", "diagnostics", "state.views.cpm" })
         {
