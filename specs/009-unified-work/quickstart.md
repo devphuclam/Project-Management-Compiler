@@ -1,6 +1,6 @@
 # Implementation and Verification Quickstart: Unified Work
 
-This guide supports the approved Feature 009 implementation. The current User Story 5 checkpoint covers responsive Work behavior and evidence-gated parity; the separate T028 final-verification task remains outside this checkpoint. Use the existing local toolchain and repository scripts only. Do not install packages or copy the private IDEAEngineering checkout into fixtures.
+This guide supports the approved Feature 009 implementation. User Story 5 and the T028 final-verification checkpoint are recorded below. Use the existing local toolchain and repository scripts only. Do not install packages or copy the private IDEAEngineering checkout into fixtures.
 
 ## Prerequisites
 
@@ -58,22 +58,75 @@ The parity evidence below distinguishes synthetic projection/test coverage from 
 10. Test keyboard-only operation and layouts at 360px and 1280px. On narrow Kanban, verify one labeled state group at a time and visible counts for every group, including `Chưa ghi nhận`. Ensure no required control is clipped and no action requires dragging.
 11. Confirm legacy WBS and Kanban remain under Advanced until their explicit identity/state/filter/inspector parity gates are evidenced. Do not leave two Kanban products as equivalent normal primary destinations after parity.
 
-## User Story 5 parity evidence record
+## T028 final verification evidence record
 
-Automated parity checks use only the public-safe synthetic canonical fixture. The live evidence below comes from a local, read-only official import; no source-project content, path, or commit identifier was copied into this public repository.
+Automated parity checks use the public-safe synthetic canonical fixture. Live evidence below was collected from one local, read-only official import on 2026-09-30. The repository record intentionally omits the private source checkout path, source commit SHA, source-project files, and employee/company material. Snapshot-specific counts are observations, not product constants.
 
-**Observed manual evidence — 2026-09-30; T028 remains INCOMPLETE.** On the imported official snapshot, the first Work → Gantt navigation after selecting a source-backed Delivery Card retained the selected identity and opened its Gantt details. At 360px and 1280px, the Work inspector was exercised with keyboard input: Space opened it, Escape closed it, selection persisted, and focus returned to the invoking row. Narrow Kanban showed one labeled state group at a time with separate counts, including `Chưa ghi nhận`. This records only these observed scenarios; full live search/filter parity and legacy Kanban live parity remain **NOT VERIFIED**.
+### Work List ↔ Unified Kanban live matrix
 
-| Gate | Evidence and status | Required behavior while unmet |
+- The imported snapshot contained 53 Delivery Cards across its canonical hierarchy (six phases, 35 Work Packages, and seven control points in this snapshot). List and Unified Kanban each rendered the same 53 unique typed Delivery Card identities; no milestone or decision point appeared as a Work card.
+- Search matched reader-facing card names, stable IDs, parent Phase names, and parent Work Package names. A reader-facing name query returned both matching cards (`P01` and `L03-A`); stable ID `P03` returned only `P03`; a Phase-name query returned its seven descendants; and a Work Package-name query returned its one descendant. Case-insensitive and Vietnamese-diacritic-insensitive queries returned the same results as their normalized forms.
+- Explicit `PH0` scope returned its seven cards. Combining explicit `PH1` scope with a query matching only `PH0` returned zero in both views; scope remained `PH1` and was not widened. A commit-hash-shaped query and the machine alert code `OVERDUE` returned no cards, confirming those unsupported fields/codes are not search text.
+- `IN_PROGRESS` with unrecorded excluded returned `P01`; `COMPLETED` with unrecorded excluded returned zero. Needs Attention returned zero for this snapshot and showed the supported-signal empty-result explanation rather than claiming the project was risk-free. Excluding unrecorded returned the one authored card; including unrecorded returned all 53, with the other 52 in the separate `Chưa ghi nhận` group. The include control is not an “unrecorded only” filter.
+- Each exercised scenario produced the same identity set in List and Kanban. Group counts reflected active scope/search/filters, displayed all six groups including zero counts, and did not count Phase or Work Package ancestors. For the search result containing `P01` and `L03-A`, List displayed only their PH0/P01 and PH4/L03 ancestor paths; it displayed no orphan ancestors. Temporary search-driven expansion was removed on clear and the prior manual expansion state was restored.
+- A live no-results case (explicit `PH1` plus a PH0-only query) retained its scope and offered query recovery. Every phase in this imported snapshot had cards, so a genuinely empty selected phase was not available for live exercise; the automated regression `WorkFilteredListHasScopedEmptyRecoveryAndExpansionRestoration` covers the distinct `empty-phase` and `no-results` states.
+
+### WBS and legacy Kanban parity
+
+- **WBS: PASS.** Live Work and legacy WBS each contained 53 unique typed Delivery Card identities: no missing or extra identity. Phase → Work Package ancestry matched exactly; WBS showed six phases and 35 Work Packages for this snapshot. Milestones/control points remained outside Work. WBS remains available under Advanced.
+- **Legacy Kanban identity/state: PASS.** It contained the same 53 unique cards. State comparison had no semantic mismatch: `P01` was `Đang làm` in Unified Kanban and `Đang thực hiện` in legacy (both `IN_PROGRESS`); the other 52 were `Chưa ghi nhận` in Work and `Unknown` in legacy. Both missing-record representations remained distinct from `NOT_STARTED`; legacy `Chưa bắt đầu` count was zero.
+- **Legacy controls: N/A where unsupported.** The existing legacy Kanban exposes no phase scope, search, or shared filter controls, so no such behavior was claimed equivalent or added to legacy. Its cards are static articles and do not open an inspector. This is an **intentional, documented transition difference**: Unified Work provides the stable-identity shared inspector; legacy Kanban remains reachable under Advanced for specialist parity/audit until the applicable transition gate is accepted. No legacy inspector behavior was fabricated, and no legacy route was retired.
+
+### Work ↔ Gantt navigation
+
+- **First navigation: PASS.** Before visiting Gantt in this app session, selecting `P01` in Work with its inspector open and invoking `Xem trên Gantt` navigated to the exact `DeliveryCard:P01`. The Gantt row was selected, keyboard-focused, and visible in the viewport; its visible PH0 ancestor was opened. The Gantt inspector remained open, matching the Work inspector's prior open state.
+- **Closed inspector: PASS.** With Work selection retained and its inspector closed, navigating to the Gantt primary destination left the Gantt inspector closed and kept the selected row visible; selection and drawer visibility remained separate.
+- **Different/filtered card: PASS.** `P02` was selected via the Work inspector CTA and resolved to `DeliveryCard:P02`. Applying Gantt's `COMPLETED` filter hid the row without clearing the selected P02 identity or closing/replacing its details; the Gantt filter remained unchanged. Returning through `Mở trong Công việc` restored the prior Work scope (`PH0`), query (`P02`), authored-state/attention/unrecorded criteria, selection, and open inspector.
+- Gantt's existing default Plan view does not render Work Package rollup rows. Therefore this verification confirms the visible Phase ancestor and the target Delivery Card; it does not claim a Work Package row was revealed or alter Gantt behavior.
+
+### Responsive and keyboard evidence
+
+- **360px: PASS.** Page-level document width remained within the viewport. Work search/scope/state/attention/unrecorded controls remained operable. Each of the six Kanban groups was selected and exactly one narrow group was shown at a time; the summary kept counts for every group, including `Chưa ghi nhận`. The Work inspector occupied the full viewport. Enter/Space opened it, Escape closed it, the selected identity persisted, and focus returned to the invoking P02 row/card in both List and Kanban.
+- **1280px: PASS.** List and Kanban each displayed the shared 53-card collection without page-level horizontal clipping; the inspector was adjacent to the collection. Keyboard selection/inspection and Work ↔ Gantt navigation were exercised at this width.
+- Viewport override was reset after verification. The user's existing application on port 5050 was not used as a verification server or disrupted.
+
+### Automated verification gates
+
+All commands below completed successfully against the unchanged implementation code:
+
+| Gate | Result |
+| --- | --- |
+| Full Node regression suite (`node --test` over `*.test.cjs`) | **PASS — 17/17** |
+| Full C# executable harness (`dotnet run --project .\tests\ProjectManagementCompiler.Tests\ProjectManagementCompiler.Tests.csproj --no-restore`) | **PASS** |
+| `scripts/test.ps1` (Node and full C# harness) | **PASS** |
+| `node --check src\ProjectManagementCompiler\wwwroot\app.js` | **PASS** |
+| `dotnet build .\ProjectManagementCompiler.sln --no-restore` | **PASS — 0 warnings, 0 errors** |
+| `scripts/verify.ps1` | **PASS** — isolated loopback port 5154; Health `ok`, official manifest classification, 53 cards, workbook/report checks, `SecurityChecks=PASS` |
+| Standalone `scripts/verify-web.ps1` | **PASS** — isolated loopback port 5155; Health `ok`, official manifest classification, 53 cards, `SecurityChecks=PASS` |
+| `git diff --check` | **PASS** before this evidence-only documentation update; rerun before commit |
+
+For the safe restore used by `verify.ps1`, the project files were checked for external package references and restore-source overrides. No package references were present. Restore was constrained to a newly created empty local feed with NuGet audit disabled; the effective MSBuild properties were checked before running verification. No public package registry was contacted. The empty temporary feed remains outside the repository and is not part of this commit. An initial standalone C# invocation without the local source-root environment was not valid test evidence; it was rerun with the real local read-only checkout configured and passed. No source checkout path or SHA is recorded here.
+
+### Fresh Feature 009 acceptance ledger
+
+`PASS` means the approved requirement has automated regression evidence and, where applicable, the live checks above. Dataset-specific behaviors not present in the imported snapshot are backed by synthetic regression coverage and are explicitly identified above.
+
+| Requirements | Status | Evidence grouping |
 | --- | --- | --- |
-| Canonical Delivery Card identities and hierarchy paths | **Synthetic test PASS** — `WorkProjectionMatchesCanonicalCardsLegacyKanbanStatesAndWbsPaths` compares typed identities, Work/WBS Phase → Work Package paths, and canonical Delivery Card membership. **Live official-import check PASS** — every visible Work Delivery Card's typed identity and Phase → Work Package ancestry matched the legacy WBS exactly. | Keep legacy WBS reachable under Advanced until all applicable parity gates pass. Do not reconstruct ancestry in browser code. |
-| Authored and unrecorded execution states | **Synthetic test PASS** — the same projection test compares Completed, In Progress, Suspended, and absent-record/null state between Work and legacy Kanban. **Live official-import check PASS** — an authored state and the separate `Chưa ghi nhận` group were both visible; the observed group counts are snapshot-specific. | Keep `Chưa ghi nhận` distinct from `Chưa bắt đầu`; do not infer a state from missing evidence. |
-| Shared Work scope, search/filter, and List/Kanban identities | **Regression coverage PASS** — `WorkListKanbanAndInspectorKeepOneCanonicalSelectionPath`, `WorkSearchAndFiltersUseOneSharedTransientPipeline`, and the existing post-filter count/hierarchy regressions verify the shared canonical collection and criteria. **Live identity check PASS** — All phases List and Unified Kanban contained the same typed Delivery Card identity set as WBS. The complete live search/filter parity matrix is not claimed here. | Work remains the only normal Kanban destination; retain legacy Kanban under Advanced until its applicable live state/filter/inspector comparisons pass. |
-| Inspector reachability | **Regression coverage PASS** — both Work card renderers select the same typed identity and resolve the shared inspector from the canonical Work projection. **Live official-import check PASS** — selecting a source-backed Work row opened the shared inspector with the selected item's details. | Keep the legacy routes available until the remaining List/Kanban parity checks pass; do not count Gantt-only selection as proof of List/Kanban parity. |
-| Route/transition gate | **Regression test PASS** — `WorkParityGateKeepsLegacyWbsAndKanbanUnderAdvanced` confirms WBS and legacy Kanban remain under Advanced, while Work is the only normal Kanban destination. | Do not remove, hide, or retire WBS or legacy Kanban until their applicable live identity, hierarchy, state, filter, and inspector checks pass. |
+| FR-001–FR-007 | **PASS** | Workspace/navigation, All-phases/current-focus, arbitrary hierarchy, canonical ordering and explicit phase scope. |
+| FR-008–FR-013 | **PASS** | Shared typed identity and state, transient Work criteria, List labels/columns, reader-facing names, planned-finish wording, source authority. |
+| FR-014–FR-019 | **PASS** | Search fields/normalization, ancestor matching, filtered paths, expansion restoration, scope-safe recovery and distinct empty states. |
+| FR-020–FR-025 | **PASS** | Authored/unrecorded separation, deterministic groups, post-filter counts and visible zero groups. |
+| FR-026–FR-033 | **PASS** | Kind-appropriate read-only inspector, evidence semantics, dependencies, selection/focus/scroll and stable Work ↔ Gantt navigation. |
+| FR-034–FR-036 | **PASS** | Narrow/full-screen inspector, 360px/1280px and keyboard behavior. |
+| FR-037–FR-039 | **PASS** | Exact supported Needs Attention whitelist, exclusions, authored-state separation and non-risk-free empty wording. |
+| FR-040–FR-043 | **PASS** | WBS/legacy routes and parity transition, no new store/write-back/proposal workflow, existing Advanced proposal route. |
+| SC-001–SC-011 | **PASS** | Automated scenarios plus live identity/filter/state/ancestry, ordering/count, inspector/navigation, responsive and accounted legacy differences. |
 
-When any gate is unverified or fails, record it as **NOT VERIFIED / NOT MET**, preserve the relevant Advanced route, and investigate the authoritative canonical/source projection. Do not infer parity from matching counts, empty views, or browser-side reconstruction. The live Work ↔ WBS identity/path gate is verified for the manually checked official snapshot; remaining live legacy Kanban state/filter/inspector comparisons are still **NOT VERIFIED**.
+No requirement is marked `FAIL` or `BLOCKED-NOT VERIFIED`. The only live-data limitation is that this official snapshot has no empty phase; that branch is covered by regression, not claimed as a live observation. Legacy-only scope/search/filter and inspector parity are classified as unsupported/intentional transition differences above, not as equivalent behavior.
+
+**T028 final result: PASS.** The implementation branch remains a review branch; keep WBS and legacy Kanban under Advanced and do not merge to `main` until human review approves this final verification record.
 
 ## Public repository hygiene
 
-Before any future commit/push, inspect `git status` and staged diff; include only intended source/docs/tests. Check for personal paths, private IDEAEngineering documents, employee data, credentials, secrets, generated output, build artifacts, and package-lock changes. The public fixture must remain synthetic/minimal. Push the implementation branch for the requested human code review, but do not merge it to `main` until this checkpoint is approved.
+Before any commit/push, inspect `git status` and staged diff; include only intended source/docs/tests. Check for personal paths, private IDEAEngineering documents, employee data, credentials, secrets, generated output, build artifacts, and package-lock changes. The public fixture must remain synthetic/minimal. Push the implementation branch for the requested human code review, but do not merge it to `main` until this checkpoint is approved.

@@ -104,7 +104,7 @@
 
 **Purpose**: Verify the complete increment and public-repository hygiene; do not treat an unavailable prerequisite as a pass.
 
-- [ ] T028 Run the focused C# executable plus `scripts/test.ps1`, `scripts/verify.ps1`, and `scripts/verify-web.ps1` only when its documented safe loopback preconditions are met; manually launch with `Run Project.cmd` and verify the approved scenarios at 360px/1280px; inspect `git status` and staged diff for only intended files, secrets/private IDEAEngineering data, generated artifacts, and package changes; record which FR/SC checks actually passed and report environment blockers separately (FR-001…FR-043; SC-001…SC-011).
+- [X] T028 Run the focused C# executable plus `scripts/test.ps1`, `scripts/verify.ps1`, and `scripts/verify-web.ps1` only when its documented safe loopback preconditions are met; manually launch with `Run Project.cmd` and verify the approved scenarios at 360px/1280px; inspect `git status` and staged diff for only intended files, secrets/private IDEAEngineering data, generated artifacts, and package changes; record which FR/SC checks actually passed and report environment blockers separately (FR-001…FR-043; SC-001…SC-011). **Evidence:** `quickstart.md`, “T028 final verification evidence record”; FR 43/43 and SC 11/11 pass, Node 17/17, C# harness, `scripts/test.ps1`, safe `scripts/verify.ps1` + standalone `scripts/verify-web.ps1`, responsive/manual parity recorded.
 
 ---
 
