@@ -29,6 +29,7 @@
   function createWorkState() {
     return {
       mode: "list",
+      narrowKanbanGroup: "NOT_STARTED",
       phaseScope: { kind: "all", phaseId: null },
       query: "",
       authoredStateFilter: "ALL",
@@ -1037,11 +1038,15 @@
 
   function renderWorkInspector(model) {
     const panel = node("aside", null, "work-inspector");
-    panel.setAttribute("aria-label", "Chi tiết công việc");
+    panel.dataset.inspectorOpen = String(state.work.inspectorOpen);
     if (!model) {
       panel.appendChild(node("p", "CHI TIẾT", "eyebrow"));
       const selectedIdentity = state.work.inspectorOpen && state.work.selectedItemKey;
-      panel.appendChild(node("h3", selectedIdentity ? "Không có chi tiết trong nguồn công việc chính thức" : "Chọn một mục để xem"));
+      const title = node("h3", selectedIdentity ? "Không có chi tiết trong nguồn công việc chính thức" : "Chọn một mục để xem");
+      title.id = "work-inspector-heading";
+      title.tabIndex = -1;
+      panel.setAttribute("aria-labelledby", title.id);
+      panel.appendChild(title);
       panel.appendChild(node("p", selectedIdentity
         ? "Mục " + selectedIdentity + " không có trong dữ liệu chính thức hiện tại; bản xem trước không được dùng thay thế."
         : "Thông tin sẽ chỉ hiển thị những gì có trong nguồn đã nhập.", "muted"));
@@ -1054,6 +1059,7 @@
     const title = node("h3", model.name);
     title.tabIndex = -1;
     title.id = "work-inspector-heading";
+    panel.setAttribute("aria-labelledby", title.id);
     copy.appendChild(title);
     heading.appendChild(copy);
     const close = node("button", "×", "work-inspector-close");
@@ -1506,13 +1512,46 @@
 
     const entries = sortWorkKanbanEntries(filterWorkEntries(work), work.currentPhaseId);
     const groups = buildWorkKanbanGroups(entries);
+    const narrow = node("div", null, "work-kanban-narrow-only");
+    const selectorLabel = node("label", "Nhóm trạng thái", "work-kanban-group-selector-label");
+    const selector = node("select", null, "work-kanban-group-selector");
+    selector.id = "work-kanban-group";
+    selector.setAttribute("aria-label", "Nhóm trạng thái Kanban");
+    groups.forEach(group => {
+      const groupId = group.executionState || "UNRECORDED";
+      const option = node("option", group.label);
+      option.value = groupId;
+      selector.appendChild(option);
+    });
+    const selectedGroupId = groups.some(group => (group.executionState || "UNRECORDED") === state.work.narrowKanbanGroup)
+      ? state.work.narrowKanbanGroup
+      : "NOT_STARTED";
+    state.work.narrowKanbanGroup = selectedGroupId;
+    selector.value = selectedGroupId;
+    selector.addEventListener("change", () => {
+      state.work.narrowKanbanGroup = selector.value;
+      renderActiveView();
+      const restored = byId("work-kanban-group");
+      if (restored) restored.focus();
+    });
+    selectorLabel.appendChild(selector);
+    narrow.appendChild(selectorLabel);
+    const countStrip = node("div", null, "work-kanban-count-strip");
+    countStrip.setAttribute("aria-label", "Số lượng công việc theo từng trạng thái sau khi lọc");
+    groups.forEach(group => countStrip.appendChild(node("span", group.label + ": " + group.count, "work-kanban-count-item")));
+    narrow.appendChild(countStrip);
+    const visibleGroup = groups.find(group => (group.executionState || "UNRECORDED") === selectedGroupId) || groups[0];
+    if (visibleGroup) narrow.appendChild(renderWorkKanbanGroup(visibleGroup, work));
+    board.appendChild(narrow);
+
+    const wide = node("div", null, "work-kanban-wide");
     const unrecorded = groups.find(group => group.kind === "unrecorded");
-    if (unrecorded) board.appendChild(renderWorkKanbanGroup(unrecorded, work));
+    if (unrecorded) wide.appendChild(renderWorkKanbanGroup(unrecorded, work));
 
     const primaryGroups = groups.filter(group => group.kind === "primary");
     const columns = node("div", null, "work-kanban-columns");
     primaryGroups.forEach(group => columns.appendChild(renderWorkKanbanGroup(group, work)));
-    board.appendChild(columns);
+    wide.appendChild(columns);
 
     const secondaryGroups = groups.filter(group => group.kind === "secondary");
     const secondary = node("details", null, "work-kanban-secondary");
@@ -1523,7 +1562,8 @@
     summary.appendChild(secondaryCounts);
     secondary.appendChild(summary);
     secondaryGroups.forEach(group => secondary.appendChild(renderWorkKanbanGroup(group, work)));
-    board.appendChild(secondary);
+    wide.appendChild(secondary);
+    board.appendChild(wide);
     return board;
   }
 
