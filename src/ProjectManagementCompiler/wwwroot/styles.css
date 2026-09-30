@@ -1115,7 +1115,10 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .work-card-attention-copy { padding: 3px 6px; border-left: 2px solid #9a6a21; background: #fff9ed; color: #59451f; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
 .work-card-state, .work-card-roles, .work-card-finish { min-width: 0; overflow-wrap: anywhere; }
 .work-cell-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-.work-list-empty { margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+.work-list-empty { display: grid; justify-items: start; gap: 10px; margin: 0; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); }
+.work-list-empty-copy { margin: 0; line-height: 1.5; }
+.work-list-empty-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.work-empty-action { min-height: 34px; }
 .work-kanban { display: grid; gap: 12px; min-width: 0; }
 .work-kanban-controls { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
 .work-kanban-columns { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); align-items: start; gap: 10px; max-width: 100%; min-width: 0; overflow-x: auto; padding: 1px 1px 8px; }

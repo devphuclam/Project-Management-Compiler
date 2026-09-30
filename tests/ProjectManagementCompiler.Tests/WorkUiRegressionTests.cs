@@ -6,8 +6,11 @@ internal static class WorkUiRegressionTests
     {
         var app = File.ReadAllText(AppJsPath());
         var list = ExtractFunction(app, "function renderWorkList(");
-        TestAssert.True(list is not null, "Missing approved Feature 009 behavior: the primary Work List renderer does not exist.");
-        var renderer = list!;
+        var hierarchy = ExtractFunction(app, "function buildWorkListHierarchy(");
+        var scopedCards = ExtractFunction(app, "function workCardScopeEntries(");
+        TestAssert.True(list is not null && hierarchy is not null && scopedCards is not null,
+            "Missing approved Feature 009 behavior: the canonical Work List hierarchy and renderer do not exist.");
+        var renderer = list! + "\n" + hierarchy! + "\n" + scopedCards!;
 
         Require(renderer, "work.phases", "List phase groups must come from the Work projection.");
         Require(renderer, "work.workPackages", "List Work Packages must come from the Work projection.");
@@ -55,6 +58,7 @@ internal static class WorkUiRegressionTests
         var app = File.ReadAllText(AppJsPath());
         var entry = ExtractFunction(app, "function renderWorkEntry(");
         var list = ExtractFunction(app, "function renderWorkList(");
+        var hierarchy = ExtractFunction(app, "function buildWorkListHierarchy(");
         var scopedCards = ExtractFunction(app, "function workCardScopeEntries(");
         var filteredCards = ExtractFunction(app, "function filterWorkEntries(");
         var kanban = ExtractFunction(app, "function renderWorkKanban(");
@@ -62,7 +66,7 @@ internal static class WorkUiRegressionTests
         var ordering = ExtractFunction(app, "function sortWorkKanbanEntries(");
 
         TestAssert.True(kanban is not null, "Missing Feature 009 behavior: the primary Work destination has no Unified Kanban renderer.");
-        TestAssert.True(entry is not null && list is not null && scopedCards is not null && filteredCards is not null && groups is not null && ordering is not null,
+        TestAssert.True(entry is not null && list is not null && hierarchy is not null && scopedCards is not null && filteredCards is not null && groups is not null && ordering is not null,
             "Unified Kanban must share explicit Work mode, card collection, grouping, and deterministic ordering seams.");
 
         Require(entry!, "state.work.mode", "List/Kanban mode must be transient shared Work view state.");
@@ -71,8 +75,9 @@ internal static class WorkUiRegressionTests
         Require(entry!, "Danh sách", "The native Work mode control must expose List by its reader-facing name.");
         Require(entry!, "Kanban", "The native Work mode control must expose Kanban.");
 
-        var collectionContract = list! + "\n" + scopedCards! + "\n" + filteredCards! + "\n" + kanban!;
-        Require(list!, "filterWorkEntries(work)", "List must consume the shared criteria-filtered canonical Delivery Card collection.");
+        var collectionContract = list! + "\n" + hierarchy! + "\n" + scopedCards! + "\n" + filteredCards! + "\n" + kanban!;
+        Require(list!, "buildWorkListHierarchy(work)", "List must consume the shared filtered canonical hierarchy projection.");
+        Require(hierarchy!, "filterWorkEntries(work)", "List hierarchy must consume the shared criteria-filtered canonical Delivery Card collection.");
         Require(kanban!, "filterWorkEntries(work)", "Kanban must use the same filtered Work card collection as List.");
         Require(filteredCards!, "workCardScopeEntries(work)", "The shared filter pipeline must apply explicit phase scope before other criteria.");
         Require(scopedCards!, "work.cards", "The canonical Work projection is the only Delivery Card payload collection.");
@@ -154,11 +159,12 @@ internal static class WorkUiRegressionTests
         var filter = ExtractFunction(app, "function filterWorkEntries(");
         var entry = ExtractFunction(app, "function renderWorkEntry(");
         var list = ExtractFunction(app, "function renderWorkList(");
+        var hierarchy = ExtractFunction(app, "function buildWorkListHierarchy(");
         var kanban = ExtractFunction(app, "function renderWorkKanban(");
 
         TestAssert.True(workState is not null, "Work must own a transient shared criteria state.");
         TestAssert.True(filter is not null, "Missing approved Feature 009 behavior: shared Work search and filtering have not been implemented.");
-        TestAssert.True(entry is not null && list is not null && kanban is not null, "List and Kanban must remain consumers of the same Work entry state.");
+        TestAssert.True(entry is not null && list is not null && hierarchy is not null && kanban is not null, "List and Kanban must remain consumers of the same Work entry state.");
 
         Require(workState!, "mode: \"list\"", "The active Work mode must remain in shared in-memory Work state.");
         Require(workState!, "phaseScope", "Explicit phase scope must remain a shared Work criterion.");
@@ -170,7 +176,8 @@ internal static class WorkUiRegressionTests
 
         Require(entry!, "renderWorkFilters(work)", "One Work-level filter surface must apply regardless of selected mode.");
         Require(entry!, "filterWorkEntries(work)", "Work attention summary and both views must use the filtered card collection.");
-        Require(list!, "filterWorkEntries(work)", "List must consume the shared Work filtering pipeline.");
+        Require(list!, "buildWorkListHierarchy(work)", "List must consume the shared Work hierarchy projection.");
+        Require(hierarchy!, "filterWorkEntries(work)", "List hierarchy must consume the shared Work filtering pipeline.");
         Require(kanban!, "filterWorkEntries(work)", "Kanban must consume the same Work filtering pipeline as List.");
         Require(filter!, "workCardScopeEntries(work)", "The shared pipeline must begin from the canonical card collection after explicit phase scope.");
         Require(filter!, "normalizeWorkSearchValue", "Work search must use its approved normalized matching rule.");

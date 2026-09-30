@@ -744,6 +744,117 @@
     });
   }
 
+  function hasWorkResultFilters() {
+    return Boolean(normalizeWorkSearchValue(state.work.query).trim())
+      || String(state.work.authoredStateFilter || "ALL").toUpperCase() !== "ALL"
+      || Boolean(state.work.needsAttentionOnly)
+      || state.work.includeUnrecorded === false;
+  }
+
+  function buildWorkListHierarchy(work) {
+    const allScopedEntries = workCardScopeEntries(work);
+    const survivingEntries = filterWorkEntries(work);
+    const resultFilterActive = hasWorkResultFilters();
+    const searchActive = Boolean(normalizeWorkSearchValue(state.work.query).trim());
+    const phases = Array.isArray(work.phases) ? work.phases : [];
+    const scopedPhases = state.work.phaseScope && state.work.phaseScope.kind === "phase"
+      ? phases.filter(phase => phase && phase.id === state.work.phaseScope.phaseId)
+      : phases;
+    const workPackages = new Map();
+    (Array.isArray(work.workPackages) ? work.workPackages : []).forEach(workPackage => {
+      if (workPackage && workPackage.id && !workPackages.has(workPackage.id)) workPackages.set(workPackage.id, workPackage);
+    });
+    const survivingByIdentity = new Map();
+    survivingEntries.forEach(entry => {
+      if (entry && entry.identity && entry.card && !survivingByIdentity.has(entry.identity)) {
+        survivingByIdentity.set(entry.identity, entry);
+      }
+    });
+
+    const visiblePhases = [];
+    const projectedIdentities = new Set();
+    scopedPhases.forEach(phase => {
+      if (!phase || !phase.id) return;
+      const packageViews = [];
+      let phaseCardCount = 0;
+      (Array.isArray(phase.workPackageIds) ? phase.workPackageIds : []).forEach(workPackageId => {
+        const workPackage = workPackages.get(workPackageId);
+        if (!workPackage || workPackage.phaseId !== phase.id) return;
+        const cards = [];
+        (Array.isArray(workPackage.deliveryCardIds) ? workPackage.deliveryCardIds : []).forEach(cardId => {
+          const identity = "DeliveryCard:" + cardId;
+          const entry = survivingByIdentity.get(identity);
+          if (!entry || !entry.card || entry.card.key.kind !== "DeliveryCard"
+            || entry.card.phaseId !== phase.id || entry.card.workPackageId !== workPackage.id
+            || entry.phase.id !== phase.id || entry.workPackage.id !== workPackage.id
+            || projectedIdentities.has(identity)) return;
+          projectedIdentities.add(identity);
+          cards.push(entry.card);
+        });
+        if (resultFilterActive && cards.length === 0) return;
+        phaseCardCount += cards.length;
+        packageViews.push({
+          workPackage,
+          cards,
+          temporarilyExpanded: searchActive && cards.length > 0
+        });
+      });
+      if (resultFilterActive && packageViews.length === 0) return;
+      visiblePhases.push({
+        phase,
+        workPackages: packageViews,
+        cardCount: phaseCardCount,
+        temporarilyExpanded: searchActive && phaseCardCount > 0
+      });
+    });
+
+    const scopedCardCount = allScopedEntries.length;
+    const selectedPhase = state.work.phaseScope && state.work.phaseScope.kind === "phase"
+      ? scopedPhases.length === 1 ? scopedPhases[0] : null
+      : null;
+    const emptyKind = selectedPhase && scopedCardCount === 0
+      ? "empty-phase"
+      : scopedCardCount > 0 && survivingEntries.length === 0
+        ? "no-results"
+        : scopedCardCount === 0 && survivingEntries.length === 0
+          ? "empty-work"
+          : null;
+    const recoveryCriteria = [];
+    if (String(state.work.query || "").trim()) recoveryCriteria.push("query");
+    if (String(state.work.authoredStateFilter || "ALL").toUpperCase() !== "ALL") recoveryCriteria.push("authoredStateFilter");
+    if (state.work.needsAttentionOnly) recoveryCriteria.push("needsAttentionOnly");
+    if (state.work.includeUnrecorded === false) recoveryCriteria.push("includeUnrecorded");
+
+    return {
+      phases: visiblePhases,
+      resultFilterActive,
+      searchActive,
+      cardCount: survivingEntries.length,
+      emptyKind,
+      recoveryCriteria
+    };
+  }
+
+  function clearWorkCriterion(criterion) {
+    switch (criterion) {
+      case "query":
+        state.work.query = "";
+        break;
+      case "authoredStateFilter":
+        state.work.authoredStateFilter = "ALL";
+        break;
+      case "needsAttentionOnly":
+        state.work.needsAttentionOnly = false;
+        break;
+      case "includeUnrecorded":
+        state.work.includeUnrecorded = true;
+        break;
+      default:
+        return false;
+    }
+    return true;
+  }
+
   function renderWorkFilters(work) {
     const template = byId("work-filters-template");
     if (!template || !template.content || !template.content.firstElementChild) return node("div", "Không thể mở bộ lọc công việc.", "work-filter-error");
@@ -923,6 +1034,7 @@
 
   function renderWorkList(work) {
     const list = node("section", null, "work-list");
+    const hierarchy = buildWorkListHierarchy(work);
     const controls = node("div", null, "work-list-controls");
     controls.appendChild(renderWorkPhaseScopeControl(work));
     list.appendChild(controls);
@@ -934,29 +1046,15 @@
     });
     list.appendChild(columns);
 
-    const packageById = new Map();
-    (Array.isArray(work.workPackages) ? work.workPackages : []).forEach(workPackage => {
-      if (workPackage && workPackage.id && !packageById.has(workPackage.id)) packageById.set(workPackage.id, workPackage);
-    });
-    const cardByKey = new Map();
-    (Array.isArray(work.cards) ? work.cards : []).forEach(card => {
-      if (!card || !card.key || !card.key.kind || !card.key.id) return;
-      const identity = card.key.kind + ":" + card.key.id;
-      if (!cardByKey.has(identity)) cardByKey.set(identity, card);
-    });
-    const inScopeCardIdentities = new Set(filterWorkEntries(work).map(entry => entry.identity));
     const renderedCardKeys = new Set();
-    const phases = Array.isArray(work.phases) ? work.phases : [];
-    const scopedPhases = state.work.phaseScope.kind === "phase"
-      ? phases.filter(phase => phase && phase.id === state.work.phaseScope.phaseId)
-      : phases;
-
-    scopedPhases.forEach(phase => {
+    hierarchy.phases.forEach(phaseView => {
+      const phase = phaseView.phase;
       if (!phase || !phase.id) return;
       const phaseGroup = node("details", null, "work-phase");
       phaseGroup.dataset.workPhaseId = phase.id;
-      phaseGroup.open = state.work.expandedPhaseIds.has(phase.id);
+      phaseGroup.open = state.work.expandedPhaseIds.has(phase.id) || phaseView.temporarilyExpanded;
       phaseGroup.addEventListener("toggle", () => {
+        if (hierarchy.searchActive) return;
         if (phaseGroup.open) state.work.expandedPhaseIds.add(phase.id);
         else state.work.expandedPhaseIds.delete(phase.id);
       });
@@ -966,22 +1064,22 @@
       phaseGroup.appendChild(phaseSummary);
 
       const packages = node("div", null, "work-phase-packages");
-      (Array.isArray(phase.workPackageIds) ? phase.workPackageIds : []).forEach(workPackageId => {
-        const workPackage = packageById.get(workPackageId);
+      phaseView.workPackages.forEach(packageView => {
+        const workPackage = packageView.workPackage;
         if (!workPackage || workPackage.phaseId !== phase.id) return;
         const packageGroup = node("details", null, "work-package");
         packageGroup.dataset.workPackageId = workPackage.id;
-        packageGroup.open = state.work.expandedWorkPackageIds.has(workPackage.id);
+        packageGroup.open = state.work.expandedWorkPackageIds.has(workPackage.id) || packageView.temporarilyExpanded;
         packageGroup.addEventListener("toggle", () => {
+          if (hierarchy.searchActive) return;
           if (packageGroup.open) state.work.expandedWorkPackageIds.add(workPackage.id);
           else state.work.expandedWorkPackageIds.delete(workPackage.id);
         });
         packageGroup.appendChild(node("summary", workPackage.name || "Gói công việc chưa có tên", "work-package-summary"));
         const cards = node("div", null, "work-package-cards");
-        (Array.isArray(workPackage.deliveryCardIds) ? workPackage.deliveryCardIds : []).forEach(cardId => {
-          const identity = "DeliveryCard:" + cardId;
-          const card = cardByKey.get(identity);
-          if (!card || card.key.kind !== "DeliveryCard" || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || !inScopeCardIdentities.has(identity) || renderedCardKeys.has(identity)) return;
+        packageView.cards.forEach(card => {
+          const identity = card && card.key && card.key.kind + ":" + card.key.id;
+          if (!card || !card.key || card.key.kind !== "DeliveryCard" || !card.key.id || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || !identity || renderedCardKeys.has(identity)) return;
           renderedCardKeys.add(identity);
           cards.appendChild(renderWorkCard(card));
         });
@@ -992,8 +1090,49 @@
       list.appendChild(phaseGroup);
     });
 
-    if (scopedPhases.length === 0) list.appendChild(node("p", "Chưa có giai đoạn trong nguồn đã nhập.", "work-list-empty"));
+    if (hierarchy.emptyKind) list.appendChild(renderWorkEmptyState(hierarchy));
     return list;
+  }
+
+  function renderWorkEmptyState(projection) {
+    const empty = node("section", null, "work-list-empty");
+    empty.setAttribute("role", "status");
+    if (projection.emptyKind === "empty-phase") {
+      empty.appendChild(node("p", "Giai đoạn này chưa có công việc trong kế hoạch.", "work-list-empty-copy"));
+      const showAll = node("button", "Xem tất cả giai đoạn", "secondary work-empty-action");
+      showAll.type = "button";
+      showAll.addEventListener("click", () => {
+        setWorkPhaseScope(null);
+        renderWorkAndRestoreFocus("work-phase-scope");
+      });
+      empty.appendChild(showAll);
+      return empty;
+    }
+    if (projection.emptyKind === "no-results") {
+      empty.appendChild(node("p", "Không tìm thấy công việc phù hợp với tìm kiếm và bộ lọc hiện tại.", "work-list-empty-copy"));
+      const actions = {
+        query: { label: "Xóa tìm kiếm", focusId: "work-search" },
+        authoredStateFilter: { label: "Bỏ lọc trạng thái", focusId: "work-authored-state" },
+        needsAttentionOnly: { label: "Bỏ lọc Cần chú ý", focusId: "work-needs-attention" },
+        includeUnrecorded: { label: "Bao gồm Chưa ghi nhận", focusId: "work-include-unrecorded" }
+      };
+      const recovery = node("div", null, "work-list-empty-actions");
+      projection.recoveryCriteria.forEach(criterion => {
+        const action = actions[criterion];
+        if (!action) return;
+        const button = node("button", action.label, "secondary work-empty-action");
+        button.type = "button";
+        button.addEventListener("click", () => {
+          clearWorkCriterion(criterion);
+          renderWorkAndRestoreFocus(action.focusId);
+        });
+        recovery.appendChild(button);
+      });
+      empty.appendChild(recovery);
+      return empty;
+    }
+    empty.appendChild(node("p", "Nguồn đã nhập chưa có công việc trong phân cấp.", "work-list-empty-copy"));
+    return empty;
   }
 
   function renderWorkCard(card) {
