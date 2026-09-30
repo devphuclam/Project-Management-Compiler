@@ -50,6 +50,61 @@ internal static class WorkUiRegressionTests
         }
     }
 
+    public static void UnifiedWorkKanbanGroupsScopedCanonicalCardsDeterministically()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var entry = ExtractFunction(app, "function renderWorkEntry(");
+        var list = ExtractFunction(app, "function renderWorkList(");
+        var scopedCards = ExtractFunction(app, "function workCardScopeEntries(");
+        var kanban = ExtractFunction(app, "function renderWorkKanban(");
+        var groups = ExtractFunction(app, "function buildWorkKanbanGroups(");
+        var ordering = ExtractFunction(app, "function sortWorkKanbanEntries(");
+
+        TestAssert.True(kanban is not null, "Missing Feature 009 behavior: the primary Work destination has no Unified Kanban renderer.");
+        TestAssert.True(entry is not null && list is not null && scopedCards is not null && groups is not null && ordering is not null,
+            "Unified Kanban must share explicit Work mode, card collection, grouping, and deterministic ordering seams.");
+
+        Require(entry!, "state.work.mode", "List/Kanban mode must be transient shared Work view state.");
+        Require(entry!, "renderWorkList(work)", "List must remain available in the primary Work destination.");
+        Require(entry!, "renderWorkKanban(work)", "Kanban must be selectable inside Work without replacing the legacy Advanced route.");
+        Require(entry!, "Danh sách", "The native Work mode control must expose List by its reader-facing name.");
+        Require(entry!, "Kanban", "The native Work mode control must expose Kanban.");
+
+        var collectionContract = list! + "\n" + scopedCards! + "\n" + kanban!;
+        Require(list!, "workCardScopeEntries(work)", "List must use the shared canonical Delivery Card scope helper.");
+        Require(kanban!, "workCardScopeEntries(work)", "Kanban must use the same scoped Work card collection as List.");
+        Require(scopedCards!, "work.cards", "The canonical Work projection is the only Delivery Card payload collection.");
+        Require(scopedCards!, "key.kind", "Card membership must preserve kind-qualified canonical identity.");
+        Require(scopedCards!, "key.id", "Card membership must preserve the stable canonical card ID.");
+        Require(scopedCards!, "workPackageIds", "Canonical phase-to-package references define hierarchy membership.");
+        Require(scopedCards!, "deliveryCardIds", "Canonical package-to-card references define hierarchy membership and order.");
+        Require(scopedCards!, "phaseId", "A card must remain attached to its canonical phase.");
+        Require(scopedCards!, "workPackageId", "A card must remain attached to its canonical Work Package.");
+        Require(scopedCards!, "state.work.phaseScope", "Explicit phase scope must be shared without using current-phase focus as a filter.");
+        TestAssert.False(scopedCards!.Contains("focusedPhaseId", StringComparison.Ordinal), "Current-phase focus must not narrow All phases membership.");
+        TestAssert.False(collectionContract.Contains("state.views.kanban", StringComparison.Ordinal), "Unified Kanban must not consume the legacy Kanban projection.");
+        TestAssert.False(collectionContract.Contains("wipLimit", StringComparison.OrdinalIgnoreCase), "Unified Kanban must not inherit legacy WIP semantics.");
+
+        Require(kanban!, "sortWorkKanbanEntries", "Kanban cards must use the approved deterministic presentation order.");
+        Require(kanban!, "buildWorkKanbanGroups", "Kanban groups must be computed from the shared in-scope Work card collection.");
+        Require(kanban!, "renderWorkKanbanGroup", "Every state group, including zero-count groups, must have a renderer.");
+        Require(groups!, "NOT_STARTED", "Explicit NOT_STARTED cards must map to the Chưa bắt đầu group.");
+        Require(groups!, "IN_PROGRESS", "Explicit IN_PROGRESS cards must map to the Đang làm group.");
+        Require(groups!, "COMPLETED", "Explicit COMPLETED cards must map to the Hoàn thành group.");
+        Require(groups!, "SUSPENDED", "SUSPENDED must remain a distinct authored-state group.");
+        Require(groups!, "CANCELLED", "CANCELLED must remain a distinct authored-state group.");
+        Require(groups!, "Chưa ghi nhận", "Null/unrecorded state must have a separate reader-facing group.");
+        Require(groups!, "executionState: null", "Unrecorded state must be represented as null, never defaulted to NOT_STARTED.");
+        Require(groups!, "group.cards.push", "Each eligible Delivery Card must be placed in only its one authored-state group.");
+        Require(groups!, "group.count = group.cards.length", "Each count must be calculated from cards remaining after active scope.");
+        Require(ordering!, "currentPhaseId", "The known current phase must be ordered first without changing card membership.");
+        Require(ordering!, "phaseOrder", "Remaining phases must follow canonical hierarchy order.");
+        Require(ordering!, "workPackageOrder", "Work Packages must follow canonical hierarchy order.");
+        Require(ordering!, "cardOrder", "Cards must follow canonical/source order within their Work Package.");
+        Require(ordering!, "compareOrdinalWorkIds", "Tied or unavailable canonical positions must use ordinal stable-ID ordering.");
+        TestAssert.False(ordering!.Contains("localeCompare", StringComparison.Ordinal), "Kanban order must not depend on locale-sensitive sorting.");
+    }
+
     private static string? ExtractFunction(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);
