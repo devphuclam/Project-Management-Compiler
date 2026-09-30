@@ -25,9 +25,21 @@
     };
   }
 
+  function createWorkState() {
+    return {
+      mode: "list",
+      phaseScope: { kind: "all", phaseId: null },
+      focusedPhaseId: null,
+      expandedPhaseIds: new Set(),
+      expandedWorkPackageIds: new Set(),
+      snapshotId: null,
+      focusInitialized: false
+    };
+  }
+
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", gantt: createGanttState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, activeViewsClassification: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", gantt: createGanttState(), work: createWorkState() };
   const byId = (id) => document.getElementById(id);
   const sourcePreferenceKeys = Object.freeze({
     repositoryRoot: "pmc.source.repositoryRoot",
@@ -551,9 +563,68 @@
   }
 
   function activateView(view) {
+    if (view === "work") initializeWorkFocus(activeWorkProjection());
     state.activeView = view;
     updateActiveTab(view);
     renderActiveView();
+  }
+
+  function activeWorkProjection() {
+    if (state.activeViewsClassification !== "OFFICIAL_COMMIT") return null;
+    return state.views && state.views.work || null;
+  }
+
+  function initializeWorkFocus(work) {
+    if (!work) return;
+    const metadata = state.officialManifest && state.officialManifest.metadata || {};
+    const snapshotId = metadata.snapshotId || metadata.sourceIdentity || "";
+    if (state.work.snapshotId !== snapshotId) {
+      state.work = createWorkState();
+      state.work.snapshotId = snapshotId;
+    }
+    if (state.work.focusInitialized) return;
+    state.work.focusInitialized = true;
+    if (!work.currentPhaseId || !Array.isArray(work.phases)) return;
+    const matches = work.phases.filter(phase => phase && phase.id === work.currentPhaseId);
+    if (matches.length !== 1) return;
+    state.work.focusedPhaseId = matches[0].id;
+    state.work.expandedPhaseIds.add(matches[0].id);
+  }
+
+  function setWorkPhaseScope(phaseId) {
+    if (phaseId === null || phaseId === undefined || phaseId === "") {
+      state.work.phaseScope = { kind: "all", phaseId: null };
+      return;
+    }
+    const work = activeWorkProjection();
+    const matches = work && Array.isArray(work.phases)
+      ? work.phases.filter(phase => phase && phase.id === phaseId)
+      : [];
+    state.work.phaseScope = matches.length === 1
+      ? { kind: "phase", phaseId: matches[0].id }
+      : { kind: "all", phaseId: null };
+    if (matches.length === 1) state.work.expandedPhaseIds.add(matches[0].id);
+  }
+
+  function workPhaseScopeLabel(work) {
+    if (state.work.phaseScope.kind !== "phase" || !work || !Array.isArray(work.phases)) return "Tất cả giai đoạn";
+    const matches = work.phases.filter(phase => phase && phase.id === state.work.phaseScope.phaseId);
+    return matches.length === 1 ? matches[0].name : "Tất cả giai đoạn";
+  }
+
+  function renderWorkEntry(work) {
+    const section = node("section", null, "work-entry");
+    const heading = node("header", null, "work-entry-heading");
+    heading.appendChild(node("p", "CÔNG VIỆC", "eyebrow"));
+    heading.appendChild(node("h2", "Danh sách công việc"));
+    heading.appendChild(node("p", workPhaseScopeLabel(work), "work-entry-scope"));
+    section.appendChild(heading);
+    if (!work) {
+      section.appendChild(node("p", "Công việc chỉ hiển thị từ snapshot commit chính thức. Bản xem trước không thay thế dữ liệu chính thức.", "work-entry-note"));
+      return section;
+    }
+    section.appendChild(node("p", "Danh sách", "work-entry-mode"));
+    return section;
   }
 
   function openSummaryView(view, key, attention) {
@@ -2745,7 +2816,8 @@
       content.appendChild(node("div", "Views will appear here after analysis.", "empty-state"));
       return;
     }
-    const view = state.activeView === "overview" ? renderOverview(state.views.overview) :
+    const view = state.activeView === "work" ? renderWorkEntry(activeWorkProjection()) :
+      state.activeView === "overview" ? renderOverview(state.views.overview) :
       state.activeView === "management-control" ? renderManagementControl(state.managementControl || state.views.managementControl) :
       state.activeView === "source" ? renderSource() :
       state.activeView === "dashboard" ? renderDashboard(state.views.dashboard) :
@@ -2770,6 +2842,7 @@
     state.sources = summary.sources || [];
     state.sourceExecution = null;
     state.views = summary.views;
+    state.activeViewsClassification = null;
     state.managementControl = summary.managementControl || summary.views && summary.views.managementControl;
     state.warnings = summary.warnings || [];
     state.manifest = null;
@@ -2806,6 +2879,8 @@
       }
       return false;
     }
+
+    state.activeViewsClassification = response.classification || "FAILED";
 
     if (response.classification === "OFFICIAL_COMMIT") {
       state.officialManifest = state.manifest;

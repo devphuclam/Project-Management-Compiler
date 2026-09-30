@@ -1076,6 +1076,12 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .overview-attention-item strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .overview-attention-item > span:nth-child(2) { overflow: hidden; color: #687c80; font-size: 11px; text-overflow: ellipsis; }
 .overview-attention-link { color: #14766f; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.work-entry { display: grid; gap: 14px; min-width: 0; }
+.work-entry-heading { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.work-entry-heading .eyebrow, .work-entry-heading h2, .work-entry-heading p { margin: 0; }
+.work-entry-heading h2 { font-size: 20px; }
+.work-entry-scope, .work-entry-mode { color: var(--muted); font-size: 12px; }
+.work-entry-note { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--muted); }
 .advanced-navigation { margin-top: 10px; border-top: 1px solid #e2eae5; }
 .advanced-navigation > summary { display: flex; align-items: center; gap: 10px; padding: 11px 2px 2px; color: #334b50; cursor: pointer; font-size: 12px; font-weight: 750; }
 .advanced-navigation > summary span { color: #76888b; font-size: 10px; font-weight: 450; }

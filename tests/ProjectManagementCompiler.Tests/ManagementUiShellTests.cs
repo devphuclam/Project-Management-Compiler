@@ -147,6 +147,22 @@ internal static class ManagementUiShellTests
         TestAssert.True(app.Contains("state.views.work", StringComparison.Ordinal), "The Work destination must consume the additive Work projection from the existing aggregate.");
         TestAssert.Contains("data-view=\"work\"", index, "Công việc must be a real destination rather than a dead or absent placeholder.");
         TestAssert.False(app.Contains("pmc.work.", StringComparison.Ordinal), "Work scope/focus state must not be persisted to localStorage.");
+
+        var focusStart = app.IndexOf("function initializeWorkFocus(", StringComparison.Ordinal);
+        var focusEnd = app.IndexOf("\n  function ", focusStart + 10, StringComparison.Ordinal);
+        TestAssert.True(focusStart >= 0 && focusEnd > focusStart, "Current-phase focus must have an explicit projection-backed initializer.");
+        var focusInitializer = app[focusStart..focusEnd];
+        TestAssert.True(focusInitializer.Contains("work.currentPhaseId", StringComparison.Ordinal), "Current-phase focus must come from the Work projection.");
+        TestAssert.True(focusInitializer.Contains("matches.length !== 1", StringComparison.Ordinal), "Unknown or ambiguous current phases must produce no focus.");
+        TestAssert.True(focusInitializer.Contains("state.work.focusedPhaseId", StringComparison.Ordinal), "The uniquely resolved current phase must be stored as focus.");
+        TestAssert.False(focusInitializer.Contains("phaseScope", StringComparison.Ordinal), "Current-phase focus must not narrow the All phases scope.");
+
+        var scopeStart = app.IndexOf("function setWorkPhaseScope(", StringComparison.Ordinal);
+        var scopeEnd = app.IndexOf("\n  function ", scopeStart + 10, StringComparison.Ordinal);
+        TestAssert.True(scopeStart >= 0 && scopeEnd > scopeStart, "Explicit phase selection must have one shared Work scope setter.");
+        var scopeSetter = app[scopeStart..scopeEnd];
+        TestAssert.True(scopeSetter.Contains("state.work.phaseScope", StringComparison.Ordinal), "Explicit phase selection must update state shared by Work modes.");
+        TestAssert.True(scopeSetter.Contains("kind: \"phase\"", StringComparison.Ordinal), "A valid explicit selection must narrow Work to its selected phase.");
     }
 
     public static void WorkUsesOnlyOfficialProjectionCardsAndKeepsControlPointsOutOfTheCollection()
