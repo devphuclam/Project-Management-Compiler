@@ -285,6 +285,30 @@ internal static class WorkUiRegressionTests
         TestAssert.False(renderer.Contains("data-work-edit", StringComparison.Ordinal), "The read-only Work inspector must not offer edits.");
     }
 
+    public static void WorkInspectorMapsSourceResultStatesSeparatelyFromEvidenceStates()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var resultLabels = ExtractFunction(app, "function workResultStateLabel(");
+        var renderer = ExtractFunction(app, "function renderWorkInspector(");
+
+        TestAssert.True(resultLabels is not null && renderer is not null,
+            "Work must have a dedicated reader-facing mapping for SourceResultState.");
+        TestAssert.Contains("workResultStateLabel(model.execution.resultState)", renderer!,
+            "The Work inspector must render result states with their own vocabulary, not evidence data-state labels.");
+        foreach (var mapping in new[]
+        {
+            "NOT_RUN: \"Chưa chạy\"",
+            "PASS: \"Đạt\"",
+            "FAIL: \"Không đạt\"",
+            "BLOCKED: \"Bị chặn\"",
+            "NOT_APPLICABLE: \"Không áp dụng\""
+        })
+            Require(resultLabels!, mapping, $"Source result mapping must preserve '{mapping}'.");
+        Require(resultLabels!, "Chưa ghi nhận", "A null source result must remain not recorded.");
+        TestAssert.False(renderer!.Contains("workDataStateLabel(model.execution.resultState)", StringComparison.Ordinal),
+            "Source result states must not be sent through the evidence-state mapper.");
+    }
+
     public static void WorkInspectorLimitsDependenciesAndNonCardSemantics()
     {
         var app = File.ReadAllText(AppJsPath());

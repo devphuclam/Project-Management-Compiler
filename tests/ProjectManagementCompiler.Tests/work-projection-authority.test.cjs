@@ -8,6 +8,8 @@ function createAppHarness() {
   const appPath = path.resolve(__dirname, "../../src/ProjectManagementCompiler/wwwroot/app.js");
   const initializationMarker = '  document.querySelectorAll(".tab").forEach(tab => tab.addEventListener';
   const source = fs.readFileSync(appPath, "utf8");
+  const focusElements = new Map();
+  const focusTargets = [];
   assert.equal(source.split(initializationMarker).length - 1, 1, "The app must have one initialization boundary for the isolated state harness.");
 
   const harness = `
@@ -26,18 +28,34 @@ function createAppHarness() {
     buildWorkListHierarchy: typeof buildWorkListHierarchy === "function" ? buildWorkListHierarchy : null,
     clearWorkCriterion: typeof clearWorkCriterion === "function" ? clearWorkCriterion : null,
     buildWorkInspectorModel: typeof buildWorkInspectorModel === "function" ? buildWorkInspectorModel : null,
+    workDataStateLabel: typeof workDataStateLabel === "function" ? workDataStateLabel : null,
+    workResultStateLabel: typeof workResultStateLabel === "function" ? workResultStateLabel : null,
     selectWorkItem: typeof selectWorkItem === "function" ? selectWorkItem : null,
     applyOfficialWorkSnapshot: typeof applyOfficialWorkSnapshot === "function" ? applyOfficialWorkSnapshot : null,
     workScrollPlan: typeof workScrollPlan === "function" ? workScrollPlan : null,
     rememberWorkScroll: typeof rememberWorkScroll === "function" ? rememberWorkScroll : null,
     chooseWorkFocusReturn: typeof chooseWorkFocusReturn === "function" ? chooseWorkFocusReturn : null,
     prepareWorkToGantt: typeof prepareWorkToGantt === "function" ? prepareWorkToGantt : null,
-    prepareGanttToWork: typeof prepareGanttToWork === "function" ? prepareGanttToWork : null
+    prepareGanttToWork: typeof prepareGanttToWork === "function" ? prepareGanttToWork : null,
+    selectGanttRow: typeof selectGanttRow === "function" ? selectGanttRow : null,
+    closeGanttDetails: typeof closeGanttDetails === "function" ? closeGanttDetails : null,
+    handleGanttEscape: typeof handleGanttEscape === "function" ? handleGanttEscape : null,
+    restoreGanttFocusReturn: typeof restoreGanttFocusReturn === "function" ? restoreGanttFocusReturn : null,
+    focusElements,
+    focusTargets
   };
   return;
 `;
   const instrumentedSource = source.replace(initializationMarker, harness + initializationMarker);
-  const context = { document: { getElementById: () => null, querySelectorAll: () => [] }, window: {} };
+  const context = {
+    focusElements,
+    focusTargets,
+    document: {
+      getElementById: id => focusElements.get(id) || null,
+      querySelectorAll: selector => selector === "button.gantt-row-select[data-gantt-select]" ? focusTargets : []
+    },
+    window: {}
+  };
   vm.runInNewContext(instrumentedSource, context, { filename: appPath });
   return context.__pmcReviewHarness;
 }
@@ -149,6 +167,7 @@ test("Work inspector resolves evidence-backed details by typed identity and keep
   assert.equal(model.execution.recorded, true);
   assert.equal(model.execution.state, null, "A recorded row without authored state is not NOT_STARTED.");
   assert.equal(model.execution.resultState, "NOT_RUN");
+  assert.equal(model.execution.actualFinish, null, "An absent actual finish must not replace or inherit the planned finish.");
   assert.equal(model.execution.actualEffortHours, 0, "Known zero actual effort must remain zero.");
   assert.equal(model.execution.remainingEffortHours, null, "Absent remaining effort must not become zero.");
   assert.deepEqual(Array.from(model.roles, role => [role.label, role.person]), [["Đầu mối dự án", null]]);
@@ -157,6 +176,27 @@ test("Work inspector resolves evidence-backed details by typed identity and keep
   assert.deepEqual(Array.from(model.dependencies.successors, item => item.key), ["DeliveryCard:P02"]);
   assert.equal(JSON.stringify(model.dependencies).includes("P03"), false, "Excluded edges and transitive items must not become primary relationships.");
   assert.equal(JSON.stringify(model.dependencies).includes("MISSING"), false, "An edge with an unresolved endpoint cannot be presented as a supported link.");
+});
+
+test("Work inspector keeps every authoritative source result state distinct", () => {
+  const app = createAppHarness();
+  const labelResult = app.workResultStateLabel || app.workDataStateLabel;
+  assert.equal(typeof labelResult, "function", "Missing approved behavior: source result state has no reader-facing mapping.");
+
+  const expected = [
+    [null, "Chưa ghi nhận"],
+    ["NOT_RUN", "Chưa chạy"],
+    ["PASS", "Đạt"],
+    ["FAIL", "Không đạt"],
+    ["BLOCKED", "Bị chặn"],
+    ["NOT_APPLICABLE", "Không áp dụng"]
+  ];
+  for (const [sourceState, readerLabel] of expected) {
+    assert.equal(labelResult(sourceState), readerLabel, `${sourceState ?? "null"} must render as ${readerLabel}.`);
+  }
+  for (const sourceState of ["PASS", "FAIL", "NOT_APPLICABLE"]) {
+    assert.notEqual(labelResult(sourceState), "Chưa ghi nhận", `${sourceState} is a recorded result, not a missing result.`);
+  }
 });
 
 test("Work inspector uses evidence-limited variants for non-card hierarchy and milestone identities", () => {
@@ -302,6 +342,142 @@ test("Work and Gantt navigation preserve typed selection, drawer condition, and 
   assert.equal(app.state.work.phaseScope.phaseId, "PH0");
   assert.equal(app.state.work.query, "keep-query");
   assert.equal(app.state.work.authoredStateFilter, "IN_PROGRESS");
+});
+
+test("Gantt drawer Close and Escape retain selection, filters, Work criteria, and restore focus", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.selectGanttRow, "function", "Missing approved behavior: selecting a row does not have a testable state transition.");
+  assert.equal(typeof app.closeGanttDetails, "function", "Missing approved behavior: closing Gantt details has no separate selection-preserving transition.");
+  assert.equal(typeof app.handleGanttEscape, "function", "Missing approved behavior: Gantt Escape has no tested close transition.");
+
+  const identity = "DeliveryCard:P01";
+  const selectedRow = {
+    dataset: { ganttSelect: identity },
+    disabled: false,
+    focused: false,
+    focus() { this.focused = true; }
+  };
+  app.focusTargets.push(selectedRow);
+  app.state.work.selectedItemKey = "DeliveryCard:P02";
+  app.state.work.mode = "kanban";
+  app.state.work.phaseScope = { kind: "phase", phaseId: "PH0" };
+  app.state.work.query = "keep work search";
+  app.state.work.authoredStateFilter = "IN_PROGRESS";
+  app.state.work.needsAttentionOnly = true;
+  app.state.work.includeUnrecorded = false;
+  app.state.gantt.phaseFilter = "PH0";
+  app.state.gantt.executionFilter = "IN_PROGRESS";
+  app.state.gantt.attentionOnly = true;
+  app.state.gantt.criticalOnly = true;
+  app.state.gantt.overdueOnly = true;
+  app.state.gantt.atRiskOnly = true;
+  app.state.gantt.lateStartOnly = true;
+  app.state.gantt.showDependencies = true;
+  app.state.gantt.dependencyFocus = "upstream";
+
+  app.selectGanttRow(identity);
+  assert.equal(app.state.gantt.selectedRowKey, identity);
+  assert.equal(app.state.gantt.detailsOpen, true);
+
+  const ganttControls = [
+    app.state.gantt.phaseFilter,
+    app.state.gantt.executionFilter,
+    app.state.gantt.attentionOnly,
+    app.state.gantt.criticalOnly,
+    app.state.gantt.overdueOnly,
+    app.state.gantt.atRiskOnly,
+    app.state.gantt.lateStartOnly,
+    app.state.gantt.showDependencies,
+    app.state.gantt.dependencyFocus
+  ];
+  app.closeGanttDetails();
+  assert.equal(app.state.gantt.selectedRowKey, identity, "Close must preserve the selected typed identity.");
+  assert.equal(app.state.gantt.detailsOpen, false, "Close must hide only the details drawer.");
+  assert.deepEqual([
+    app.state.gantt.phaseFilter,
+    app.state.gantt.executionFilter,
+    app.state.gantt.attentionOnly,
+    app.state.gantt.criticalOnly,
+    app.state.gantt.overdueOnly,
+    app.state.gantt.atRiskOnly,
+    app.state.gantt.lateStartOnly,
+    app.state.gantt.showDependencies,
+    app.state.gantt.dependencyFocus
+  ], ganttControls, "Close must not reset Gantt filters or dependency presentation controls.");
+  assert.equal(app.state.work.selectedItemKey, "DeliveryCard:P02", "Closing a Gantt drawer must not alter the separate Work selection.");
+  assert.equal(app.state.work.mode, "kanban");
+  assert.deepEqual(app.state.work.phaseScope, { kind: "phase", phaseId: "PH0" });
+  assert.equal(app.state.work.query, "keep work search");
+  assert.equal(app.state.work.authoredStateFilter, "IN_PROGRESS");
+  assert.equal(app.state.work.needsAttentionOnly, true);
+  assert.equal(app.state.work.includeUnrecorded, false);
+  assert.equal(selectedRow.focused, true, "Close must return focus to the still-rendered enabled row.");
+
+  app.selectGanttRow(app.state.gantt.selectedRowKey);
+  assert.equal(app.state.gantt.selectedRowKey, identity, "Selecting the retained row must reopen details for that same identity.");
+  assert.equal(app.state.gantt.detailsOpen, true);
+  selectedRow.focused = false;
+  assert.equal(app.handleGanttEscape({ key: "Escape" }), true);
+  assert.equal(app.state.gantt.selectedRowKey, identity, "Escape must preserve the selected typed identity.");
+  assert.equal(app.state.gantt.detailsOpen, false, "Escape must hide the details drawer.");
+  assert.deepEqual([
+    app.state.gantt.phaseFilter,
+    app.state.gantt.executionFilter,
+    app.state.gantt.attentionOnly,
+    app.state.gantt.criticalOnly,
+    app.state.gantt.overdueOnly,
+    app.state.gantt.atRiskOnly,
+    app.state.gantt.lateStartOnly,
+    app.state.gantt.showDependencies,
+    app.state.gantt.dependencyFocus
+  ], ganttControls, "Escape must leave Gantt filters and dependency controls unchanged.");
+  assert.equal(app.state.work.selectedItemKey, "DeliveryCard:P02", "Escape must not alter the separate Work selection.");
+  assert.equal(app.state.work.mode, "kanban");
+  assert.deepEqual(app.state.work.phaseScope, { kind: "phase", phaseId: "PH0" });
+  assert.equal(app.state.work.query, "keep work search");
+  assert.equal(app.state.work.authoredStateFilter, "IN_PROGRESS");
+  assert.equal(app.state.work.needsAttentionOnly, true);
+  assert.equal(app.state.work.includeUnrecorded, false);
+  assert.equal(selectedRow.focused, true, "Escape must return focus to the selected rendered row.");
+
+  const workIdentity = app.prepareGanttToWork(app.state.gantt.selectedRowKey, app.state.gantt.detailsOpen);
+  assert.equal(workIdentity, identity);
+  assert.equal(app.state.work.selectedItemKey, identity, "Gantt → Work must transfer the same retained identity.");
+  assert.equal(app.state.work.inspectorOpen, false, "Gantt → Work after Close/Escape must keep Work details closed.");
+});
+
+test("Gantt focus return falls back from a hidden or disabled selection to status then heading", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.restoreGanttFocusReturn, "function", "Missing approved behavior: Gantt has no selection-aware focus return.");
+  app.state.gantt.selectedRowKey = "DeliveryCard:P01";
+
+  const disabledRow = {
+    dataset: { ganttSelect: "DeliveryCard:P01" },
+    disabled: true,
+    focused: false,
+    focus() { this.focused = true; }
+  };
+  const status = { focused: false, focus() { this.focused = true; } };
+  const heading = { focused: false, focus() { this.focused = true; } };
+  app.focusTargets.push(disabledRow);
+  app.focusElements.set("gantt-selection-status", status);
+  app.focusElements.set("gantt-view-heading", heading);
+
+  app.restoreGanttFocusReturn();
+  assert.equal(disabledRow.focused, false, "A disabled selected row cannot receive focus.");
+  assert.equal(status.focused, true, "A status explaining a filtered/absent selection is the next focus target.");
+  assert.equal(heading.focused, false);
+
+  app.focusTargets.length = 0;
+  status.focused = false;
+  app.restoreGanttFocusReturn();
+  assert.equal(status.focused, true, "When the selected row is not rendered, focus should go to its status explanation.");
+  assert.equal(heading.focused, false);
+
+  status.focused = false;
+  app.focusElements.delete("gantt-selection-status");
+  app.restoreGanttFocusReturn();
+  assert.equal(heading.focused, true, "The Gantt heading is the final fallback when no suitable row/status exists.");
 });
 
 function workSearchFixture() {

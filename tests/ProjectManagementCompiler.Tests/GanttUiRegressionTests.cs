@@ -54,9 +54,55 @@ internal static class GanttUiRegressionTests
 
         TestAssert.Contains("if (!state.gantt.showDependencies || !selectedRowKey) return svg;", appJs, "Dependency connectors must stay hidden until a row is selected.");
         TestAssert.Contains("state.gantt.showDependencies = true;", appJs, "Selecting a row must immediately reveal its focused direct links.");
-        TestAssert.Contains("state.gantt.selectedRowKey = null", appJs, "The details drawer must provide a return to the uncluttered plan view.");
         TestAssert.Contains(" L \" + bend + \" ", appJs, "Gantt dependency connectors must use clear stepped paths.");
         TestAssert.Contains("path.appendChild(title)", appJs, "Gantt dependency connectors must expose endpoint text on hover.");
+    }
+
+    public static void GanttDetailClosePreservesSelectionAndUsesFocusReturn()
+    {
+        var appJs = ReadAppJs();
+        var closeActionStart = appJs.IndexOf("} else if (action === \"close-details\") {", StringComparison.Ordinal);
+        var closeActionEnd = closeActionStart < 0 ? -1 : appJs.IndexOf("} else if (action === ", closeActionStart + 1, StringComparison.Ordinal);
+        var closeAction = closeActionStart >= 0 && closeActionEnd > closeActionStart
+            ? appJs[closeActionStart..closeActionEnd]
+            : string.Empty;
+        var escapeHandlerStart = appJs.IndexOf("shell.addEventListener(\"keydown\", event => {", StringComparison.Ordinal);
+        var escapeHandlerEnd = escapeHandlerStart < 0 ? -1 : appJs.IndexOf("\n    });", escapeHandlerStart, StringComparison.Ordinal);
+        var escapeHandler = escapeHandlerStart >= 0 && escapeHandlerEnd > escapeHandlerStart
+            ? appJs[escapeHandlerStart..escapeHandlerEnd]
+            : string.Empty;
+        var select = ExtractFunction(appJs, "function selectGanttRow(");
+        var close = ExtractFunction(appJs, "function closeGanttDetails(");
+        var escape = ExtractFunction(appJs, "function handleGanttEscape(");
+        var focus = ExtractFunction(appJs, "function restoreGanttFocusReturn(");
+
+        TestAssert.False(closeAction.Contains("state.gantt.selectedRowKey = null", StringComparison.Ordinal),
+            "Current Close action clears the selected canonical identity instead of only closing the drawer.");
+        TestAssert.False(escapeHandler.Contains("state.gantt.selectedRowKey = null", StringComparison.Ordinal),
+            "Current Escape handler clears the selected canonical identity instead of only closing the drawer.");
+        TestAssert.True(select is not null && close is not null && escape is not null && focus is not null,
+            "Gantt selection, drawer visibility, Escape, and focus return must have testable behavior seams.");
+        TestAssert.Contains("closeGanttDetails()", closeAction, "The visible Close action must run the selection-preserving close behavior.");
+        TestAssert.Contains("selectGanttRow(selectTarget.dataset.ganttSelect)", appJs, "A rendered row selection must use the shared selection transition.");
+        TestAssert.Contains("handleGanttEscape(event)", appJs, "The Gantt Escape listener must use the shared close transition.");
+        TestAssert.Contains("state.gantt.selectedRowKey", select!, "Selecting a row must preserve its canonical identity.");
+        TestAssert.Contains("state.gantt.detailsOpen = Boolean", select!, "Selecting a row must open its detail drawer.");
+        TestAssert.Contains("state.gantt.detailsOpen = false", close!, "Close must hide the drawer.");
+        TestAssert.False(close!.Contains("state.gantt.selectedRowKey = null", StringComparison.Ordinal),
+            "Closing the drawer must not clear canonical selection.");
+        TestAssert.Contains("renderActiveView()", close!, "The closed drawer state must be rendered before focus is restored.");
+        TestAssert.Contains("restoreGanttFocusReturn()", close!, "Close must restore focus after rerendering.");
+        TestAssert.True(close!.IndexOf("renderActiveView()", StringComparison.Ordinal) < close.IndexOf("restoreGanttFocusReturn()", StringComparison.Ordinal),
+            "Focus must be restored only after the Gantt view has rerendered.");
+        TestAssert.Contains("closeGanttDetails()", escape!, "Escape must use the same close and focus-return behavior.");
+        TestAssert.False(escape!.Contains("state.gantt.selectedRowKey = null", StringComparison.Ordinal),
+            "Escape must not clear canonical selection.");
+        foreach (var statePath in new[] { "state.gantt.phaseFilter =", "state.gantt.executionFilter =", "state.gantt.attentionOnly =", "state.gantt.criticalOnly =", "state.gantt.overdueOnly =", "state.gantt.atRiskOnly =", "state.gantt.lateStartOnly =", "state.work." })
+            TestAssert.False(close.Contains(statePath, StringComparison.Ordinal), $"Closing details must not reset '{statePath}'.");
+        TestAssert.Contains("button.gantt-row-select[data-gantt-select]", focus!, "Focus should return to a rendered Gantt row when one is available.");
+        TestAssert.Contains("!candidate.disabled", focus!, "Disabled rows must not be selected as the focus-return target.");
+        TestAssert.Contains("gantt-selection-status", focus!, "A hidden selection should return focus to its status explanation.");
+        TestAssert.Contains("gantt-view-heading", focus!, "The Gantt heading is the final focus-return fallback.");
     }
 
     public static void GanttDependencyInspectorShowsImpact()
@@ -197,4 +243,12 @@ internal static class GanttUiRegressionTests
 
     private static string ReadIndexHtml() => File.ReadAllText(Path.Combine(
         Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "index.html"));
+
+    private static string? ExtractFunction(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0) return null;
+        var end = source.IndexOf("\n  function ", start + signature.Length, StringComparison.Ordinal);
+        return end > start ? source[start..end] : source[start..];
+    }
 }
