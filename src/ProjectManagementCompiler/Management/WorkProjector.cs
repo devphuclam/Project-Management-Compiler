@@ -140,8 +140,7 @@ public sealed class WorkProjector
     }
 
     private static IReadOnlyList<WorkRoleProjection> BuildRoles(CanonicalProject project, string cardId) => project.Assignments
-        .Where(assignment => string.Equals(assignment.WorkItemId, cardId, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(assignment.CarioRoleCode, "A", StringComparison.OrdinalIgnoreCase))
+        .Where(assignment => string.Equals(assignment.WorkItemId, cardId, StringComparison.OrdinalIgnoreCase))
         .Select(assignment => new WorkRoleProjection
         {
             Label = ResolveRoleLabel(project, assignment.LogicalRoleCode),

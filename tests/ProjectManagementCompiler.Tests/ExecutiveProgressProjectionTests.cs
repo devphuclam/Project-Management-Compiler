@@ -199,6 +199,29 @@ internal static class ExecutiveProgressProjectionTests
         TestAssert.Equal("P01-A", card.ReferenceCode, "The short raw card identity must remain available only as the final detail field.");
     }
 
+    public static void ExecutiveDeliveryCardOwnerRemainsRestrictedToAccountableAssignments()
+    {
+        var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult();
+        var baseline = new ProjectManagementCompiler.Management.ExecutiveProgressReportProjector().Build(result);
+        var baselineOwner = baseline.DeliveryCardDetails.Single(detail => detail.ReferenceCode == "P01-A").OwnerLabel;
+        var nonAccountable = new Assignment
+        {
+            WorkItemId = "P01-A",
+            LogicalRoleCode = "QA",
+            CarioRoleCode = "R+",
+            ConcreteIdentity = "Mapped QA Person",
+            MappingStatus = "MAPPED",
+            SourceReferences = result.Project.Assignments[0].SourceReferences
+        };
+        var report = new ProjectManagementCompiler.Management.ExecutiveProgressReportProjector().Build(result with
+        {
+            Project = result.Project with { Assignments = result.Project.Assignments.Append(nonAccountable).ToArray() }
+        });
+
+        TestAssert.Equal("Đầu mối dự án", baselineOwner, "The fixture's accountable CARIO-A role must retain its established executive owner label.");
+        TestAssert.Equal(baselineOwner, report.DeliveryCardDetails.Single(detail => detail.ReferenceCode == "P01-A").OwnerLabel, "A mapped non-A logical role must not change Executive Progress Report owner semantics.");
+    }
+
     public static void ProjectionCleansOnlyIdentityPrefixesAndPreservesMeaningfulBracketText()
     {
         var result = ExecutiveProgressTestFixtures.BuildOfficialFixtureResult();

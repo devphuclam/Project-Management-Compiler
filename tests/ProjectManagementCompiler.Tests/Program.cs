@@ -12,6 +12,7 @@ internal static class Program
         ("WorkProjectionUsesOnlyOneValidPhaseContainingTheOfficialReportingDate", WorkProjectionTests.WorkProjectionUsesOnlyOneValidPhaseContainingTheOfficialReportingDate),
         ("WorkProjectionPreservesAuthoredExecutionAndRecordedActualAuthority", WorkProjectionTests.WorkProjectionPreservesAuthoredExecutionAndRecordedActualAuthority),
         ("WorkProjectionPreservesPlannedEvidenceStatesRolesAndProvenance", WorkProjectionTests.WorkProjectionPreservesPlannedEvidenceStatesRolesAndProvenance),
+        ("WorkProjectionRetainsSourceBackedRolesAcrossCarioClassifications", WorkProjectionTests.WorkProjectionRetainsSourceBackedRolesAcrossCarioClassifications),
         ("WorkProjectionLimitsAttentionToTargetedAllowlistedSignalsAndOrdersItDeterministically", WorkProjectionTests.WorkProjectionLimitsAttentionToTargetedAllowlistedSignalsAndOrdersItDeterministically),
         ("WorkIsIncludedInAggregateAndNamedRouteReturnsTheSameProjection", WorkApiTests.WorkIsIncludedInAggregateAndNamedRouteReturnsTheSameProjection),
         ("WorkNamedRouteRetainsTheExistingNoProjectResponse", WorkApiTests.WorkNamedRouteRetainsTheExistingNoProjectResponse),
@@ -268,6 +269,7 @@ internal static class Program
         ,("ProjectionBuildsConciseOverviewFactsAndPriorityActions", ExecutiveProgressProjectionTests.ProjectionBuildsConciseOverviewFactsAndPriorityActions)
         ,("ProjectionExposesAllFiveActualEvidenceShapesWithoutInventingDates", ExecutiveProgressProjectionTests.ProjectionExposesAllFiveActualEvidenceShapesWithoutInventingDates)
         ,("ProjectionBuildsConservativeWorkPackageAndDeliveryCardRows", ExecutiveProgressProjectionTests.ProjectionBuildsConservativeWorkPackageAndDeliveryCardRows)
+        ,("ExecutiveDeliveryCardOwnerRemainsRestrictedToAccountableAssignments", ExecutiveProgressProjectionTests.ExecutiveDeliveryCardOwnerRemainsRestrictedToAccountableAssignments)
         ,("ProjectionCleansOnlyIdentityPrefixesAndPreservesMeaningfulBracketText", ExecutiveProgressProjectionTests.ProjectionCleansOnlyIdentityPrefixesAndPreservesMeaningfulBracketText)
         ,("ProjectionDeduplicatesAttentionByWorkItemAndIncludesCriticalOwnerlessWork", ExecutiveProgressProjectionTests.ProjectionDeduplicatesAttentionByWorkItemAndIncludesCriticalOwnerlessWork)
         ,("ProjectionRanksActionableAttentionWithSourceBackedConsequences", ExecutiveProgressProjectionTests.ProjectionRanksActionableAttentionWithSourceBackedConsequences)
@@ -355,11 +357,21 @@ internal static class Program
         ,("DefaultBranchApiContractCannotAcceptCallerModeOrCommit", ManifestDefaultBranchImportTests.DefaultBranchApiContractCannotAcceptCallerModeOrCommit)
     ];
 
-    public static int Main()
+    public static int Main(string[] args)
     {
+        var selectedTests = args.Length == 0
+            ? Tests
+            : Tests.Where(test => args.Contains(test.Name, StringComparer.Ordinal)).ToArray();
+        if (args.Length > 0 && selectedTests.Length != args.Distinct(StringComparer.Ordinal).Count())
+        {
+            var unknownTests = args.Except(selectedTests.Select(test => test.Name), StringComparer.Ordinal);
+            Console.Error.WriteLine($"Unknown test name(s): {string.Join(", ", unknownTests)}");
+            return 2;
+        }
+
         var failures = 0;
 
-        foreach (var (name, test) in Tests)
+        foreach (var (name, test) in selectedTests)
         {
             try
             {

@@ -211,6 +211,70 @@ internal static class WorkProjectionTests
         TestAssert.False(JsonSerializer.Serialize(cards["P03"]).Contains("C:\\", StringComparison.Ordinal), "Synthetic public-safe provenance must not acquire an absolute local path.");
     }
 
+    public static void WorkProjectionRetainsSourceBackedRolesAcrossCarioClassifications()
+    {
+        var canonical = WorkTestFixtures.SyntheticProject();
+        var leadReference = canonical.Provenance[0] with { Item = "P01-lead-assignment" };
+        var qaReference = canonical.Provenance[0] with { Item = "P01-qa-assignment" };
+        var pdaReference = canonical.Provenance[0] with { Item = "P01-pda-assignment" };
+        var lead = new Assignment
+        {
+            WorkItemId = "P01",
+            LogicalRoleCode = "LEAD",
+            CarioRoleCode = null,
+            MappingStatus = "UNRESOLVED_IDENTITY",
+            SourceReferences = [leadReference]
+        };
+        var assignments = new[]
+        {
+            new Assignment
+            {
+                WorkItemId = "P01",
+                LogicalRoleCode = "QA",
+                CarioRoleCode = "R+",
+                MappingStatus = "UNRESOLVED_IDENTITY",
+                SourceReferences = [qaReference]
+            },
+            new Assignment
+            {
+                WorkItemId = "P01",
+                LogicalRoleCode = "PDA",
+                CarioRoleCode = "C",
+                ConcreteIdentity = "Mapped Product Authority",
+                MappingStatus = "MAPPED",
+                SourceReferences = [pdaReference]
+            },
+            lead,
+            lead with { SourceReferences = [leadReference with { Item = "P01-lead-assignment-duplicate" }] }
+        };
+        var project = canonical with
+        {
+            ResponsibilityRoles = canonical.ResponsibilityRoles.Concat(
+            [
+                new ResponsibilityRole { Code = "QA", LogicalRoleCode = "QA", SourceMeaning = "Quality assurance", SourceReferences = [qaReference] },
+                new ResponsibilityRole { Code = "PDA", LogicalRoleCode = "PDA", SourceMeaning = "Product decision authority", SourceReferences = [pdaReference] }
+            ]).ToArray(),
+            Assignments = assignments
+        };
+
+        using var firstProjection = Project(project, new ManagementAnalysis());
+        var firstRoles = CardsById(firstProjection.RootElement)["P01"].GetProperty("roles");
+        var roles = firstRoles.EnumerateArray().ToArray();
+
+        TestAssert.Equal(3, roles.Length, "Source-backed role assignments must be retained and duplicate logical-role/person pairs deduplicated, regardless of CARIO classification.");
+        TestAssert.Equal(
+            "Thẩm quyền quyết định sản phẩm|Đảm bảo chất lượng|Đầu mối dự án",
+            string.Join('|', roles.Select(role => role.GetProperty("label").GetString())),
+            "Multiple supported roles must use the existing reader-facing mapping and deterministic ordinal label ordering.");
+        TestAssert.Equal(JsonValueKind.Null, roles[1].GetProperty("person").ValueKind, "A valid non-A CARIO assignment with unresolved identity must remain a role with no person.");
+        TestAssert.Equal(JsonValueKind.Null, roles[2].GetProperty("person").ValueKind, "A source-backed LEAD assignment with no CARIO role code must remain unresolved role evidence, not disappear or imply a person.");
+        TestAssert.Equal("Mapped Product Authority", roles[0].GetProperty("person").GetString(), "A concrete person may appear only for an authoritatively mapped assignment.");
+
+        using var reversedProjection = Project(project with { Assignments = assignments.Reverse().ToArray() }, new ManagementAnalysis());
+        var reversedRoles = CardsById(reversedProjection.RootElement)["P01"].GetProperty("roles");
+        TestAssert.Equal(firstRoles.GetRawText(), reversedRoles.GetRawText(), "Role ordering and deduplication must not depend on source assignment insertion order.");
+    }
+
     public static void WorkProjectionLimitsAttentionToTargetedAllowlistedSignalsAndOrdersItDeterministically()
     {
         var (project, analysis) = FieldAuthorityScenario();
