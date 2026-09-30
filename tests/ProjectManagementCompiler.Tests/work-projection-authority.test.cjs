@@ -10,6 +10,17 @@ function createAppHarness() {
   const source = fs.readFileSync(appPath, "utf8");
   const focusElements = new Map();
   const focusTargets = [];
+  const createElement = tagName => ({
+    tagName,
+    className: "",
+    textContent: "",
+    children: [],
+    attributes: {},
+    dataset: {},
+    appendChild(child) { this.children.push(child); return child; },
+    setAttribute(name, value) { this.attributes[name] = String(value); },
+    addEventListener() {}
+  });
   assert.equal(source.split(initializationMarker).length - 1, 1, "The app must have one initialization boundary for the isolated state harness.");
 
   const harness = `
@@ -28,6 +39,7 @@ function createAppHarness() {
     buildWorkListHierarchy: typeof buildWorkListHierarchy === "function" ? buildWorkListHierarchy : null,
     clearWorkCriterion: typeof clearWorkCriterion === "function" ? clearWorkCriterion : null,
     buildWorkInspectorModel: typeof buildWorkInspectorModel === "function" ? buildWorkInspectorModel : null,
+    renderWorkInspector: typeof renderWorkInspector === "function" ? renderWorkInspector : null,
     workDataStateLabel: typeof workDataStateLabel === "function" ? workDataStateLabel : null,
     workResultStateLabel: typeof workResultStateLabel === "function" ? workResultStateLabel : null,
     selectWorkItem: typeof selectWorkItem === "function" ? selectWorkItem : null,
@@ -52,12 +64,72 @@ function createAppHarness() {
     focusTargets,
     document: {
       getElementById: id => focusElements.get(id) || null,
+      createElement,
       querySelectorAll: selector => selector === "button.gantt-row-select[data-gantt-select]" ? focusTargets : []
     },
     window: {}
   };
   vm.runInNewContext(instrumentedSource, context, { filename: appPath });
   return context.__pmcReviewHarness;
+}
+
+function workInspectorDependencyFixture() {
+  const work = {
+    phases: [{ id: "PH0", name: "Chuẩn bị", workPackageIds: ["WP0"] }],
+    workPackages: [{ id: "WP0", phaseId: "PH0", name: "Hồ sơ", deliveryCardIds: ["P01"] }],
+    cards: [{
+      key: { kind: "DeliveryCard", id: "P01" },
+      name: "Xác nhận đầu vào",
+      phaseId: "PH0",
+      workPackageId: "WP0",
+      plannedStart: null,
+      plannedFinish: null,
+      plannedEffortHours: null,
+      plannedEffortState: null,
+      execution: { recorded: false, state: null, resultState: null },
+      roles: [],
+      attention: [],
+      sourceReferences: []
+    }]
+  };
+  const endpoint = { key: "DeliveryCard:P00", kind: "DeliveryCard", id: "P00", name: "Điều kiện đầu vào" };
+  const views = {
+    dependencyNetwork: {
+      nodes: [
+        endpoint,
+        { key: "DeliveryCard:P01", kind: "DeliveryCard", id: "P01", name: "Xác nhận đầu vào" },
+        { key: "DeliveryCard:P02", kind: "DeliveryCard", id: "P02", name: "Kiểm tra" },
+        { key: "Phase:PH0", kind: "Phase", id: "PH0", name: "Chuẩn bị" },
+        { key: "WorkPackage:WP0", kind: "WorkPackage", id: "WP0", name: "Hồ sơ" },
+        { key: "Milestone:G-M1", kind: "Milestone", id: "G-M1", name: "Mốc hoàn tất" },
+        { key: "Milestone:G-D0", kind: "Milestone", id: "G-D0", name: "Điểm quyết định" }
+      ],
+      edges: [
+        { subjectKey: "DeliveryCard:P01", predecessorKey: endpoint.key, includedInAnalysis: true },
+        { subjectKey: "DeliveryCard:P02", predecessorKey: "DeliveryCard:P01", includedInAnalysis: true },
+        { subjectKey: "Phase:PH0", predecessorKey: endpoint.key, includedInAnalysis: true },
+        { subjectKey: "WorkPackage:WP0", predecessorKey: endpoint.key, includedInAnalysis: true },
+        { subjectKey: "Milestone:G-M1", predecessorKey: endpoint.key, includedInAnalysis: true },
+        { subjectKey: "Milestone:G-D0", predecessorKey: endpoint.key, includedInAnalysis: true }
+      ]
+    },
+    gantt: { milestones: [
+      { milestoneId: "G-M1", name: "Mốc hoàn tất", kind: "MILESTONE", plannedDate: "2026-09-25" },
+      { milestoneId: "G-D0", name: "Điểm quyết định", kind: "DECISION_GATE", plannedDate: "2026-09-26" }
+    ] },
+    wbs: { root: { kind: "Project", id: "PROJECT", name: "Dự án", children: [
+      { kind: "Phase", id: "PH0", name: "Chuẩn bị", children: [
+        { kind: "WorkPackage", id: "WP0", name: "Hồ sơ", children: [] }
+      ] },
+      { kind: "Milestone", id: "G-M1", name: "Mốc hoàn tất", children: [] },
+      { kind: "Milestone", id: "G-D0", name: "Điểm quyết định", children: [] }
+    ] } }
+  };
+  return { work, views };
+}
+
+function renderedInspectorNodes(root) {
+  return [root, ...(root.children || []).flatMap(renderedInspectorNodes)];
 }
 
 function manifestResponse(classification, work, snapshotId) {
@@ -230,6 +302,49 @@ test("Work inspector uses evidence-limited variants for non-card hierarchy and m
   assert.equal(milestone.milestoneKind, "DECISION_GATE");
   assert.equal(milestone.planned.start, "2026-09-25");
   assert.equal(milestone.execution, undefined, "A milestone inspector must not fabricate Delivery Card execution semantics.");
+});
+
+test("Work inspector dependency model is authorized only for Delivery Cards", () => {
+  const app = createAppHarness();
+  const { work, views } = workInspectorDependencyFixture();
+  const card = app.buildWorkInspectorModel("DeliveryCard:P01", work, views);
+  assert.deepEqual(Array.from(card.dependencies.predecessors, item => item.key), ["DeliveryCard:P00"]);
+  assert.deepEqual(Array.from(card.dependencies.successors, item => item.key), ["DeliveryCard:P02"]);
+
+  const nonCardKeys = ["Phase:PH0", "WorkPackage:WP0", "Milestone:G-M1", "Milestone:G-D0"];
+  for (const key of nonCardKeys) {
+    const model = app.buildWorkInspectorModel(key, work, views);
+    assert.ok(model, `${key} should resolve to its existing kind-appropriate inspector model.`);
+    assert.equal(Object.prototype.hasOwnProperty.call(model, "dependencies"), false,
+      `${key} must not receive a Delivery Card dependency model.`);
+  }
+});
+
+test("Work inspector renderer shows direct dependency detail only for Delivery Cards", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.renderWorkInspector, "function", "The shared inspector renderer must be testable at its behavior boundary.");
+  const { work, views } = workInspectorDependencyFixture();
+  const card = app.buildWorkInspectorModel("DeliveryCard:P01", work, views);
+  const cardPanel = app.renderWorkInspector(card);
+  const cardNodes = renderedInspectorNodes(cardPanel);
+  assert.ok(cardNodes.some(item => item.className === "work-inspector-dependencies"),
+    "Delivery Card retains its direct predecessor/successor section.");
+  const cardCopy = cardNodes.map(item => item.textContent).join(" ");
+  assert.match(cardCopy, /Phụ thuộc trực tiếp/);
+  assert.match(cardCopy, /Phụ thuộc vào/);
+  assert.match(cardCopy, /Ảnh hưởng trực tiếp đến/);
+  assert.match(cardCopy, /Điều kiện đầu vào/);
+  assert.match(cardCopy, /Kiểm tra/);
+
+  for (const key of ["Phase:PH0", "WorkPackage:WP0", "Milestone:G-M1", "Milestone:G-D0"]) {
+    const model = app.buildWorkInspectorModel(key, work, views);
+    const panel = app.renderWorkInspector(model);
+    const nodes = renderedInspectorNodes(panel);
+    assert.equal(nodes.some(item => item.className === "work-inspector-dependencies"), false,
+      `${key} must not render a fabricated Delivery Card dependency section.`);
+    assert.equal(nodes.some(item => item.textContent === "Phụ thuộc trực tiếp"), false,
+      `${key} must not present Delivery Card dependency wording.`);
+  }
 });
 
 test("official snapshot changes clear only stale selection while previews, failures, and same-snapshot refresh retain Work context", () => {

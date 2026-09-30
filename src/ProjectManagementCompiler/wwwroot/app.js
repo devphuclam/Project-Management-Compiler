@@ -922,9 +922,9 @@
     const identity = workItemKeyParts(selectionKey);
     if (!identity) return null;
     const key = typedKey(identity.kind, identity.id);
-    const dependencyNetwork = views && views.dependencyNetwork;
-    const dependencies = buildWorkDependencyLinks(key, dependencyNetwork);
     if (identity.kind === "DeliveryCard") {
+      const dependencyNetwork = views && views.dependencyNetwork;
+      const dependencies = buildWorkDependencyLinks(key, dependencyNetwork);
       const card = (work && work.cards || []).find(item => item && item.key
         && typedKey(item.key.kind, item.key.id) === key);
       if (!card) return null;
@@ -973,8 +973,7 @@
         effortHours: wbsNode.plannedEffortHours ?? null,
         effortState: null
       },
-      sourceReferences: Array.isArray(wbsNode.sourceReferences) ? wbsNode.sourceReferences : [],
-      dependencies
+      sourceReferences: Array.isArray(wbsNode.sourceReferences) ? wbsNode.sourceReferences : []
     };
   }
 
@@ -1101,20 +1100,22 @@
       panel.appendChild(primary);
     }
 
-    const relationships = node("details", null, "work-inspector-dependencies");
-    relationships.appendChild(node("summary", "Phụ thuộc trực tiếp"));
-    [
-      ["predecessors", "Phụ thuộc vào"],
-      ["successors", "Ảnh hưởng trực tiếp đến"]
-    ].forEach(([key, label]) => {
-      const group = node("section", null, "work-dependency-group");
-      group.appendChild(node("h4", label));
-      const links = model.dependencies[key] || [];
-      if (!links.length) group.appendChild(node("p", "Không có mối liên hệ trực tiếp được hỗ trợ.", "muted"));
-      links.forEach(link => renderWorkDetailField(group, link.kind + " · " + link.id, link.name));
-      relationships.appendChild(group);
-    });
-    panel.appendChild(relationships);
+    if (model.kind === "DeliveryCard" && model.dependencies) {
+      const relationships = node("details", null, "work-inspector-dependencies");
+      relationships.appendChild(node("summary", "Phụ thuộc trực tiếp"));
+      [
+        ["predecessors", "Phụ thuộc vào"],
+        ["successors", "Ảnh hưởng trực tiếp đến"]
+      ].forEach(([key, label]) => {
+        const group = node("section", null, "work-dependency-group");
+        group.appendChild(node("h4", label));
+        const links = model.dependencies[key] || [];
+        if (!links.length) group.appendChild(node("p", "Không có mối liên hệ trực tiếp được hỗ trợ.", "muted"));
+        links.forEach(link => renderWorkDetailField(group, link.kind + " · " + link.id, link.name));
+        relationships.appendChild(group);
+      });
+      panel.appendChild(relationships);
+    }
 
     const provenance = node("details", null, "work-inspector-provenance");
     provenance.appendChild(node("summary", "Nguồn và căn cứ"));
