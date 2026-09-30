@@ -1138,6 +1138,32 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .work-kanban-secondary-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 10px; }
 .work-kanban-secondary > .work-kanban-group { margin-left: 18px; }
 .work-kanban-group-unrecorded { border-style: dashed; background: #f7f8f7; }
+.work-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 340px); align-items: start; gap: 14px; min-width: 0; }
+.work-main { min-width: 0; }
+.work-list-row, .work-kanban-card { box-sizing: border-box; width: 100%; text-align: left; font: inherit; cursor: pointer; }
+.work-list-row:hover, .work-kanban-card:hover { border-color: #8eb9a9; background: #f4faf6; }
+.work-list-row:focus-visible, .work-kanban-card:focus-visible, .work-inspector-close:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+.work-inspector { position: sticky; top: 12px; display: grid; gap: 13px; min-width: 0; max-height: 76vh; overflow: auto; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 8px 22px rgba(32, 58, 48, .07); }
+.work-inspector > p, .work-inspector h3, .work-inspector h4 { margin: 0; }
+.work-inspector > p.muted { font-size: 12px; line-height: 1.55; }
+.work-inspector-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+.work-inspector-heading h3 { margin-top: 4px; color: var(--text); font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
+.work-inspector-heading .eyebrow { margin: 0; }
+.work-inspector-close { flex: 0 0 auto; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--text); font-size: 19px; cursor: pointer; }
+.work-inspector-primary, .work-inspector-actual, .work-inspector-attention, .work-dependency-group { display: grid; gap: 9px; }
+.work-inspector-primary h4, .work-inspector-actual h4, .work-inspector-attention h4, .work-dependency-group h4 { color: var(--accent-strong); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.work-detail-field { display: grid; gap: 3px; min-width: 0; }
+.work-detail-label { color: var(--muted); font-size: 10px; }
+.work-detail-value { color: var(--text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.work-inspector-dependencies, .work-inspector-provenance { padding-top: 10px; border-top: 1px solid var(--line); }
+.work-inspector-dependencies > summary, .work-inspector-provenance > summary { color: var(--accent-strong); cursor: pointer; font-size: 11px; font-weight: 750; }
+.work-inspector-dependencies[open], .work-inspector-provenance[open] { display: grid; gap: 12px; }
+.work-dependency-group { padding-top: 8px; }
+.work-dependency-group > .muted, .work-provenance-item > .muted { margin: 0; color: var(--muted); font-size: 11px; }
+.work-provenance-item { display: grid; gap: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: #f8faf8; }
+.work-selection-hidden { margin: 0; padding: 9px 11px; border-left: 3px solid #b47a27; background: #fff8ea; color: #5e4b2b; font-size: 11px; line-height: 1.5; }
+.work-selection-open, .work-gantt-navigation, .gantt-open-in-work { justify-self: start; }
+.gantt-selection-status { margin: 10px 0; padding: 9px 12px; border-left: 3px solid #b47a27; background: #fff8ea; color: #5e4b2b; font-size: 12px; line-height: 1.5; }
 .advanced-navigation { margin-top: 10px; border-top: 1px solid #e2eae5; }
 .advanced-navigation > summary { display: flex; align-items: center; gap: 10px; padding: 11px 2px 2px; color: #334b50; cursor: pointer; font-size: 12px; font-weight: 750; }
 .advanced-navigation > summary span { color: #76888b; font-size: 10px; font-weight: 450; }
@@ -1177,6 +1203,8 @@ body.is-unloaded #execution-panel { display: none; }
 }
 
 @media (max-width: 760px) {
+  .work-workspace { grid-template-columns: minmax(0, 1fr); }
+  .work-inspector { position: static; max-height: none; }
   .work-list-columns { display: none; }
   .work-list-row { grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 11px 8px; }
   .work-cell-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; color: var(--muted); font-size: 10px; }

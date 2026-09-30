@@ -21,7 +21,8 @@
       criticalPath: false,
       structureMode: false,
       columns: { state: true, plannedEffort: true, recordedPercent: true, owner: false, attention: false },
-      selectedRowKey: null
+      selectedRowKey: null,
+      detailsOpen: false
     };
   }
 
@@ -36,6 +37,13 @@
       focusedPhaseId: null,
       expandedPhaseIds: new Set(),
       expandedWorkPackageIds: new Set(),
+      selectedItemKey: null,
+      inspectorOpen: false,
+      focusReturnKey: null,
+      revealSelectedKey: null,
+      scrollPositions: { list: null, kanban: null },
+      renderedCriteria: { list: null, kanban: null },
+      lastRenderedMode: null,
       snapshotId: null,
       focusInitialized: false
     };
@@ -43,7 +51,7 @@
 
   const GANTT_ROW_HEIGHT = 44;
 
-  const state = { project: null, sources: [], sourceExecution: null, views: null, officialWorkProjection: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, activeViewsClassification: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", gantt: createGanttState(), work: createWorkState() };
+  const state = { project: null, sources: [], sourceExecution: null, views: null, officialWorkProjection: null, officialDependencyNetwork: null, officialWbsRoot: null, officialMilestones: null, managementControl: null, warnings: [], manifest: null, officialManifest: null, activeViewsClassification: null, latestAttempt: null, activeProposal: null, xlsxPreview: null, activeView: "overview", lastRenderedView: null, gantt: createGanttState(), work: createWorkState() };
   const byId = (id) => document.getElementById(id);
   const sourcePreferenceKeys = Object.freeze({
     repositoryRoot: "pmc.source.repositoryRoot",
@@ -131,7 +139,10 @@
     if (!response.ok) {
       const message = payload && payload.message ? payload.message : String(payload);
       const diagnostics = payload && payload.diagnostics ? payload.diagnostics.map(item => item.code + ": " + item.message).join("\n") : "";
-      throw new Error(diagnostics ? message + "\n" + diagnostics : message);
+      const error = new Error(diagnostics ? message + "\n" + diagnostics : message);
+      error.status = response.status;
+      error.code = payload && payload.code || null;
+      throw error;
     }
     return payload;
   }
@@ -577,12 +588,179 @@
     return state.officialWorkProjection;
   }
 
+  function applyOfficialWorkSnapshot(snapshot, manifest) {
+    const payload = snapshot && snapshot.snapshot || snapshot;
+    const views = payload && payload.views || null;
+    const metadata = manifest && manifest.metadata || payload && payload.metadata || {};
+    const snapshotId = metadata.snapshotId || null;
+    if (state.work.snapshotId !== snapshotId) {
+      state.work.selectedItemKey = null;
+      state.work.inspectorOpen = false;
+      state.work.focusReturnKey = null;
+      state.work.revealSelectedKey = null;
+      state.work.focusedPhaseId = null;
+      state.work.focusInitialized = false;
+    }
+    state.work.snapshotId = snapshotId;
+    state.officialWorkProjection = views && views.work || null;
+    state.officialDependencyNetwork = views && views.dependencyNetwork || null;
+    state.officialWbsRoot = views && views.wbs && views.wbs.root || null;
+    state.officialMilestones = views && views.gantt && views.gantt.milestones || [];
+    state.officialManifest = manifest || null;
+    return Boolean(state.officialWorkProjection);
+  }
+
+  function workCriteriaFingerprint() {
+    const scope = state.work.phaseScope || { kind: "all", phaseId: null };
+    return JSON.stringify({
+      phaseScope: { kind: scope.kind || "all", phaseId: scope.kind === "phase" ? scope.phaseId || null : null },
+      query: normalizeWorkSearchValue(state.work.query).trim(),
+      authoredStateFilter: String(state.work.authoredStateFilter || "ALL").toUpperCase(),
+      needsAttentionOnly: Boolean(state.work.needsAttentionOnly),
+      includeUnrecorded: state.work.includeUnrecorded !== false
+    });
+  }
+
+  function workScrollPlan(saved, criteria, selectedMatches) {
+    if (saved && saved.criteria === criteria && Number.isFinite(saved.top)) return { kind: "restore", top: saved.top };
+    if (selectedMatches) return { kind: "reveal" };
+    return { kind: "start" };
+  }
+
+  function rememberWorkScroll(mode, criteria, top) {
+    if ((mode !== "list" && mode !== "kanban") || !Number.isFinite(top)) return;
+    state.work.scrollPositions[mode] = { criteria, top: Math.max(0, top) };
+  }
+
+  function captureWorkModeScroll() {
+    if (state.lastRenderedView !== "work") return;
+    const mode = state.work.lastRenderedMode;
+    const criteria = mode && state.work.renderedCriteria[mode];
+    if (!criteria) return;
+    const top = Number.isFinite(window.scrollY) ? window.scrollY
+      : document.documentElement && document.documentElement.scrollTop || document.body && document.body.scrollTop || 0;
+    rememberWorkScroll(mode, criteria, top);
+  }
+
+  function openWorkAncestors(element) {
+    let ancestor = element && element.parentElement;
+    while (ancestor) {
+      if (ancestor.tagName === "DETAILS" && !ancestor.open) {
+        ancestor.open = true;
+        if (ancestor.dataset.workPhaseId) state.work.expandedPhaseIds.add(ancestor.dataset.workPhaseId);
+        if (ancestor.dataset.workPackageId) state.work.expandedWorkPackageIds.add(ancestor.dataset.workPackageId);
+      }
+      ancestor = ancestor.parentElement;
+    }
+  }
+
+  function revealWorkItem(key) {
+    if (!key) return false;
+    const item = Array.from(document.querySelectorAll("[data-work-key]")).find(candidate => candidate.dataset.workKey === key);
+    if (!item) return false;
+    openWorkAncestors(item);
+    if (typeof item.scrollIntoView === "function") item.scrollIntoView({ block: "nearest", behavior: "auto" });
+    return true;
+  }
+
+  function restoreWorkModeScroll(work) {
+    if (!work) return;
+    const mode = state.work.mode === "kanban" ? "kanban" : "list";
+    const criteria = workCriteriaFingerprint();
+    const saved = state.work.scrollPositions[mode];
+    const selectedMatches = Boolean(state.work.selectedItemKey
+      && filterWorkEntries(work).some(entry => entry.identity === state.work.selectedItemKey));
+    const plan = state.work.revealSelectedKey
+      ? { kind: selectedMatches ? "reveal" : "start" }
+      : workScrollPlan(saved, criteria, selectedMatches);
+    if (plan.kind === "restore" && typeof window.scrollTo === "function") {
+      window.scrollTo(0, plan.top);
+    } else if (plan.kind === "reveal") {
+      if (!revealWorkItem(state.work.selectedItemKey)) {
+        const heading = byId("work-view-heading");
+        if (heading && typeof heading.scrollIntoView === "function") heading.scrollIntoView({ block: "start", behavior: "auto" });
+      }
+    } else {
+      const heading = byId("work-view-heading");
+      if (heading && typeof heading.scrollIntoView === "function") heading.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+    state.work.revealSelectedKey = null;
+    state.work.renderedCriteria[mode] = criteria;
+    state.work.lastRenderedMode = mode;
+    const actualTop = Number.isFinite(window.scrollY) ? window.scrollY : plan.kind === "restore" ? plan.top : 0;
+    rememberWorkScroll(mode, criteria, actualTop);
+  }
+
+  function chooseWorkFocusReturn(invokerKey, enabledRenderedKeys, fallbackId) {
+    if (invokerKey && Array.isArray(enabledRenderedKeys) && enabledRenderedKeys.includes(invokerKey)) {
+      return { kind: "item", key: invokerKey };
+    }
+    return fallbackId ? { kind: "control", id: fallbackId } : { kind: "none" };
+  }
+
+  function restoreWorkFocusReturn() {
+    const buttons = Array.from(document.querySelectorAll("[data-work-key]"));
+    const enabledKeys = buttons.filter(button => !button.disabled && !button.closest("details:not([open])"))
+      .map(button => button.dataset.workKey);
+    const fallbackId = String(state.work.query || "").trim() ? "work-search"
+      : state.work.phaseScope && state.work.phaseScope.kind === "phase" ? "work-phase-scope" : "work-view-heading";
+    const choice = chooseWorkFocusReturn(state.work.focusReturnKey, enabledKeys, fallbackId);
+    const target = choice.kind === "item"
+      ? buttons.find(button => button.dataset.workKey === choice.key && !button.disabled && !button.closest("details:not([open])"))
+      : choice.kind === "control" ? byId(choice.id) : null;
+    if (target && typeof target.focus === "function") target.focus();
+  }
+
+  function prepareWorkToGantt(key) {
+    const identity = workItemKeyParts(key || state.work.selectedItemKey);
+    if (!identity) return null;
+    const typedIdentity = typedKey(identity.kind, identity.id);
+    state.gantt.selectedRowKey = typedIdentity;
+    state.gantt.detailsOpen = Boolean(state.work.inspectorOpen);
+    state.work.revealSelectedKey = typedIdentity;
+    const root = state.views && state.views.wbs && state.views.wbs.root;
+    const gantt = state.views && state.views.gantt;
+    if (root && gantt) {
+      const model = buildGanttRows(root, gantt, state.project && state.project.baseline || {});
+      let row = model.byKey.get(typedIdentity) || null;
+      while (row) {
+        if (row.isSummary) state.gantt.expandedKeys.add(row.key);
+        row = row.parentKey ? model.byKey.get(row.parentKey) : null;
+      }
+    }
+    return typedIdentity;
+  }
+
+  function prepareGanttToWork(key, detailsOpen) {
+    const identity = workItemKeyParts(key);
+    if (!identity) return null;
+    const typedIdentity = typedKey(identity.kind, identity.id);
+    state.work.selectedItemKey = typedIdentity;
+    state.work.inspectorOpen = Boolean(detailsOpen);
+    state.work.focusReturnKey = null;
+    state.work.revealSelectedKey = typedIdentity;
+    return typedIdentity;
+  }
+
+  function revealGanttItem(key) {
+    if (!key) return false;
+    const item = Array.from(document.querySelectorAll("[data-gantt-select]")).find(candidate => candidate.dataset.ganttSelect === key);
+    if (!item) return false;
+    if (typeof item.scrollIntoView === "function") item.scrollIntoView({ block: "nearest", behavior: "auto" });
+    if (typeof item.focus === "function") item.focus();
+    return true;
+  }
+
   function initializeWorkFocus(work) {
     if (!work) return;
     const metadata = state.officialManifest && state.officialManifest.metadata || {};
-    const snapshotId = metadata.snapshotId || metadata.sourceIdentity || "";
+    const snapshotId = metadata.snapshotId || null;
     if (state.work.snapshotId !== snapshotId) {
-      state.work = createWorkState();
+      state.work.selectedItemKey = null;
+      state.work.inspectorOpen = false;
+      state.work.focusReturnKey = null;
+      state.work.focusedPhaseId = null;
+      state.work.focusInitialized = false;
       state.work.snapshotId = snapshotId;
     }
     if (state.work.focusInitialized) return;
@@ -613,7 +791,10 @@
     const section = node("section", null, "work-entry");
     const heading = node("header", null, "work-entry-heading");
     heading.appendChild(node("p", "CÔNG VIỆC", "eyebrow"));
-    heading.appendChild(node("h2", "Công việc"));
+    const title = node("h2", "Công việc");
+    title.id = "work-view-heading";
+    title.tabIndex = -1;
+    heading.appendChild(title);
     section.appendChild(heading);
     if (!work) {
       section.appendChild(node("p", "Công việc chỉ hiển thị từ snapshot commit chính thức. Bản xem trước không thay thế dữ liệu chính thức.", "work-entry-note"));
@@ -643,8 +824,330 @@
     const scopedCards = filterWorkEntries(work).map(entry => entry.card);
     const attentionSummary = renderWorkAttentionSummary(scopedCards);
     if (attentionSummary) section.appendChild(attentionSummary);
-    section.appendChild(state.work.mode === "kanban" ? renderWorkKanban(work) : renderWorkList(work));
+    const workspace = node("div", null, "work-workspace");
+    const main = node("div", null, "work-main");
+    main.appendChild(state.work.mode === "kanban" ? renderWorkKanban(work) : renderWorkList(work));
+    workspace.appendChild(main);
+    const inspectorModel = state.work.inspectorOpen && state.work.selectedItemKey
+      ? buildWorkInspectorModel(state.work.selectedItemKey, work, officialWorkInspectorViews())
+      : null;
+    workspace.appendChild(renderWorkInspector(inspectorModel));
+    section.addEventListener("keydown", event => {
+      if (event.key !== "Escape" || !state.work.inspectorOpen) return;
+      event.preventDefault();
+      closeWorkInspector();
+    });
+    section.appendChild(workspace);
+    const selectedIdentity = state.work.selectedItemKey;
+    if (selectedIdentity && !filterWorkEntries(work).some(entry => entry.identity === selectedIdentity)) {
+      const selected = buildWorkInspectorModel(selectedIdentity, work, officialWorkInspectorViews());
+      const hidden = node("div", null, "work-selection-hidden");
+      hidden.setAttribute("role", "status");
+      hidden.appendChild(document.createTextNode((selected && selected.name || selectedIdentity) + " đang được chọn nhưng không thuộc phạm vi/kết quả hiện tại. Bộ lọc không bị thay đổi. "));
+      if (!state.work.inspectorOpen) {
+        const openDetails = node("button", "Mở chi tiết", "text-action work-selection-open");
+        openDetails.type = "button";
+        openDetails.addEventListener("click", () => {
+          state.work.inspectorOpen = true;
+          renderActiveView();
+          const inspectorHeading = byId("work-inspector-heading");
+          if (inspectorHeading) inspectorHeading.focus();
+        });
+        hidden.appendChild(openDetails);
+      }
+      section.insertBefore(hidden, workspace);
+    }
     return section;
+  }
+
+  function officialWorkInspectorViews() {
+    return {
+      dependencyNetwork: state.officialDependencyNetwork,
+      wbs: { root: state.officialWbsRoot },
+      gantt: { milestones: state.officialMilestones || [] }
+    };
+  }
+
+  function workItemKeyParts(value) {
+    if (value && typeof value === "object" && value.kind && value.id !== undefined && value.id !== null) {
+      return { kind: canonicalKind(value.kind), id: String(value.id) };
+    }
+    const identity = String(value || "");
+    const separator = identity.indexOf(":");
+    if (separator <= 0 || separator === identity.length - 1) return null;
+    return { kind: canonicalKind(identity.slice(0, separator)), id: identity.slice(separator + 1) };
+  }
+
+  function findWorkWbsNode(root, key) {
+    if (!root || !key) return null;
+    if (canonicalKind(root.kind) === key.kind && String(root.id || "") === key.id) return root;
+    for (const child of root.children || []) {
+      const match = findWorkWbsNode(child, key);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  function buildWorkDependencyLinks(selectedKey, network) {
+    const links = { predecessors: [], successors: [] };
+    if (!selectedKey || !network) return links;
+    const nodeByKey = new Map((network.nodes || []).map(item => [
+      item.key || typedKey(item.kind, item.id), item
+    ]));
+    (network.edges || []).forEach(edge => {
+      if (!edge || edge.includedInAnalysis !== true) return;
+      const subjectKey = edge.subjectKey || typedKey(edge.subjectKind, edge.subjectId);
+      const predecessorKey = edge.predecessorKey || typedKey(edge.predecessorKind, edge.predecessorId);
+      const isPredecessor = subjectKey === selectedKey;
+      const isSuccessor = predecessorKey === selectedKey;
+      if (!isPredecessor && !isSuccessor) return;
+      const linkedKey = isPredecessor ? predecessorKey : subjectKey;
+      const linkedNode = nodeByKey.get(linkedKey);
+      if (!linkedNode || !linkedNode.name) return;
+      const target = {
+        key: linkedKey,
+        kind: canonicalKind(linkedNode.kind),
+        id: String(linkedNode.id || ""),
+        name: linkedNode.name,
+        dependencyType: edge.dependencyType || null
+      };
+      (isPredecessor ? links.predecessors : links.successors).push(target);
+    });
+    [links.predecessors, links.successors].forEach(items => items.sort((left, right) =>
+      compareOrdinalWorkIds(left.kind, right.kind) || compareOrdinalWorkIds(left.id, right.id)));
+    return links;
+  }
+
+  function buildWorkInspectorModel(selectionKey, work, views) {
+    const identity = workItemKeyParts(selectionKey);
+    if (!identity) return null;
+    const key = typedKey(identity.kind, identity.id);
+    const dependencyNetwork = views && views.dependencyNetwork;
+    const dependencies = buildWorkDependencyLinks(key, dependencyNetwork);
+    if (identity.kind === "DeliveryCard") {
+      const card = (work && work.cards || []).find(item => item && item.key
+        && typedKey(item.key.kind, item.key.id) === key);
+      if (!card) return null;
+      const phase = (work.phases || []).find(item => item && item.id === card.phaseId) || null;
+      const workPackage = (work.workPackages || []).find(item => item && item.id === card.workPackageId) || null;
+      return {
+        key: { kind: identity.kind, id: identity.id },
+        identity: key,
+        kind: "DeliveryCard",
+        id: identity.id,
+        name: card.name || identity.id,
+        phase,
+        workPackage,
+        planned: {
+          start: card.plannedStart ?? null,
+          finish: card.plannedFinish ?? null,
+          effortHours: card.plannedEffortHours ?? null,
+          effortState: card.plannedEffortState || null
+        },
+        execution: card.execution || { recorded: false, state: null },
+        roles: Array.isArray(card.roles) ? card.roles : [],
+        attention: Array.isArray(card.attention) ? card.attention : [],
+        sourceReferences: Array.isArray(card.sourceReferences) ? card.sourceReferences : [],
+        dependencies
+      };
+    }
+
+    const root = views && views.wbs && views.wbs.root;
+    const wbsNode = findWorkWbsNode(root, identity);
+    if (!wbsNode) return null;
+    const milestone = identity.kind === "Milestone"
+      ? (views && views.gantt && views.gantt.milestones || []).find(item => item && String(item.milestoneId || "") === identity.id)
+      : null;
+    return {
+      key: { kind: identity.kind, id: identity.id },
+      identity: key,
+      kind: identity.kind,
+      id: identity.id,
+      name: wbsNode.name || identity.id,
+      parentId: wbsNode.parentId || null,
+      phaseId: wbsNode.phaseId || (identity.kind === "Phase" ? identity.id : null),
+      milestoneKind: milestone && milestone.kind || null,
+      planned: {
+        start: wbsNode.plannedStart ?? null,
+        finish: wbsNode.plannedFinish ?? null,
+        effortHours: wbsNode.plannedEffortHours ?? null,
+        effortState: null
+      },
+      sourceReferences: Array.isArray(wbsNode.sourceReferences) ? wbsNode.sourceReferences : [],
+      dependencies
+    };
+  }
+
+  function workDataStateLabel(value) {
+    const labels = {
+      KNOWN: "Đã xác định",
+      UNKNOWN: "Chưa xác định",
+      INVALID: "Không hợp lệ",
+      BLOCKED: "Bị chặn",
+      UNRESOLVED: "Chưa phân giải",
+      NOT_RUN: "Chưa chạy"
+    };
+    return labels[String(value || "").toUpperCase()] || "Chưa ghi nhận";
+  }
+
+  function workExecutionStateLabel(value) {
+    const labels = {
+      NOT_STARTED: "Chưa bắt đầu",
+      IN_PROGRESS: "Đang làm",
+      COMPLETED: "Hoàn thành",
+      SUSPENDED: "Tạm dừng",
+      CANCELLED: "Đã hủy"
+    };
+    return labels[String(value || "").toUpperCase()] || (value ? workDataStateLabel(value) : "Chưa ghi nhận");
+  }
+
+  function workInspectorKindLabel(model) {
+    if (!model || model.kind !== "Milestone") return model && model.kind || "Mục";
+    const kind = String(model.milestoneKind || "").toUpperCase();
+    return kind === "DECISION" || kind === "DECISION_GATE" ? "Điểm quyết định" : "Mốc tiến độ";
+  }
+
+  function workDetailValue(value, stateName, recorded, unit) {
+    if (recorded === false) return "Chưa ghi nhận";
+    if (value !== null && value !== undefined) {
+      const suffix = unit || "";
+      return typeof value === "number" ? displayOptionalNumber(value, suffix) : String(value);
+    }
+    return stateName ? workDataStateLabel(stateName) : "Chưa có giá trị";
+  }
+
+  function renderWorkDetailField(parent, label, value) {
+    const field = node("div", null, "work-detail-field");
+    field.appendChild(node("span", label, "work-detail-label"));
+    field.appendChild(node("strong", value === null || value === undefined || value === "" ? "Chưa ghi nhận" : value, "work-detail-value"));
+    parent.appendChild(field);
+    return field;
+  }
+
+  function renderWorkInspector(model) {
+    const panel = node("aside", null, "work-inspector");
+    panel.setAttribute("aria-label", "Chi tiết công việc");
+    if (!model) {
+      panel.appendChild(node("p", "CHI TIẾT", "eyebrow"));
+      const selectedIdentity = state.work.inspectorOpen && state.work.selectedItemKey;
+      panel.appendChild(node("h3", selectedIdentity ? "Không có chi tiết trong nguồn công việc chính thức" : "Chọn một mục để xem"));
+      panel.appendChild(node("p", selectedIdentity
+        ? "Mục " + selectedIdentity + " không có trong dữ liệu chính thức hiện tại; bản xem trước không được dùng thay thế."
+        : "Thông tin sẽ chỉ hiển thị những gì có trong nguồn đã nhập.", "muted"));
+      return panel;
+    }
+
+    const heading = node("header", null, "work-inspector-heading");
+    const copy = node("div");
+    copy.appendChild(node("p", model.kind + " · " + model.id, "eyebrow"));
+    const title = node("h3", model.name);
+    title.tabIndex = -1;
+    title.id = "work-inspector-heading";
+    copy.appendChild(title);
+    heading.appendChild(copy);
+    const close = node("button", "×", "work-inspector-close");
+    close.type = "button";
+    close.setAttribute("aria-label", "Đóng chi tiết");
+    close.addEventListener("click", () => closeWorkInspector());
+    heading.appendChild(close);
+    panel.appendChild(heading);
+
+    const primary = node("section", null, "work-inspector-primary");
+    primary.appendChild(node("h4", model.kind === "DeliveryCard" ? "Công việc" : "Thông tin hiện có"));
+    renderWorkDetailField(primary, "Loại", workInspectorKindLabel(model));
+    renderWorkDetailField(primary, "Mã", model.id);
+    if (model.phase) renderWorkDetailField(primary, "Giai đoạn", model.phase.name || model.phase.id);
+    else if (model.phaseId) renderWorkDetailField(primary, "Giai đoạn", model.phaseId);
+    if (model.workPackage) renderWorkDetailField(primary, "Gói công việc", model.workPackage.name || model.workPackage.id);
+    else if (model.kind === "WorkPackage") renderWorkDetailField(primary, "Gói công việc", model.name);
+    if (model.planned.start) renderWorkDetailField(primary, "Bắt đầu kế hoạch", formatDate(model.planned.start));
+    if (model.planned.finish) renderWorkDetailField(primary, model.kind === "Milestone" ? "Ngày kế hoạch" : "Kết thúc kế hoạch", formatDate(model.planned.finish));
+    if (model.kind === "DeliveryCard") {
+      renderWorkDetailField(primary, "Nỗ lực kế hoạch", workDetailValue(model.planned.effortHours, model.planned.effortState, true, " giờ"));
+      const roles = model.roles.map(role => role.person ? role.label + " · " + role.person : role.label).filter(Boolean);
+      renderWorkDetailField(primary, "Đầu mối / vai trò", roles.length ? roles.join(", ") : "Chưa ghi nhận");
+      renderWorkDetailField(primary, "Trạng thái thực hiện", workExecutionStateLabel(model.execution.state));
+      renderWorkDetailField(primary, "Kết quả", model.execution.resultState ? workDataStateLabel(model.execution.resultState) : "Chưa ghi nhận");
+      const actual = node("section", null, "work-inspector-actual");
+      actual.appendChild(node("h4", "Thực tế đã ghi nhận"));
+      renderWorkDetailField(actual, "Bắt đầu thực tế", workDetailValue(model.execution.actualStart, null, model.execution.recorded, ""));
+      renderWorkDetailField(actual, "Kết thúc thực tế", workDetailValue(model.execution.actualFinish, null, model.execution.recorded, ""));
+      renderWorkDetailField(actual, "Nỗ lực thực tế", workDetailValue(model.execution.actualEffortHours, null, model.execution.recorded, " giờ"));
+      renderWorkDetailField(actual, "Nỗ lực còn lại", workDetailValue(model.execution.remainingEffortHours, null, model.execution.recorded, " giờ"));
+      panel.appendChild(primary);
+      panel.appendChild(actual);
+      if (model.attention.length) {
+        const attention = node("section", null, "work-inspector-attention");
+        attention.appendChild(node("h4", "Cần chú ý"));
+        model.attention.forEach(item => renderWorkDetailField(attention, "Tín hiệu", item.consequence));
+        panel.appendChild(attention);
+      }
+    } else {
+      if (model.planned.effortHours !== null && model.planned.effortHours !== undefined) {
+        renderWorkDetailField(primary, "Nỗ lực kế hoạch", workDetailValue(model.planned.effortHours, model.planned.effortState, true, " giờ"));
+      }
+      panel.appendChild(primary);
+    }
+
+    const relationships = node("details", null, "work-inspector-dependencies");
+    relationships.appendChild(node("summary", "Phụ thuộc trực tiếp"));
+    [
+      ["predecessors", "Phụ thuộc vào"],
+      ["successors", "Ảnh hưởng trực tiếp đến"]
+    ].forEach(([key, label]) => {
+      const group = node("section", null, "work-dependency-group");
+      group.appendChild(node("h4", label));
+      const links = model.dependencies[key] || [];
+      if (!links.length) group.appendChild(node("p", "Không có mối liên hệ trực tiếp được hỗ trợ.", "muted"));
+      links.forEach(link => renderWorkDetailField(group, link.kind + " · " + link.id, link.name));
+      relationships.appendChild(group);
+    });
+    panel.appendChild(relationships);
+
+    const provenance = node("details", null, "work-inspector-provenance");
+    provenance.appendChild(node("summary", "Nguồn và căn cứ"));
+    const references = model.sourceReferences || [];
+    if (!references.length) provenance.appendChild(node("p", "Nguồn chi tiết chưa được ghi nhận cho mục này.", "muted"));
+    references.forEach(reference => {
+      const item = node("article", null, "work-provenance-item");
+      item.appendChild(node("strong", reference.sourceId || "Nguồn"));
+      renderWorkDetailField(item, "Tệp", displaySourceFile(reference.relativeFile || reference.relativePath));
+      renderWorkDetailField(item, "Mục", reference.section || reference.table || reference.item || "Chưa ghi nhận");
+      provenance.appendChild(item);
+    });
+    panel.appendChild(provenance);
+    const ganttNavigation = node("button", "Xem trên Gantt", "secondary work-gantt-navigation");
+    ganttNavigation.type = "button";
+    ganttNavigation.dataset.workAction = "show-gantt";
+    ganttNavigation.addEventListener("click", () => {
+      const identity = prepareWorkToGantt(model.identity);
+      if (!identity) return;
+      activateView("gantt");
+      if (!revealGanttItem(identity)) {
+        const focusTarget = byId("gantt-selection-status") || byId("gantt-view-heading");
+        if (focusTarget) focusTarget.focus();
+      }
+    });
+    panel.appendChild(ganttNavigation);
+    return panel;
+  }
+
+  function closeWorkInspector() {
+    state.work.inspectorOpen = false;
+    renderActiveView();
+    restoreWorkFocusReturn();
+  }
+
+  function selectWorkItem(key) {
+    const identity = workItemKeyParts(key);
+    if (!identity) return;
+    const typedIdentity = typedKey(identity.kind, identity.id);
+    state.work.selectedItemKey = typedIdentity;
+    state.work.focusReturnKey = typedIdentity;
+    state.work.inspectorOpen = true;
+    renderActiveView();
+    const heading = byId("work-inspector-heading");
+    if (heading) heading.focus();
   }
 
   function renderWorkPhaseScopeControl(work) {
@@ -964,9 +1467,13 @@
   }
 
   function renderWorkKanbanCard(card, work) {
-    const item = node("article", null, "work-kanban-card");
+    const item = node("button", null, "work-kanban-card");
+    item.type = "button";
     item.dataset.workKind = card.key.kind;
     item.dataset.workId = card.key.id;
+    item.dataset.workKey = typedKey(card.key.kind, card.key.id);
+    item.setAttribute("aria-pressed", String(state.work.selectedItemKey === item.dataset.workKey));
+    item.addEventListener("click", () => selectWorkItem(item.dataset.workKey));
     const phase = (Array.isArray(work.phases) ? work.phases : []).find(candidate => candidate && candidate.id === card.phaseId);
     item.appendChild(node("span", phase && phase.name ? phase.name : "Giai đoạn chưa có tên", "work-kanban-card-phase"));
     item.appendChild(node("strong", card.name || "Công việc chưa có tên", "work-kanban-card-name"));
@@ -1136,9 +1643,13 @@
   }
 
   function renderWorkCard(card) {
-    const row = node("article", null, "work-list-row");
+    const row = node("button", null, "work-list-row");
+    row.type = "button";
     row.dataset.workKind = card.key.kind;
     row.dataset.workId = card.key.id;
+    row.dataset.workKey = typedKey(card.key.kind, card.key.id);
+    row.setAttribute("aria-pressed", String(state.work.selectedItemKey === row.dataset.workKey));
+    row.addEventListener("click", () => selectWorkItem(row.dataset.workKey));
     const identity = node("div", null, "work-card-identity");
     identity.appendChild(node("strong", card.name || "Công việc chưa có tên", "work-card-name"));
     const stableId = node("span", card.key.id, "work-card-id");
@@ -1176,6 +1687,7 @@
       const projectId = state.project && state.project.project && state.project.project.id || state.project && state.project.id || "project";
       prepareGanttState(projectId);
       state.gantt.selectedRowKey = key || null;
+      state.gantt.detailsOpen = Boolean(key);
       state.gantt.attentionOnly = Boolean(attention);
       if (attention) state.gantt.preset = "attention";
       if (key && state.views && state.views.wbs && state.views.gantt) {
@@ -2455,6 +2967,7 @@
   function applyGanttPreset(preset) {
     state.gantt.preset = preset;
     state.gantt.selectedRowKey = null;
+    state.gantt.detailsOpen = false;
     state.gantt.phaseFilter = "ALL";
     state.gantt.executionFilter = "ALL";
     state.gantt.attentionOnly = false;
@@ -2773,6 +3286,12 @@
     appendDetailField(summary, "Primary owner", row.primaryOwner ? row.primaryOwner.code : "Unassigned");
     panel.appendChild(summary);
 
+    const openInWork = node("button", "Mở trong Công việc", "secondary gantt-open-in-work");
+    openInWork.type = "button";
+    openInWork.dataset.ganttAction = "open-in-work";
+    openInWork.dataset.ganttKey = row.key;
+    panel.appendChild(openInWork);
+
     const dependencies = node("section", null, "gantt-drawer-section gantt-dependency-section");
     dependencies.appendChild(node("span", "DEPENDENCY IMPACT", "eyebrow"));
     dependencies.appendChild(node("h4", "Dependency impact"));
@@ -2940,6 +3459,7 @@
     const selectedCanonical = model.byKey.get(state.gantt.selectedRowKey) || null;
     const selectedRow = presentation.byKey.get(state.gantt.selectedRowKey)
       || (selectedCanonical ? ManagementPresentationRow(selectedCanonical, selectedCanonical.parentKey, selectedCanonical.childKeys, selectedCanonical.depth) : null);
+    const selectedRowVisible = Boolean(selectedRow && visibleRows.some(row => row.key === selectedRow.key));
     const impact = dependencyImpact(state.gantt.selectedRowKey, dependencyView);
     const relatedKeys = new Set([
       ...impact.directUpstreamKeys,
@@ -2953,7 +3473,10 @@
     const contextBar = node("div", null, "gantt-context-bar");
     const contextIdentity = node("div", null, "gantt-context-identity");
     contextIdentity.appendChild(node("p", "PROJECT SCHEDULE", "eyebrow"));
-    contextIdentity.appendChild(node("h2", normalizeDisplayTitle(summary && summary.project && summary.project.name, projectId || "Project")));
+    const ganttHeading = node("h2", normalizeDisplayTitle(summary && summary.project && summary.project.name, projectId || "Project"));
+    ganttHeading.id = "gantt-view-heading";
+    ganttHeading.tabIndex = -1;
+    contextIdentity.appendChild(ganttHeading);
     contextIdentity.appendChild(node("p", "Baseline " + displayDate(baseline && baseline.planningStart) + " → " + displayDate(baseline && baseline.planningFinish), "muted"));
     contextBar.appendChild(contextIdentity);
     const contextMeta = node("div", null, "gantt-context-meta");
@@ -2962,6 +3485,16 @@
     contextBar.appendChild(contextMeta);
     shell.appendChild(contextBar);
     shell.appendChild(renderGanttToolbar(rows, visibleRows, range, analysis || {}));
+    if (state.gantt.selectedRowKey && (!selectedRow || !selectedRowVisible)) {
+      const selectionStatus = node("p", null, "gantt-selection-status");
+      selectionStatus.id = "gantt-selection-status";
+      selectionStatus.setAttribute("role", "status");
+      selectionStatus.tabIndex = -1;
+      selectionStatus.textContent = selectedRow
+        ? selectedRow.displayName + " đang bị ẩn bởi bộ lọc Gantt hiện tại. Hãy điều chỉnh bộ lọc để xem; bộ lọc không bị thay đổi."
+        : "Mục " + state.gantt.selectedRowKey + " không có trong lịch Gantt đang mở. Nguồn và bộ lọc không bị thay đổi.";
+      shell.appendChild(selectionStatus);
+    }
 
     const legend = node("div", null, "gantt-legend");
     [["gantt-plan-key", "PLAN · immutable baseline"], ["gantt-actual-key", "ACTUAL · recorded evidence"], ["gantt-alert-key", "ALERT · derived condition"], ["gantt-milestone-key", "Milestone · zero duration"]].forEach(([className, label]) => {
@@ -3036,9 +3569,9 @@
     contentGrid.appendChild(timeline);
     canvas.appendChild(contentGrid);
     scroll.appendChild(canvas);
-    const workspace = node("div", null, "gantt-workspace gantt-chart-frame" + (selectedRow ? " has-selection" : ""));
+    const workspace = node("div", null, "gantt-workspace gantt-chart-frame" + (selectedRow && state.gantt.detailsOpen ? " has-selection" : ""));
     workspace.appendChild(scroll);
-    const detailDrawer = renderGanttDetail(selectedRow, analysis || {}, dependencyView, cpmView);
+    const detailDrawer = state.gantt.detailsOpen ? renderGanttDetail(selectedRow, analysis || {}, dependencyView, cpmView) : null;
     if (detailDrawer) workspace.appendChild(detailDrawer);
     shell.appendChild(workspace);
 
@@ -3081,7 +3614,16 @@
           state.gantt.showDependencies = true;
         } else if (action === "plan-mode") {
           applyGanttPreset("plan");
+        } else if (action === "open-in-work") {
+          const identity = prepareGanttToWork(actionTarget.dataset.ganttKey || state.gantt.selectedRowKey, state.gantt.detailsOpen);
+          if (identity) {
+            activateView("work");
+            const focusTarget = state.work.inspectorOpen ? byId("work-inspector-heading") : byId("work-view-heading");
+            if (focusTarget) focusTarget.focus();
+          }
+          return;
         } else if (action === "close-details") {
+          state.gantt.detailsOpen = false;
           state.gantt.selectedRowKey = null;
           state.gantt.showDependencies = false;
           state.gantt.dependencyFocus = "both";
@@ -3104,6 +3646,7 @@
       }
       if (selectTarget) {
         state.gantt.selectedRowKey = selectTarget.dataset.ganttSelect || null;
+        state.gantt.detailsOpen = Boolean(state.gantt.selectedRowKey);
         state.gantt.showDependencies = true;
         state.gantt.dependencyFocus = "both";
         renderActiveView();
@@ -3133,6 +3676,7 @@
     });
     shell.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !state.gantt.selectedRowKey) return;
+      state.gantt.detailsOpen = false;
       state.gantt.selectedRowKey = null;
       state.gantt.showDependencies = false;
       state.gantt.dependencyFocus = "both";
@@ -3347,6 +3891,7 @@
   }
 
   function renderActiveView() {
+    captureWorkModeScroll();
     updateWorkspaceMode();
     updateActiveTab(state.activeView);
     const content = byId("view-content");
@@ -3354,10 +3899,12 @@
     if (state.xlsxPreview) {
       updateActiveTab(null);
       content.appendChild(renderXlsxPreviewSurface(state.xlsxPreview));
+      state.lastRenderedView = "xlsx-preview";
       return;
     }
     if (!state.views || !state.project) {
       content.appendChild(node("div", "Views will appear here after analysis.", "empty-state"));
+      state.lastRenderedView = state.activeView;
       return;
     }
     const view = state.activeView === "work" ? renderWorkEntry(activeWorkProjection()) :
@@ -3377,6 +3924,8 @@
       state.activeView === "dependencies" ? renderDependencies(state.views.dependencyNetwork) :
       renderCpm(state.views.cpm);
     content.appendChild(view);
+    if (state.activeView === "work") restoreWorkModeScroll(activeWorkProjection());
+    state.lastRenderedView = state.activeView;
   }
 
   function applySummary(summary) {
@@ -3427,8 +3976,7 @@
     state.activeViewsClassification = response.classification || "FAILED";
 
     if (response.classification === "OFFICIAL_COMMIT") {
-      state.officialWorkProjection = snapshot.views.work || null;
-      state.officialManifest = state.manifest;
+      applyOfficialWorkSnapshot(snapshot, state.manifest);
       state.activeView = "overview";
     }
     setExportAvailability();
@@ -3618,14 +4166,23 @@
 
   async function refresh() {
     try {
-      const views = await request("/api/views");
-      const project = await request("/api/project");
-      const warnings = await request("/api/warnings");
+      const officialSnapshotRequest = request("/api/manifest-import/official").catch(error => {
+        if (error && error.status === 404 && error.code === "NO_OFFICIAL_SNAPSHOT") return null;
+        throw error;
+      });
+      const [views, project, warnings, officialSnapshot] = await Promise.all([
+        request("/api/views"),
+        request("/api/project"),
+        request("/api/warnings"),
+        officialSnapshotRequest
+      ]);
       state.views = views;
       state.project = project;
       state.managementControl = views.managementControl;
       state.sources = project.sources || [];
       state.warnings = warnings;
+      applyOfficialWorkSnapshot(officialSnapshot, officialSnapshot);
+      setExportAvailability();
       renderActiveView();
       setStatus("Analysis refreshed.");
     } catch (error) {
