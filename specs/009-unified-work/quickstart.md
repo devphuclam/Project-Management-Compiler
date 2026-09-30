@@ -1,10 +1,10 @@
 # Implementation and Verification Quickstart: Unified Work
 
-This guide is for the later implementation stage. Feature 009 is currently at plan review; this file does not authorize coding. Use the existing local toolchain and repository scripts only. Do not install packages or copy the private IDEAEngineering checkout into fixtures.
+This guide supports the approved Feature 009 implementation. The current User Story 5 checkpoint covers responsive Work behavior and evidence-gated parity; the separate T028 final-verification task remains outside this checkpoint. Use the existing local toolchain and repository scripts only. Do not install packages or copy the private IDEAEngineering checkout into fixtures.
 
 ## Prerequisites
 
-- Start from the human-approved Feature 009 specification and this reviewed plan on its planning branch.
+- Start from the human-approved Feature 009 specification and implementation plan on the implementation branch.
 - Existing .NET 10 SDK/runtime and Git executable.
 - Existing browser and repository launcher `Run Project.cmd`.
 - Public-safe reduced fixture under `tests/fixtures/ideaengineering-real-shaped`; do not use private employee/company data.
@@ -12,7 +12,7 @@ This guide is for the later implementation stage. Feature 009 is currently at pl
 
 ## Test-first implementation checks
 
-Implement later in small vertical slices. For each slice, first add the smallest failing test through the existing deep seam, run it and confirm the expected red result, then implement the minimum behavior and rerun it. Do not create a separate JavaScript/package test stack.
+For each production slice, add the smallest failing test through the existing deep seam, confirm the expected red result, implement the minimum approved behavior, then rerun the focused tests. Do not create a separate JavaScript/package test stack.
 
 Focused harness command from repository root:
 
@@ -29,7 +29,7 @@ Focused coverage should include:
 5. API/UI: aggregate contains additive `work`; named `/api/views/work` returns the same projection; no-project error remains `NO_PROJECT`; primary navigation/default List; shared inspector; keyboard focus and Work ↔ Gantt integration; responsive group selector; legacy routes remain reachable.
 6. Regression: existing Overview, Gantt schedule/dependency, execution truth, WBS, legacy Kanban, and source/preview tests remain green.
 
-Use small in-memory canonical fixtures for synthetic edge cases. The public-safe real-shaped fixture may prove hierarchy completeness and legacy parity shape; its current six-phase/35-package/53-card counts must not become UI or product constants.
+Use small in-memory canonical fixtures for synthetic edge cases. The public-safe real-shaped fixture may prove hierarchy completeness and legacy parity shape. Fixture cardinalities are test data only and must not become UI or product constants.
 
 ## Repository checks
 
@@ -42,7 +42,7 @@ After implementation slices, and again for the complete increment, run:
 
 Run `scripts/verify-web.ps1` when its local app DLL has been built and a safe loopback port is available. Preserve the script's refusal behavior when the chosen port is already occupied; do not let verification silently exercise an unrelated running app.
 
-No tests or runtime verification are claimed by this plan-only artifact.
+The parity evidence below distinguishes synthetic projection/test coverage from live imported-project evidence. It does not claim completion of T028 or overall Feature 009 verification.
 
 ## Manual browser verification
 
@@ -58,6 +58,20 @@ No tests or runtime verification are claimed by this plan-only artifact.
 10. Test keyboard-only operation and layouts at 360px and 1280px. On narrow Kanban, verify one labeled state group at a time and visible counts for every group, including `Chưa ghi nhận`. Ensure no required control is clipped and no action requires dragging.
 11. Confirm legacy WBS and Kanban remain under Advanced until their explicit identity/state/filter/inspector parity gates are evidenced. Do not leave two Kanban products as equivalent normal primary destinations after parity.
 
+## User Story 5 parity evidence record
+
+This record uses only the public-safe synthetic canonical fixture for automated parity checks. A live imported-project review did not resolve Delivery Cards into visible Phase → Work Package rows in the Work List; that empty hierarchy is **not** evidence of parity.
+
+| Gate | Evidence and status | Required behavior while unmet |
+| --- | --- | --- |
+| Canonical Delivery Card identities and hierarchy paths | **Synthetic test PASS** — `WorkProjectionMatchesCanonicalCardsLegacyKanbanStatesAndWbsPaths` compares typed identities, Work/WBS Phase → Work Package paths, and canonical Delivery Card membership. **Live imported-project parity NOT VERIFIED.** | Keep legacy WBS reachable under Advanced. Do not reconstruct missing ancestry in browser code. |
+| Authored and unrecorded execution states | **Synthetic test PASS** — the same projection test compares Completed, In Progress, Suspended, and absent-record/null state between Work and legacy Kanban. | Keep `Chưa ghi nhận` distinct from `Chưa bắt đầu`; do not infer a state from missing evidence. |
+| Shared Work scope, search/filter, and List/Kanban identities | **Regression coverage PASS** — `WorkListKanbanAndInspectorKeepOneCanonicalSelectionPath`, `WorkSearchAndFiltersUseOneSharedTransientPipeline`, and the existing post-filter count/hierarchy regressions verify the shared canonical collection and criteria. **Live imported-project parity NOT VERIFIED.** | Work remains the only normal Kanban destination; retain legacy Kanban under Advanced until live comparison passes. |
+| Inspector reachability | **Regression coverage PASS** — both Work card renderers select the same typed identity and resolve the shared inspector from the canonical Work projection. Live source-backed row access was not demonstrated because the imported Work hierarchy had no visible card rows. | Keep the legacy routes available; do not count Gantt-only selection as proof that List/Kanban parity passed. |
+| Route/transition gate | **Regression test PASS** — `WorkParityGateKeepsLegacyWbsAndKanbanUnderAdvanced` confirms WBS and legacy Kanban remain under Advanced, while Work is the only normal Kanban destination. | Do not remove, hide, or retire WBS or legacy Kanban until their applicable live identity, hierarchy, state, filter, and inspector checks pass. |
+
+When any gate is unverified or fails, record it as **NOT VERIFIED / NOT MET**, preserve the relevant Advanced route, and investigate the authoritative canonical/source projection. Do not infer parity from matching counts, empty views, or browser-side reconstruction. The live imported-project hierarchy parity gate remains **NOT VERIFIED** at this checkpoint.
+
 ## Public repository hygiene
 
-Before any future commit/push, inspect `git status` and staged diff; include only intended source/docs/tests. Check for personal paths, private IDEAEngineering documents, employee data, credentials, secrets, generated output, build artifacts, and package-lock changes. The public fixture must remain synthetic/minimal. The planning branch may be pushed for the requested human/AI plan review; do not merge it to `main` until the human plan approval gate passes.
+Before any future commit/push, inspect `git status` and staged diff; include only intended source/docs/tests. Check for personal paths, private IDEAEngineering documents, employee data, credentials, secrets, generated output, build artifacts, and package-lock changes. The public fixture must remain synthetic/minimal. Push the implementation branch for the requested human code review, but do not merge it to `main` until this checkpoint is approved.
