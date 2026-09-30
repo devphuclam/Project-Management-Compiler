@@ -155,6 +155,25 @@ internal static class GanttUiRegressionTests
         TestAssert.Contains("applyGanttPreset(\"plan\")", appJs, "Returning to Plan must reset secondary view state through the preset contract.");
     }
 
+    public static void GanttSelectionNavigatesToWorkWithoutChangingScheduleSemantics()
+    {
+        var appJs = ReadAppJs();
+        var ganttDetailsStart = appJs.IndexOf("function renderGanttDetail(", StringComparison.Ordinal);
+        var ganttDetailsEnd = appJs.IndexOf("function resolveRelevantPhase(", ganttDetailsStart, StringComparison.Ordinal);
+        var ganttDetails = ganttDetailsStart >= 0 && ganttDetailsEnd > ganttDetailsStart
+            ? appJs[ganttDetailsStart..ganttDetailsEnd]
+            : string.Empty;
+
+        TestAssert.Contains("detailsOpen", appJs, "Gantt selected identity and drawer visibility must be separate state.");
+        TestAssert.Contains("Mở trong Công việc", ganttDetails, "The selected Gantt item must offer reverse navigation to the shared Work inspector.");
+        TestAssert.Contains("open-in-work", ganttDetails, "Work navigation must be an explicit reader-operable Gantt drawer action.");
+        TestAssert.Contains("prepareGanttToWork", appJs, "Reverse navigation must use the shared typed-identity handoff.");
+        TestAssert.Contains("state.work.selectedItemKey", appJs, "Gantt selection must resolve to the canonical Work selection.");
+        TestAssert.Contains("state.work.phaseScope", appJs, "Gantt-to-Work navigation must not clear phase scope or other Work criteria.");
+        TestAssert.Contains("state.gantt.detailsOpen", appJs, "Gantt drawer visibility must be preserved independently from selection.");
+        TestAssert.Contains("buildGanttRows", appJs, "Navigation may focus existing Gantt rows but must not introduce a new schedule calculation.");
+    }
+
     public static void ManifestWorkflowUsesAuthorityAwareExecutionLabels()
     {
         var appJs = ReadAppJs();

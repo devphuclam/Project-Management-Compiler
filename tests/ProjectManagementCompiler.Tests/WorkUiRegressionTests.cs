@@ -255,6 +255,135 @@ internal static class WorkUiRegressionTests
         Require(clearCriterion!, "switch", "Only explicitly requested filter criteria may be cleared.");
     }
 
+    public static void WorkInspectorUsesTypedIdentityAndEvidenceBackedCardFields()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var model = ExtractFunction(app, "function buildWorkInspectorModel(");
+        var renderer = ExtractFunction(app, "function renderWorkInspector(");
+        TestAssert.True(model is not null && renderer is not null,
+            "Missing approved Feature 009 behavior: Work has no shared read-only inspector model and renderer.");
+        var evidenceLabels = renderer + "\n"
+            + ExtractFunction(app, "function workDataStateLabel(")
+            + "\n" + ExtractFunction(app, "function workDetailValue(")
+            + "\n" + ExtractFunction(app, "function workExecutionStateLabel(");
+
+        Require(model!, "key.kind", "Inspector identity must retain the canonical kind-qualified identity.");
+        Require(model!, "key.id", "Inspector identity must retain the canonical stable ID.");
+        Require(model!, "work.cards", "Delivery Card details must resolve from the one official Work card collection.");
+        var inspectorContract = model + "\n" + renderer;
+        foreach (var field in new[] { "plannedStart", "plannedFinish", "plannedEffortHours", "plannedEffortState", "execution", "recorded", "actualStart", "actualFinish", "actualEffortHours", "remainingEffortHours", "roles", "sourceReferences" })
+            Require(inspectorContract, field, $"The shared Delivery Card inspector must preserve evidence-backed '{field}' data.");
+        Require(renderer!, "Kết thúc kế hoạch", "Inspector finish dates must retain baseline planned semantics.");
+        Require(renderer!, "Chưa ghi nhận", "No execution record must remain visibly distinct from an authored state.");
+        Require(evidenceLabels, "UNKNOWN", "Unknown evidence must remain distinct from numeric zero.");
+        Require(evidenceLabels, "INVALID", "Invalid evidence must remain distinct from unknown and zero.");
+        Require(evidenceLabels, "BLOCKED", "Blocked evidence must remain distinct from unknown and zero.");
+        Require(evidenceLabels, "UNRESOLVED", "Unresolved evidence must remain distinct from unknown and zero.");
+        Require(evidenceLabels, "NOT_RUN", "Not-run evidence must remain distinct from an authored execution state.");
+        Require(renderer!, "sourceReferences", "Provenance must remain available in secondary inspector detail.");
+        TestAssert.False(renderer!.Contains("Propose execution update", StringComparison.Ordinal), "The read-only Work inspector must not offer proposal actions.");
+        TestAssert.False(renderer.Contains("data-work-edit", StringComparison.Ordinal), "The read-only Work inspector must not offer edits.");
+    }
+
+    public static void WorkInspectorLimitsDependenciesAndNonCardSemantics()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var model = ExtractFunction(app, "function buildWorkInspectorModel(");
+        var links = ExtractFunction(app, "function buildWorkDependencyLinks(");
+        TestAssert.True(model is not null && links is not null,
+            "Missing approved Feature 009 behavior: Work inspector dependency and kind resolution are not implemented.");
+
+        Require(model!, "findWorkWbsNode", "Non-card inspectors must resolve only existing typed WBS evidence.");
+        Require(model!, "milestoneKind", "Milestones must retain their existing kind without Delivery Card semantics.");
+        Require(model!, "identity.kind === \"DeliveryCard\"", "Card-only fields must be added only in the Delivery Card branch.");
+        Require(links!, "includedInAnalysis !== true", "Only explicitly analysis-included direct edges may become primary Work relationships.");
+        Require(links!, "predecessorKey", "Dependency details must preserve predecessor direction.");
+        Require(links!, "subjectKey", "Dependency details must preserve successor direction.");
+        Require(links!, "network.nodes", "A primary dependency link requires a resolved canonical node and reader-facing name.");
+        Require(links!, "predecessors", "A direct predecessor must be presented as an item the selected work depends on.");
+        Require(links!, "successors", "A direct successor must be presented as an item directly affected by the selected work.");
+        TestAssert.False(links!.Contains("dependencyImpact", StringComparison.Ordinal), "Work must not inherit transitive Gantt impact calculations.");
+        TestAssert.False(links.Contains("downstreamKeys", StringComparison.Ordinal), "Work relationships must remain direct, not a downstream chain.");
+    }
+
+    public static void WorkSelectionFocusScrollAndCriteriaRemainIndependent()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var workState = ExtractFunction(app, "function createWorkState()");
+        var close = ExtractFunction(app, "function closeWorkInspector()");
+        var render = ExtractFunction(app, "function renderActiveView()");
+        var hidden = ExtractFunction(app, "function renderWorkEntry(");
+        var scrollPlan = ExtractFunction(app, "function workScrollPlan(");
+        var focusChoice = ExtractFunction(app, "function chooseWorkFocusReturn(");
+
+        TestAssert.True(workState is not null && close is not null && render is not null && hidden is not null && scrollPlan is not null && focusChoice is not null,
+            "Missing approved Feature 009 behavior: Work selection, inspector, focus, and scroll state are not independently managed.");
+        foreach (var stateField in new[] { "selectedItemKey", "inspectorOpen", "focusReturnKey", "scrollPositions", "phaseScope", "query" })
+            Require(workState!, stateField, $"Transient Work state must represent '{stateField}' independently.");
+        TestAssert.False(workState!.Contains("localStorage", StringComparison.OrdinalIgnoreCase), "Inspector selection, filters, and scroll must not be persisted to localStorage.");
+        TestAssert.False(close!.Contains("selectedItemKey = null", StringComparison.Ordinal), "Closing the inspector must not clear canonical selection.");
+        Require(close!, "restoreWorkFocusReturn", "Closing the inspector must restore focus to the invoking item or approved fallback.");
+        Require(hidden!, "đang được chọn", "A selected item outside current results must be explained.");
+        Require(hidden!, "Mở chi tiết", "A hidden selected item must remain inspectable without widening filters.");
+        Require(hidden!, "event.key !== \"Escape\"", "Escape must close the read-only inspector without changing selected identity.");
+        Require(hidden!, "closeWorkInspector()", "Escape and Close must use the same focus-return behavior.");
+        Require(render!, "captureWorkModeScroll", "Work must save the outgoing mode scroll position before replacing its view.");
+        Require(render!, "restoreWorkModeScroll", "Work must restore or reset scroll according to criteria identity.");
+        Require(scrollPlan!, "criteria", "Scroll restoration must be conditioned on shared Work criteria equality.");
+        Require(scrollPlan!, "selectedMatches", "Criteria changes reveal selection only when it remains in current results.");
+        Require(focusChoice!, "invokerKey", "Selection identity and keyboard focus return target must remain separate.");
+        Require(focusChoice!, "fallbackId", "Unavailable or filtered invokers must use the approved focus fallback.");
+    }
+
+    public static void WorkRefreshUsesOfficialAuthorityAndRetainsPreviewContext()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var refresh = ExtractFunction(app, "async function refresh()");
+        var updateOfficial = ExtractFunction(app, "function applyOfficialWorkSnapshot(");
+        var applyImport = ExtractFunction(app, "function applyManifestImport(");
+
+        TestAssert.True(refresh is not null && updateOfficial is not null && applyImport is not null,
+            "Missing approved Feature 009 behavior: refresh does not reconcile Work against official snapshot authority.");
+        Require(refresh!, "/api/manifest-import/official", "Refresh must read the existing official snapshot endpoint rather than treating preview views as Work authority.");
+        Require(refresh!, "applyOfficialWorkSnapshot", "Successful refresh must reconcile the official Work projection and snapshot identity.");
+        Require(updateOfficial!, "snapshotId", "Only the active official snapshot identity may invalidate stale selection.");
+        Require(updateOfficial!, "selectedItemKey = null", "A changed official snapshot must clear stale selected identity.");
+        Require(updateOfficial!, "inspectorOpen = false", "A changed official snapshot must close stale inspector context.");
+        TestAssert.False(updateOfficial!.Contains("query = \"\"", StringComparison.Ordinal), "Snapshot identity must not clear unrelated Work search state.");
+        TestAssert.False(updateOfficial.Contains("phaseScope = { kind: \"all\"", StringComparison.Ordinal), "Snapshot identity must not silently widen the user's phase scope.");
+        Require(applyImport!, "response.classification === \"OFFICIAL_COMMIT\"", "Candidate and failed imports must not enter the official Work reconciliation path.");
+    }
+
+    public static void WorkAndGanttNavigationPreserveTypedIdentityAndInspectorCondition()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var workNavigation = ExtractFunction(app, "function prepareWorkToGantt(");
+        var ganttNavigation = ExtractFunction(app, "function prepareGanttToWork(");
+        var inspector = ExtractFunction(app, "function renderWorkInspector(");
+        var ganttDetail = ExtractFunction(app, "function renderGanttDetail(");
+        var ganttRender = ExtractFunction(app, "function renderGantt(");
+
+        TestAssert.True(workNavigation is not null && ganttNavigation is not null && inspector is not null && ganttDetail is not null && ganttRender is not null,
+            "Missing approved Feature 009 behavior: Work and Gantt do not share canonical selection navigation.");
+        Require(workNavigation!, "selectedItemKey", "Work-to-Gantt navigation must use the selected typed Work identity.");
+        Require(workNavigation!, "state.work.inspectorOpen", "Work-to-Gantt navigation must preserve whether the Work inspector was open.");
+        Require(workNavigation!, "selectedRowKey", "Gantt focus must receive the same canonical typed identity.");
+        Require(workNavigation!, "expandedKeys", "Gantt navigation must reveal the item's visible ancestor path when available.");
+        TestAssert.False(workNavigation!.Contains("state.gantt.showDependencies =", StringComparison.Ordinal),
+            "Work-to-Gantt navigation must not change the existing dependency control state.");
+        Require(inspector!, "Xem trên Gantt", "The read-only Work inspector must offer navigation to the matching Gantt identity.");
+        Require(ganttDetail!, "Mở trong Công việc", "The Gantt inspector must offer reverse navigation to the same Work identity.");
+        Require(ganttDetail!, "open-in-work", "Reverse navigation must be an explicit existing Gantt inspector action.");
+        Require(ganttNavigation!, "selectedItemKey", "Gantt-to-Work navigation must share the typed selected identity.");
+        Require(ganttNavigation!, "inspectorOpen", "Gantt-to-Work navigation must preserve the prior drawer state.");
+        Require(ganttRender!, "gantt-selection-status", "Gantt must explain when its current controls hide or do not contain the requested identity.");
+        Require(ganttRender!, "selectedRowVisible", "Gantt reveal status must be based on the existing visible-row projection.");
+        foreach (var workCriterion in new[] { "phaseScope", "query", "authoredStateFilter", "needsAttentionOnly", "includeUnrecorded", "mode" })
+            TestAssert.False(ganttNavigation!.Contains("state.work." + workCriterion + " =", StringComparison.Ordinal),
+                $"Gantt-to-Work navigation must retain the user's existing '{workCriterion}' choice.");
+        Require(ganttRender!, "detailsOpen", "Gantt inspector visibility must be independent from selected row identity.");
+    }
+
     private static string? ExtractFunction(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);
