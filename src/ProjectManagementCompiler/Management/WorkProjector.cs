@@ -231,9 +231,9 @@ public sealed class WorkProjector
         .ToDictionary(group => group.Key, group => group.Single().Index, StringComparer.OrdinalIgnoreCase);
 
     private static bool HasValidPhaseParent(WorkPackage package, IReadOnlyDictionary<string, int> phasePositions) =>
-        !string.IsNullOrWhiteSpace(package.ParentId)
-        && string.Equals(package.ParentId, package.PhaseId, StringComparison.OrdinalIgnoreCase)
-        && phasePositions.ContainsKey(package.PhaseId);
+        phasePositions.ContainsKey(package.PhaseId)
+        && (string.IsNullOrWhiteSpace(package.ParentId)
+            || string.Equals(package.ParentId, package.PhaseId, StringComparison.OrdinalIgnoreCase));
 
     private static bool HasValidPackageParent(DeliveryCard card, WorkPackage package) =>
         !string.IsNullOrWhiteSpace(card.ParentId)

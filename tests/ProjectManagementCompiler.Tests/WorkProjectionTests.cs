@@ -147,6 +147,50 @@ internal static class WorkProjectionTests
         TestAssert.False(packages.Any(package => StringArray(package, "deliveryCardIds").Contains("P04", StringComparer.Ordinal)), "A card with no valid canonical parent must not be placed under a guessed Work Package.");
     }
 
+    public static void WorkProjectionUsesValidPhaseIdForPackageHierarchyAndRejectsContradictions()
+    {
+        var source = WorkTestFixtures.SyntheticProject();
+        var canonical = source with
+        {
+            WorkPackages =
+            [
+                source.WorkPackages[0] with { ParentId = null },
+                source.WorkPackages[1],
+                source.WorkPackages[2] with { ParentId = "PH-A" },
+                new WorkPackage { Id = "WP-MISSING-PHASE", ParentId = null, PhaseId = "", Name = "Unassigned package" }
+            ]
+        };
+
+        var projection = new WorkProjector().Build(canonical, new ManagementAnalysis());
+
+        TestAssert.Equal("WP-A", string.Join('|', projection.Phases.Single(phase => phase.Id == "PH-A").WorkPackageIds),
+            "A Work Package with a valid PhaseId and no separate ParentId must remain under its canonical phase.");
+        TestAssert.Equal("WP-B", string.Join('|', projection.Phases.Single(phase => phase.Id == "PH-B").WorkPackageIds),
+            "A matching nonblank ParentId may corroborate, but is not required to establish, the PhaseId relationship.");
+        TestAssert.False(projection.Phases.Any(phase => phase.WorkPackageIds.Contains("WP-C", StringComparer.Ordinal)),
+            "A conflicting nonblank Work Package ParentId must not be promoted into the PhaseId hierarchy.");
+        TestAssert.False(projection.Phases.Any(phase => phase.WorkPackageIds.Contains("WP-MISSING-PHASE", StringComparer.Ordinal)),
+            "A Work Package without a resolvable PhaseId must remain unattached.");
+        TestAssert.Equal("P01|P02", string.Join('|', projection.WorkPackages.Single(package => package.Id == "WP-A").DeliveryCardIds),
+            "A Work Package accepted through its PhaseId must retain its valid canonical Delivery Cards.");
+        TestAssert.Equal("P03", string.Join('|', projection.WorkPackages.Single(package => package.Id == "WP-B").DeliveryCardIds),
+            "A Work Package with a matching ParentId must retain its valid canonical Delivery Cards.");
+        TestAssert.Equal(0, projection.WorkPackages.Single(package => package.Id == "WP-C").DeliveryCardIds.Count,
+            "A conflicting Work Package parent must not authorize Delivery Card hierarchy links.");
+        TestAssert.Equal(0, projection.WorkPackages.Single(package => package.Id == "WP-MISSING-PHASE").DeliveryCardIds.Count,
+            "A missing PhaseId must not authorize Delivery Card hierarchy links.");
+        TestAssert.Equal(4, projection.Cards.Count,
+            "Failing closed on hierarchy links must not drop or duplicate canonical Delivery Cards.");
+
+        var duplicatePhaseProject = source with
+        {
+            Phases = source.Phases.Append(source.Phases.Single(phase => phase.Id == "PH-A") with { Name = "Duplicate phase identity" }).ToArray()
+        };
+        var duplicatePhaseProjection = new WorkProjector().Build(duplicatePhaseProject, new ManagementAnalysis());
+        TestAssert.False(duplicatePhaseProjection.Phases.Any(phase => phase.WorkPackageIds.Contains("WP-A", StringComparer.Ordinal)),
+            "A Work Package must remain unattached when its PhaseId does not resolve to one unique canonical Phase.");
+    }
+
     public static void WorkProjectionUsesOnlyOneValidPhaseContainingTheOfficialReportingDate()
     {
         var canonical = WorkTestFixtures.SyntheticProject();

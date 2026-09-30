@@ -9,6 +9,7 @@ internal static class Program
         ("SyntheticDependencyProjectionPreservesEligibilityAndTypedDirectEdges", WorkAuthorityCharacterizationTests.SyntheticDependencyProjectionPreservesEligibilityAndTypedDirectEdges),
         ("WorkProjectionPreservesCanonicalHierarchyAndUsesOneTypedCardIdentity", WorkProjectionTests.WorkProjectionPreservesCanonicalHierarchyAndUsesOneTypedCardIdentity),
         ("WorkProjectionDoesNotGuessMalformedOrMissingParents", WorkProjectionTests.WorkProjectionDoesNotGuessMalformedOrMissingParents),
+        ("WorkProjectionUsesValidPhaseIdForPackageHierarchyAndRejectsContradictions", WorkProjectionTests.WorkProjectionUsesValidPhaseIdForPackageHierarchyAndRejectsContradictions),
         ("WorkProjectionUsesOnlyOneValidPhaseContainingTheOfficialReportingDate", WorkProjectionTests.WorkProjectionUsesOnlyOneValidPhaseContainingTheOfficialReportingDate),
         ("WorkProjectionPreservesAuthoredExecutionAndRecordedActualAuthority", WorkProjectionTests.WorkProjectionPreservesAuthoredExecutionAndRecordedActualAuthority),
         ("WorkProjectionPreservesPlannedEvidenceStatesRolesAndProvenance", WorkProjectionTests.WorkProjectionPreservesPlannedEvidenceStatesRolesAndProvenance),
