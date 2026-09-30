@@ -990,6 +990,18 @@
     return labels[String(value || "").toUpperCase()] || "Chưa ghi nhận";
   }
 
+  function workResultStateLabel(value) {
+    if (value === null || value === undefined) return "Chưa ghi nhận";
+    const labels = {
+      NOT_RUN: "Chưa chạy",
+      PASS: "Đạt",
+      FAIL: "Không đạt",
+      BLOCKED: "Bị chặn",
+      NOT_APPLICABLE: "Không áp dụng"
+    };
+    return labels[String(value).toUpperCase()] || "Không xác định";
+  }
+
   function workExecutionStateLabel(value) {
     const labels = {
       NOT_STARTED: "Chưa bắt đầu",
@@ -1067,7 +1079,7 @@
       const roles = model.roles.map(role => role.person ? role.label + " · " + role.person : role.label).filter(Boolean);
       renderWorkDetailField(primary, "Đầu mối / vai trò", roles.length ? roles.join(", ") : "Chưa ghi nhận");
       renderWorkDetailField(primary, "Trạng thái thực hiện", workExecutionStateLabel(model.execution.state));
-      renderWorkDetailField(primary, "Kết quả", model.execution.resultState ? workDataStateLabel(model.execution.resultState) : "Chưa ghi nhận");
+      renderWorkDetailField(primary, "Kết quả", workResultStateLabel(model.execution.resultState));
       const actual = node("section", null, "work-inspector-actual");
       actual.appendChild(node("h4", "Thực tế đã ghi nhận"));
       renderWorkDetailField(actual, "Bắt đầu thực tế", workDetailValue(model.execution.actualStart, null, model.execution.recorded, ""));
@@ -2964,6 +2976,38 @@
     }[value] || "Both directions";
   }
 
+  function selectGanttRow(key) {
+    state.gantt.selectedRowKey = key || null;
+    state.gantt.detailsOpen = Boolean(state.gantt.selectedRowKey);
+    if (state.gantt.selectedRowKey) {
+      state.gantt.showDependencies = true;
+      state.gantt.dependencyFocus = "both";
+    }
+  }
+
+  function restoreGanttFocusReturn() {
+    const selectedRow = state.gantt.selectedRowKey
+      ? Array.from(document.querySelectorAll("button.gantt-row-select[data-gantt-select]")).find(candidate =>
+        candidate.dataset.ganttSelect === state.gantt.selectedRowKey && !candidate.disabled)
+      : null;
+    const focusTarget = selectedRow || byId("gantt-selection-status") || byId("gantt-view-heading");
+    if (focusTarget && typeof focusTarget.focus === "function") focusTarget.focus();
+  }
+
+  function closeGanttDetails() {
+    if (!state.gantt.detailsOpen) return false;
+    state.gantt.detailsOpen = false;
+    renderActiveView();
+    restoreGanttFocusReturn();
+    return true;
+  }
+
+  function handleGanttEscape(event) {
+    if (event.key !== "Escape" || !state.gantt.detailsOpen || !state.gantt.selectedRowKey) return false;
+    if (typeof event.preventDefault === "function") event.preventDefault();
+    return closeGanttDetails();
+  }
+
   function applyGanttPreset(preset) {
     state.gantt.preset = preset;
     state.gantt.selectedRowKey = null;
@@ -3623,10 +3667,8 @@
           }
           return;
         } else if (action === "close-details") {
-          state.gantt.detailsOpen = false;
-          state.gantt.selectedRowKey = null;
-          state.gantt.showDependencies = false;
-          state.gantt.dependencyFocus = "both";
+          closeGanttDetails();
+          return;
         } else if (action === "dependency-focus") {
           state.gantt.dependencyFocus = actionTarget.dataset.ganttFocus || "both";
         } else if (action === "record-execution") {
@@ -3645,10 +3687,7 @@
         return;
       }
       if (selectTarget) {
-        state.gantt.selectedRowKey = selectTarget.dataset.ganttSelect || null;
-        state.gantt.detailsOpen = Boolean(state.gantt.selectedRowKey);
-        state.gantt.showDependencies = true;
-        state.gantt.dependencyFocus = "both";
+        selectGanttRow(selectTarget.dataset.ganttSelect);
         renderActiveView();
       }
     });
@@ -3675,12 +3714,7 @@
       renderActiveView();
     });
     shell.addEventListener("keydown", event => {
-      if (event.key !== "Escape" || !state.gantt.selectedRowKey) return;
-      state.gantt.detailsOpen = false;
-      state.gantt.selectedRowKey = null;
-      state.gantt.showDependencies = false;
-      state.gantt.dependencyFocus = "both";
-      renderActiveView();
+      handleGanttEscape(event);
     });
     return shell;
   }
