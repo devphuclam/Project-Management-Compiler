@@ -296,11 +296,16 @@ internal static class WorkProjectionTests
             TestAssert.False(item.TryGetProperty("message", out _), "Raw analysis messages must not enter Work attention.");
         }
 
+        var projectedCodes = cards.Values
+            .SelectMany(card => card.GetProperty("attention").EnumerateArray().Select(item => item.GetProperty("code").GetString() ?? string.Empty))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(code => code, StringComparer.Ordinal);
+        TestAssert.Equal("AT_RISK|OVERDUE|START_DELAY|SUSPENDED", string.Join('|', projectedCodes), "Only the exact four supported ManagementAnalysis alert codes may appear in Work attention.");
         TestAssert.Equal("SUSPENDED", cards["P02"].GetProperty("attention")[0].GetProperty("code").GetString(), "The supported suspended signal must remain separate from authored state.");
         TestAssert.Equal("IN_PROGRESS", cards["P02"].GetProperty("execution").GetProperty("state").GetString(), "Attention must not overwrite authored state.");
-        TestAssert.Equal(0, cards["P03"].GetProperty("attention").GetArrayLength(), "Unsupported codes must not enter Work attention.");
-        TestAssert.Equal(0, cards["P04"].GetProperty("attention").GetArrayLength(), "A blocked/readiness-like signal must not be inferred as Work attention.");
-        TestAssert.Equal(0, cards["P05"].GetProperty("attention").GetArrayLength(), "An unlisted status must not enter Work attention.");
+        TestAssert.Equal(0, cards["P03"].GetProperty("attention").GetArrayLength(), "COMPLETED_LATE and COMPLETED_ON_TIME must not enter Work attention.");
+        TestAssert.Equal(0, cards["P04"].GetProperty("attention").GetArrayLength(), "BLOCKED and arbitrary unlisted alert codes must not be inferred as Work attention.");
+        TestAssert.Equal(0, cards["P05"].GetProperty("attention").GetArrayLength(), "CANCELLED must remain outside the Needs Attention whitelist.");
         TestAssert.Equal(0, cards["P06"].GetProperty("attention").GetArrayLength(), "An alert targeting a non-canonical Delivery Card must not be attached to a Work item.");
 
         var repeated = Project(project, analysis);
@@ -468,8 +473,11 @@ internal static class WorkProjectionTests
                 Alert("P01", "START_DELAY", new DateOnly(2026, 9, 13), [], "PRIVATE RAW MESSAGE E"),
                 Alert("P02", "SUSPENDED", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE F"),
                 Alert("P03", "COMPLETED_LATE", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE G"),
+                Alert("P03", "COMPLETED_ON_TIME", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE K"),
                 Alert("P04", "BLOCKED", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE H"),
+                Alert("P04", "UNLISTED_WARNING", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE L"),
                 Alert("P05", "CANCELLED", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE I"),
+                Alert("PH-C", "OVERDUE", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE M"),
                 Alert("P99", "OVERDUE", new DateOnly(2026, 9, 14), [], "PRIVATE RAW MESSAGE J")
             ]
         };

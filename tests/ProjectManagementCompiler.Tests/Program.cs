@@ -338,6 +338,7 @@ internal static class Program
         ,("WorkListUsesCanonicalHierarchyAndOneTypedDeliveryCardIdentity", WorkUiRegressionTests.WorkListUsesCanonicalHierarchyAndOneTypedDeliveryCardIdentity)
         ,("WorkListLeadsWithReaderCopyAndKeepsTechnicalEvidenceOutOfDefaultRows", WorkUiRegressionTests.WorkListLeadsWithReaderCopyAndKeepsTechnicalEvidenceOutOfDefaultRows)
         ,("UnifiedWorkKanbanGroupsScopedCanonicalCardsDeterministically", WorkUiRegressionTests.UnifiedWorkKanbanGroupsScopedCanonicalCardsDeterministically)
+        ,("WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy", WorkUiRegressionTests.WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy)
         ,("AdvancedDisclosureRetainsSpecialistViewsAndTools", ManagementUiShellTests.AdvancedDisclosureRetainsSpecialistViewsAndTools)
         ,("UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools", ManagementUiShellTests.UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools)
         ,("AdvancedGroupingPreservesExistingGanttControls", ManagementUiShellTests.AdvancedGroupingPreservesExistingGanttControls)

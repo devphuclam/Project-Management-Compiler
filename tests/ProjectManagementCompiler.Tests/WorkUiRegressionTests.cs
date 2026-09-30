@@ -109,6 +109,42 @@ internal static class WorkUiRegressionTests
         TestAssert.False(ordering!.Contains("localeCompare", StringComparison.Ordinal), "Kanban order must not depend on locale-sensitive sorting.");
     }
 
+    public static void WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var entry = ExtractFunction(app, "function renderWorkEntry(");
+        var renderer = ExtractFunction(app, "function renderWorkAttention(");
+        var summary = ExtractFunction(app, "function renderWorkAttentionSummary(");
+        var listCard = ExtractFunction(app, "function renderWorkCard(");
+        var kanbanCard = ExtractFunction(app, "function renderWorkKanbanCard(");
+        var groups = ExtractFunction(app, "function buildWorkKanbanGroups(");
+
+        TestAssert.True(renderer is not null, "Missing Feature 009 behavior: projected Work attention is not rendered on Work cards.");
+        TestAssert.True(entry is not null && summary is not null && listCard is not null && kanbanCard is not null && groups is not null,
+            "Work attention requires one projected summary and consistent List/Kanban card presentation.");
+
+        Require(renderer!, "card.attention", "Work attention must come only from the already projected WorkCard attention array.");
+        Require(renderer!, "entry.consequence", "Reader-facing attention copy must use the supported consequence.");
+        Require(renderer!, "entry.code", "The allowlisted code may remain a technical signal/filter identity.");
+        Require(entry!, "renderWorkAttentionSummary", "The Work view must show a truthful summary for the current scoped cards.");
+        Require(entry!, "workCardScopeEntries(work)", "The attention summary must share current Work scope rather than read an unrelated project-wide alert view.");
+        Require(summary!, "Không có tín hiệu cần chú ý được hỗ trợ", "The empty state must say no supported signal is available from current evidence.");
+        Require(summary!, "không khẳng định là không có rủi ro", "The empty state must not claim the work is risk-free.");
+        Require(listCard!, "renderWorkAttention(card)", "List cards must show only supported projected attention when present.");
+        Require(kanbanCard!, "renderWorkAttention(card)", "Kanban cards must show only supported projected attention when present.");
+        TestAssert.False(renderer!.Contains("alert.message", StringComparison.OrdinalIgnoreCase), "Raw analysis messages must not become Work card copy.");
+        TestAssert.False(renderer.Contains("state.views", StringComparison.Ordinal), "Work attention rendering must not read another analysis/view projection.");
+        TestAssert.False(renderer.Contains("readiness", StringComparison.OrdinalIgnoreCase), "Readiness evidence must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("governance", StringComparison.OrdinalIgnoreCase), "Governance evidence must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("gate", StringComparison.OrdinalIgnoreCase), "Gate records must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("decision", StringComparison.OrdinalIgnoreCase), "Decision or human-action evidence must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("diagnostics", StringComparison.OrdinalIgnoreCase), "Diagnostics must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("import", StringComparison.OrdinalIgnoreCase), "Import/source warnings must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("warnings", StringComparison.OrdinalIgnoreCase), "Arbitrary warnings must not be synthesized into Work attention.");
+        TestAssert.False(renderer.Contains("node(\"span\", entry.code", StringComparison.Ordinal), "Machine codes must not be displayed as primary reader-facing copy.");
+        TestAssert.False(groups!.Contains("attention", StringComparison.OrdinalIgnoreCase), "Needs Attention must remain independent from authored-state membership.");
+    }
+
     private static string? ExtractFunction(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);
