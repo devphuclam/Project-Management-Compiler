@@ -716,6 +716,8 @@
     const identity = workItemKeyParts(key || state.work.selectedItemKey);
     if (!identity) return null;
     const typedIdentity = typedKey(identity.kind, identity.id);
+    const projectId = state.project && state.project.project && state.project.project.id || state.project && state.project.id || "project";
+    prepareGanttState(projectId);
     state.gantt.selectedRowKey = typedIdentity;
     state.gantt.detailsOpen = Boolean(state.work.inspectorOpen);
     state.work.revealSelectedKey = typedIdentity;

@@ -48,6 +48,7 @@ function createAppHarness() {
     rememberWorkScroll: typeof rememberWorkScroll === "function" ? rememberWorkScroll : null,
     chooseWorkFocusReturn: typeof chooseWorkFocusReturn === "function" ? chooseWorkFocusReturn : null,
     prepareWorkToGantt: typeof prepareWorkToGantt === "function" ? prepareWorkToGantt : null,
+    prepareGanttState: typeof prepareGanttState === "function" ? prepareGanttState : null,
     prepareGanttToWork: typeof prepareGanttToWork === "function" ? prepareGanttToWork : null,
     selectGanttRow: typeof selectGanttRow === "function" ? selectGanttRow : null,
     closeGanttDetails: typeof closeGanttDetails === "function" ? closeGanttDetails : null,
@@ -457,6 +458,29 @@ test("Work and Gantt navigation preserve typed selection, drawer condition, and 
   assert.equal(app.state.work.phaseScope.phaseId, "PH0");
   assert.equal(app.state.work.query, "keep-query");
   assert.equal(app.state.work.authoredStateFilter, "IN_PROGRESS");
+});
+
+test("Work-to-Gantt selection survives first Gantt state initialization", () => {
+  const app = createAppHarness();
+  assert.equal(typeof app.prepareGanttState, "function", "Gantt project-state initialization must be testable at the Work navigation boundary.");
+  app.state.views = {
+    wbs: { root: { kind: "Project", id: "PROJECT", children: [
+      { kind: "Phase", id: "PH0", children: [
+        { kind: "WorkPackage", id: "WP0", children: [{ kind: "DeliveryCard", id: "P01", children: [] }] }
+      ] }
+    ] } },
+    gantt: { items: [{ workItemId: "P01", phaseId: "PH0", workPackageId: "WP0", lanes: [] }], milestones: [] }
+  };
+  app.state.project = { project: { id: "PROJECT" }, baseline: {} };
+  app.state.work.inspectorOpen = true;
+
+  app.prepareWorkToGantt("DeliveryCard:P01");
+  app.prepareGanttState("PROJECT");
+
+  assert.equal(app.state.gantt.selectedRowKey, "DeliveryCard:P01", "Initial Gantt setup must not discard the Work-selected canonical identity.");
+  assert.equal(app.state.gantt.detailsOpen, true, "Initial Gantt setup must preserve the open Work inspector condition.");
+  assert.equal(app.state.gantt.expandedKeys.has("Phase:PH0"), true, "Initial Gantt setup must preserve the revealed phase ancestor.");
+  assert.equal(app.state.gantt.expandedKeys.has("WorkPackage:WP0"), true, "Initial Gantt setup must preserve the revealed package ancestor.");
 });
 
 test("Gantt drawer Close and Escape retain selection, filters, Work criteria, and restore focus", () => {
