@@ -74,13 +74,16 @@ internal static class WorkUiRegressionTests
         Require(list!, "workCardScopeEntries(work)", "List must use the shared canonical Delivery Card scope helper.");
         Require(kanban!, "workCardScopeEntries(work)", "Kanban must use the same scoped Work card collection as List.");
         Require(scopedCards!, "work.cards", "The canonical Work projection is the only Delivery Card payload collection.");
-        Require(scopedCards!, "key.kind", "Card membership must preserve kind-qualified canonical identity.");
+        Require(scopedCards!, "card.key.kind !== \"DeliveryCard\"", "Phase, Work Package, milestone, and decision-point identities must not become Kanban cards.");
+        Require(scopedCards!, "key.kind + \":\" + card.key.id", "Card identity must remain the canonical kind plus stable ID.");
         Require(scopedCards!, "key.id", "Card membership must preserve the stable canonical card ID.");
         Require(scopedCards!, "workPackageIds", "Canonical phase-to-package references define hierarchy membership.");
         Require(scopedCards!, "deliveryCardIds", "Canonical package-to-card references define hierarchy membership and order.");
         Require(scopedCards!, "phaseId", "A card must remain attached to its canonical phase.");
         Require(scopedCards!, "workPackageId", "A card must remain attached to its canonical Work Package.");
         Require(scopedCards!, "state.work.phaseScope", "Explicit phase scope must be shared without using current-phase focus as a filter.");
+        Require(scopedCards!, "seenIdentities.has(identity)", "A canonical card referenced more than once must not appear twice in the shared collection.");
+        Require(scopedCards!, "seenIdentities.add(identity)", "The single typed card identity must be recorded before returning the shared collection.");
         TestAssert.False(scopedCards!.Contains("focusedPhaseId", StringComparison.Ordinal), "Current-phase focus must not narrow All phases membership.");
         TestAssert.False(collectionContract.Contains("state.views.kanban", StringComparison.Ordinal), "Unified Kanban must not consume the legacy Kanban projection.");
         TestAssert.False(collectionContract.Contains("wipLimit", StringComparison.OrdinalIgnoreCase), "Unified Kanban must not inherit legacy WIP semantics.");
@@ -95,6 +98,7 @@ internal static class WorkUiRegressionTests
         Require(groups!, "CANCELLED", "CANCELLED must remain a distinct authored-state group.");
         Require(groups!, "Chưa ghi nhận", "Null/unrecorded state must have a separate reader-facing group.");
         Require(groups!, "executionState: null", "Unrecorded state must be represented as null, never defaulted to NOT_STARTED.");
+        Require(groups!, "groups.find", "A Delivery Card must be assigned to at most one matching state group.");
         Require(groups!, "group.cards.push", "Each eligible Delivery Card must be placed in only its one authored-state group.");
         Require(groups!, "group.count = group.cards.length", "Each count must be calculated from cards remaining after active scope.");
         Require(ordering!, "currentPhaseId", "The known current phase must be ordered first without changing card membership.");
