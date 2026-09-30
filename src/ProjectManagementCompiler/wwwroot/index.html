@@ -216,6 +216,31 @@
           </section>
         </div>
       </details>
+      <template id="work-filters-template">
+        <div class="work-filter-bar" role="group" aria-label="Tìm kiếm và lọc công việc">
+          <label class="work-filter-field work-filter-search">Tìm công việc
+            <input id="work-search" type="search" placeholder="Tên, mã hoặc giai đoạn" aria-label="Tìm theo tên công việc, mã hoặc giai đoạn" autocomplete="off">
+          </label>
+          <label class="work-filter-field">Trạng thái đã ghi nhận
+            <select id="work-authored-state" aria-label="Lọc theo trạng thái đã ghi nhận">
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="NOT_STARTED">Chưa bắt đầu</option>
+              <option value="IN_PROGRESS">Đang làm</option>
+              <option value="COMPLETED">Hoàn thành</option>
+              <option value="SUSPENDED">Tạm dừng</option>
+              <option value="CANCELLED">Đã hủy</option>
+            </select>
+          </label>
+          <label class="work-filter-toggle">
+            <input id="work-needs-attention" type="checkbox">
+            <span>Cần chú ý</span>
+          </label>
+          <label class="work-filter-toggle">
+            <input id="work-include-unrecorded" type="checkbox">
+            <span>Bao gồm Chưa ghi nhận</span>
+          </label>
+        </div>
+      </template>
       <div id="view-content" class="view-content">
         <div class="empty-state">Views will appear here after analysis.</div>
       </div>

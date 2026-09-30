@@ -110,21 +110,22 @@ test("Work search is case and Vietnamese-diacritic insensitive and searches only
   const app = createAppHarness();
   assert.equal(typeof app.filterWorkEntries, "function", "Missing approved behavior: Work has one shared search/filter pipeline.");
   const work = workSearchFixture();
+  const resultIds = () => Array.from(app.filterWorkEntries(work), entry => entry.card.key.id);
   app.state.work.query = "tai lieu dau vao";
-  assert.deepEqual(app.filterWorkEntries(work).map(entry => entry.card.key.id), ["P01"]);
+  assert.deepEqual(resultIds(), ["P01"]);
 
   app.state.work.query = "p04";
-  assert.deepEqual(app.filterWorkEntries(work).map(entry => entry.card.key.id), ["P04"]);
+  assert.deepEqual(resultIds(), ["P04"]);
 
   app.state.work.query = "dam bao van hanh";
-  assert.deepEqual(app.filterWorkEntries(work).map(entry => entry.card.key.id), ["P03", "P04"]);
+  assert.deepEqual(resultIds(), ["P03", "P04"]);
 
   app.state.work.query = "ho so ky thuat";
-  assert.deepEqual(app.filterWorkEntries(work).map(entry => entry.card.key.id), ["P01", "P02"]);
+  assert.deepEqual(resultIds(), ["P01", "P02"]);
 
   for (const forbiddenTerm of ["private-project-path", "diagnostic-private", "needle-raw-diagnostic", "proposal-private", "analysis-private", "search-forbidden"]) {
     app.state.work.query = forbiddenTerm;
-    assert.deepEqual(app.filterWorkEntries(work), [], `Search must not match unrelated source/diagnostic/proposal/technical content: ${forbiddenTerm}`);
+    assert.equal(app.filterWorkEntries(work).length, 0, `Search must not match unrelated source/diagnostic/proposal/technical content: ${forbiddenTerm}`);
   }
 });
 
@@ -145,26 +146,27 @@ test("Work search and authored, attention, and unrecorded filters intersect with
   app.state.work.authoredStateFilter = "IN_PROGRESS";
   app.state.work.needsAttentionOnly = false;
   app.state.work.includeUnrecorded = true;
+  const resultIds = () => Array.from(app.filterWorkEntries(work), entry => entry.card.key.id);
 
   app.state.work.mode = "list";
-  const listResults = app.filterWorkEntries(work).map(entry => entry.card.key.id);
+  const listResults = resultIds();
   app.state.work.mode = "kanban";
-  const kanbanResults = app.filterWorkEntries(work).map(entry => entry.card.key.id);
+  const kanbanResults = resultIds();
   assert.deepEqual(listResults, ["P02", "P03"], "Unrecorded cards remain an explicit separate selection alongside the chosen authored state.");
   assert.deepEqual(kanbanResults, listResults, "List and Kanban must resolve the same identities under the same shared criteria.");
 
   app.state.work.needsAttentionOnly = true;
-  assert.deepEqual(app.filterWorkEntries(work).map(entry => entry.card.key.id), ["P02"]);
+  assert.deepEqual(resultIds(), ["P02"]);
 
   app.state.work.authoredStateFilter = "ALL";
   app.state.work.includeUnrecorded = false;
   app.state.work.needsAttentionOnly = false;
-  assert.deepEqual(app.filterWorkEntries(work).map(entry => entry.card.key.id), ["P01", "P02", "P04"], "Excluding unrecorded cards must not relabel or remove authored states.");
+  assert.deepEqual(resultIds(), ["P01", "P02", "P04"], "Excluding unrecorded cards must not relabel or remove authored states.");
 
   app.state.work.phaseScope = { kind: "phase", phaseId: "PH0" };
   app.state.work.query = "dam bao van hanh";
   app.state.work.includeUnrecorded = true;
-  assert.deepEqual(app.filterWorkEntries(work), [], "Explicit phase scope must still apply after a parent-name match.");
+  assert.equal(app.filterWorkEntries(work).length, 0, "Explicit phase scope must still apply after a parent-name match.");
 
   assert.deepEqual(work, originalWork, "Filtering must not mutate canonical Work cards or their evidence.");
   assert.strictEqual(app.state.project, project, "Filtering must not mutate the canonical project authority.");

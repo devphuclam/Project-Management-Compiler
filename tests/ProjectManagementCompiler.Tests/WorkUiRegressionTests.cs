@@ -56,12 +56,13 @@ internal static class WorkUiRegressionTests
         var entry = ExtractFunction(app, "function renderWorkEntry(");
         var list = ExtractFunction(app, "function renderWorkList(");
         var scopedCards = ExtractFunction(app, "function workCardScopeEntries(");
+        var filteredCards = ExtractFunction(app, "function filterWorkEntries(");
         var kanban = ExtractFunction(app, "function renderWorkKanban(");
         var groups = ExtractFunction(app, "function buildWorkKanbanGroups(");
         var ordering = ExtractFunction(app, "function sortWorkKanbanEntries(");
 
         TestAssert.True(kanban is not null, "Missing Feature 009 behavior: the primary Work destination has no Unified Kanban renderer.");
-        TestAssert.True(entry is not null && list is not null && scopedCards is not null && groups is not null && ordering is not null,
+        TestAssert.True(entry is not null && list is not null && scopedCards is not null && filteredCards is not null && groups is not null && ordering is not null,
             "Unified Kanban must share explicit Work mode, card collection, grouping, and deterministic ordering seams.");
 
         Require(entry!, "state.work.mode", "List/Kanban mode must be transient shared Work view state.");
@@ -70,9 +71,10 @@ internal static class WorkUiRegressionTests
         Require(entry!, "Danh sách", "The native Work mode control must expose List by its reader-facing name.");
         Require(entry!, "Kanban", "The native Work mode control must expose Kanban.");
 
-        var collectionContract = list! + "\n" + scopedCards! + "\n" + kanban!;
-        Require(list!, "workCardScopeEntries(work)", "List must use the shared canonical Delivery Card scope helper.");
-        Require(kanban!, "workCardScopeEntries(work)", "Kanban must use the same scoped Work card collection as List.");
+        var collectionContract = list! + "\n" + scopedCards! + "\n" + filteredCards! + "\n" + kanban!;
+        Require(list!, "filterWorkEntries(work)", "List must consume the shared criteria-filtered canonical Delivery Card collection.");
+        Require(kanban!, "filterWorkEntries(work)", "Kanban must use the same filtered Work card collection as List.");
+        Require(filteredCards!, "workCardScopeEntries(work)", "The shared filter pipeline must apply explicit phase scope before other criteria.");
         Require(scopedCards!, "work.cards", "The canonical Work projection is the only Delivery Card payload collection.");
         Require(scopedCards!, "card.key.kind !== \"DeliveryCard\"", "Phase, Work Package, milestone, and decision-point identities must not become Kanban cards.");
         Require(scopedCards!, "key.kind + \":\" + card.key.id", "Card identity must remain the canonical kind plus stable ID.");
@@ -127,7 +129,7 @@ internal static class WorkUiRegressionTests
         Require(renderer!, "entry.consequence", "Reader-facing attention copy must use the supported consequence.");
         Require(renderer!, "entry.code", "The allowlisted code may remain a technical signal/filter identity.");
         Require(entry!, "renderWorkAttentionSummary", "The Work view must show a truthful summary for the current scoped cards.");
-        Require(entry!, "workCardScopeEntries(work)", "The attention summary must share current Work scope rather than read an unrelated project-wide alert view.");
+        Require(entry!, "filterWorkEntries(work)", "The attention summary must share the filtered Work result set rather than read unrelated project-wide alerts.");
         Require(summary!, "Không có tín hiệu cần chú ý được hỗ trợ", "The empty state must say no supported signal is available from current evidence.");
         Require(summary!, "không khẳng định là không có rủi ro", "The empty state must not claim the work is risk-free.");
         Require(listCard!, "renderWorkAttention(card)", "List cards must show only supported projected attention when present.");

@@ -1085,6 +1085,12 @@ body.is-gantt-focus .app-header-copy #connection-status { display: none; }
 .work-mode-button { min-height: 34px; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
 .work-mode-button[aria-pressed="true"] { border-color: var(--line); background: #fff; color: var(--accent-strong); box-shadow: 0 1px 2px rgba(29, 55, 48, .08); }
 .work-mode-button:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+.work-filter-bar { display: grid; grid-template-columns: minmax(220px, 1.3fr) minmax(170px, .8fr) auto auto; align-items: end; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+.work-filter-field { display: grid; gap: 5px; min-width: 0; color: var(--text); font-size: 11px; font-weight: 650; }
+.work-filter-field input, .work-filter-field select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--text); font: inherit; font-size: 12px; }
+.work-filter-toggle { display: flex; align-items: center; gap: 7px; min-height: 38px; color: var(--text); font-size: 11px; line-height: 1.35; }
+.work-filter-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent-strong); }
+.work-filter-bar input:focus-visible, .work-filter-bar select:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 .work-list { display: grid; gap: 10px; min-width: 0; }
 .work-list-controls { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .work-scope-label { min-width: min(100%, 280px); color: var(--text); font-size: 12px; }
@@ -1171,6 +1177,7 @@ body.is-unloaded #execution-panel { display: none; }
   .work-list-columns { display: none; }
   .work-list-row { grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 11px 8px; }
   .work-cell-label { position: static; width: auto; height: auto; overflow: visible; clip: auto; color: var(--muted); font-size: 10px; }
+  .work-filter-bar { grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); }
   .work-kanban-columns { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
   .work-kanban-secondary-summary { align-items: flex-start; flex-direction: column; gap: 6px; }
 }

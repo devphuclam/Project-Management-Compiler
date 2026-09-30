@@ -29,6 +29,10 @@
     return {
       mode: "list",
       phaseScope: { kind: "all", phaseId: null },
+      query: "",
+      authoredStateFilter: "ALL",
+      needsAttentionOnly: false,
+      includeUnrecorded: true,
       focusedPhaseId: null,
       expandedPhaseIds: new Set(),
       expandedWorkPackageIds: new Set(),
@@ -635,7 +639,8 @@
       modeSwitch.appendChild(button);
     });
     section.appendChild(modeSwitch);
-    const scopedCards = workCardScopeEntries(work).map(entry => entry.card);
+    section.appendChild(renderWorkFilters(work));
+    const scopedCards = filterWorkEntries(work).map(entry => entry.card);
     const attentionSummary = renderWorkAttentionSummary(scopedCards);
     if (attentionSummary) section.appendChild(attentionSummary);
     section.appendChild(state.work.mode === "kanban" ? renderWorkKanban(work) : renderWorkList(work));
@@ -695,11 +700,92 @@
           const card = cardByKey.get(identity);
           if (!card || card.key.kind !== "DeliveryCard" || card.phaseId !== phase.id || card.workPackageId !== workPackage.id || seenIdentities.has(identity)) return;
           seenIdentities.add(identity);
-          entries.push({ card, identity, phaseOrder, workPackageOrder, cardOrder });
+          entries.push({ card, identity, phase, workPackage, phaseOrder, workPackageOrder, cardOrder });
         });
       });
     });
     return entries;
+  }
+
+  function normalizeWorkSearchValue(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[đĐ]/g, "d")
+      .toLowerCase();
+  }
+
+  function workEntryMatchesQuery(entry, normalizedQuery) {
+    if (!normalizedQuery) return true;
+    const card = entry && entry.card;
+    const phase = entry && entry.phase;
+    const workPackage = entry && entry.workPackage;
+    return [card && card.name, card && card.key && card.key.id, phase && phase.name, workPackage && workPackage.name]
+      .some(value => normalizeWorkSearchValue(value).includes(normalizedQuery));
+  }
+
+  function filterWorkEntries(work) {
+    const query = normalizeWorkSearchValue(state.work.query).trim();
+    const authoredStateFilter = String(state.work.authoredStateFilter || "ALL").toUpperCase();
+    return workCardScopeEntries(work).filter(entry => {
+      if (!workEntryMatchesQuery(entry, query)) return false;
+
+      const executionState = entry.card.execution && entry.card.execution.state
+        ? String(entry.card.execution.state).toUpperCase()
+        : null;
+      if (executionState === null) {
+        if (!state.work.includeUnrecorded) return false;
+      } else if (authoredStateFilter !== "ALL" && executionState !== authoredStateFilter) {
+        return false;
+      }
+
+      if (state.work.needsAttentionOnly && !(Array.isArray(entry.card.attention) && entry.card.attention.some(item => item && typeof item.code === "string"))) return false;
+      return true;
+    });
+  }
+
+  function renderWorkFilters(work) {
+    const template = byId("work-filters-template");
+    if (!template || !template.content || !template.content.firstElementChild) return node("div", "Không thể mở bộ lọc công việc.", "work-filter-error");
+    const filters = template.content.firstElementChild.cloneNode(true);
+    const search = filters.querySelector("#work-search");
+    const authoredState = filters.querySelector("#work-authored-state");
+    const attention = filters.querySelector("#work-needs-attention");
+    const unrecorded = filters.querySelector("#work-include-unrecorded");
+    if (!search || !authoredState || !attention || !unrecorded) return node("div", "Bộ lọc công việc chưa đầy đủ.", "work-filter-error");
+    search.value = state.work.query;
+    search.addEventListener("input", () => {
+      const caret = search.selectionStart;
+      state.work.query = search.value;
+      renderActiveView();
+      const restoredSearch = byId("work-search");
+      if (restoredSearch) {
+        restoredSearch.focus();
+        if (typeof restoredSearch.setSelectionRange === "function" && Number.isInteger(caret)) restoredSearch.setSelectionRange(caret, caret);
+      }
+    });
+    authoredState.value = state.work.authoredStateFilter;
+    authoredState.addEventListener("change", () => {
+      state.work.authoredStateFilter = authoredState.value;
+      renderWorkAndRestoreFocus(authoredState.id);
+    });
+    attention.checked = state.work.needsAttentionOnly;
+    attention.addEventListener("change", () => {
+      state.work.needsAttentionOnly = attention.checked;
+      renderWorkAndRestoreFocus(attention.id);
+    });
+    unrecorded.checked = state.work.includeUnrecorded;
+    unrecorded.addEventListener("change", () => {
+      state.work.includeUnrecorded = unrecorded.checked;
+      renderWorkAndRestoreFocus(unrecorded.id);
+    });
+    return filters;
+  }
+
+  function renderWorkAndRestoreFocus(controlId) {
+    renderActiveView();
+    const control = byId(controlId);
+    if (control) control.focus();
   }
 
   function compareOrdinalWorkIds(leftId, rightId) {
@@ -787,7 +873,7 @@
     controls.appendChild(renderWorkPhaseScopeControl(work));
     board.appendChild(controls);
 
-    const entries = sortWorkKanbanEntries(workCardScopeEntries(work), work.currentPhaseId);
+    const entries = sortWorkKanbanEntries(filterWorkEntries(work), work.currentPhaseId);
     const groups = buildWorkKanbanGroups(entries);
     const unrecorded = groups.find(group => group.kind === "unrecorded");
     if (unrecorded) board.appendChild(renderWorkKanbanGroup(unrecorded, work));
@@ -858,7 +944,7 @@
       const identity = card.key.kind + ":" + card.key.id;
       if (!cardByKey.has(identity)) cardByKey.set(identity, card);
     });
-    const inScopeCardIdentities = new Set(workCardScopeEntries(work).map(entry => entry.identity));
+    const inScopeCardIdentities = new Set(filterWorkEntries(work).map(entry => entry.identity));
     const renderedCardKeys = new Set();
     const phases = Array.isArray(work.phases) ? work.phases : [];
     const scopedPhases = state.work.phaseScope.kind === "phase"
