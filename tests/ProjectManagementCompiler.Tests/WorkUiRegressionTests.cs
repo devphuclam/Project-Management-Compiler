@@ -408,6 +408,77 @@ internal static class WorkUiRegressionTests
         Require(ganttRender!, "detailsOpen", "Gantt inspector visibility must be independent from selected row identity.");
     }
 
+    public static void NarrowKanbanShowsOneLabeledGroupAndAllPostFilterCounts()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var workState = ExtractFunction(app, "function createWorkState()");
+        var kanban = ExtractFunction(app, "function renderWorkKanban(");
+        var groups = ExtractFunction(app, "function buildWorkKanbanGroups(");
+
+        TestAssert.True(workState is not null && kanban is not null && groups is not null,
+            "Narrow Kanban requires transient group presentation state and the existing shared grouped Work collection.");
+        Require(workState!, "narrowKanbanGroup", "The narrow Kanban selected group must be presentation-only transient Work state.");
+        Require(kanban!, "work-kanban-group-selector", "Narrow Kanban must provide a labeled native group selector.");
+        Require(kanban!, "work-kanban-count-strip", "Narrow Kanban must keep every post-filter group count visible while one group is shown.");
+        Require(kanban!, "state.work.narrowKanbanGroup", "Changing the narrow display group must not change shared filters or group membership.");
+        Require(kanban!, "group.count", "All displayed narrow group counts must come from the shared post-filter groups.");
+        Require(kanban!, "UNRECORDED", "The separate unrecorded group must remain selectable and counted on narrow Kanban.");
+        Require(kanban!, "group.executionState", "The narrow selector must use every existing authored-state group's canonical key.");
+        Require(groups!, "group.count = group.cards.length", "Group counts must still be calculated only after the shared filters.");
+        Require(kanban!, "renderWorkKanbanGroup", "Narrow display selection must render a real labeled canonical state group.");
+        TestAssert.False(kanban!.Contains("state.work.authoredStateFilter =", StringComparison.Ordinal),
+            "Changing the visible narrow group must not silently apply an authored-state filter.");
+        TestAssert.False(kanban.Contains("state.work.includeUnrecorded =", StringComparison.Ordinal),
+            "Changing the visible narrow group must not silently filter unrecorded work.");
+    }
+
+    public static void WorkInspectorHasNarrowFullScreenAndKeyboardReturnContract()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var inspector = ExtractFunction(app, "function renderWorkInspector(");
+        var close = ExtractFunction(app, "function closeWorkInspector()");
+        var state = ExtractFunction(app, "function createWorkState()");
+
+        TestAssert.True(inspector is not null && close is not null && state is not null,
+            "The responsive inspector must reuse the current selected identity, open state, and focus restoration behavior.");
+        Require(inspector!, "dataset.inspectorOpen", "The inspector must expose its open/closed state to the narrow presentation without conflating selection.");
+        Require(inspector!, "aria-labelledby", "The selected work inspector must be named by its visible heading.");
+        Require(inspector!, "work-inspector-heading", "The inspector heading must remain the focus target when opened.");
+        Require(inspector!, "state.work.inspectorOpen", "Full-screen narrow presentation must depend on inspector visibility, not selection existence.");
+        Require(close!, "restoreWorkFocusReturn", "Escape and Close must restore focus to the invoker or approved fallback.");
+        Require(state!, "selectedItemKey", "Selection must remain independent from the open state and focus.");
+        Require(state!, "inspectorOpen", "Inspector visibility must remain an independent Work state concept.");
+        Require(state!, "focusReturnKey", "Keyboard focus restoration must remain independent from selected identity.");
+    }
+
+    public static void WorkStatesAndKeyboardControlsHaveNonColorSignals()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var kanban = ExtractFunction(app, "function renderWorkKanban(");
+        var group = ExtractFunction(app, "function renderWorkKanbanGroup(");
+        var card = ExtractFunction(app, "function renderWorkKanbanCard(");
+        var listCard = ExtractFunction(app, "function renderWorkCard(");
+        var inspector = ExtractFunction(app, "function renderWorkInspector(");
+        var html = File.ReadAllText(IndexHtmlPath());
+        var styles = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "src", "ProjectManagementCompiler", "wwwroot", "styles.css"));
+
+        TestAssert.True(kanban is not null && group is not null && card is not null && listCard is not null && inspector is not null,
+            "Work accessibility must use its native controls and visible textual state, not color or motion alone.");
+        Require(kanban!, "node(\"select\"", "Narrow Kanban group navigation must use a native keyboard-operable select.");
+        Require(kanban!, "aria-label", "The narrow Kanban group selector must have an accessible name.");
+        Require(group!, "group.label", "Each Kanban group must expose its state as reader-facing text.");
+        Require(group!, "String(group.count)", "Each group must display its count as text rather than color alone.");
+        Require(card!, "aria-pressed", "Selected cards must expose selection state to assistive technology.");
+        Require(inspector!, "Đóng chi tiết", "The inspector must retain a labeled keyboard-operable Close button.");
+        Require(html, "work-filters-template", "Shared Work criteria must remain available through native HTML controls.");
+        TestAssert.Contains(":focus-visible", styles, "Keyboard focus must be visibly indicated.");
+        foreach (var workRenderer in new[] { kanban!, card!, listCard! })
+        {
+            TestAssert.False(workRenderer.Contains("draggable = true", StringComparison.OrdinalIgnoreCase), "No Work operation may require drag interaction.");
+            TestAssert.False(workRenderer.Contains("ondrag", StringComparison.OrdinalIgnoreCase), "No Work operation may be exposed only through drag handlers.");
+        }
+    }
+
     private static string? ExtractFunction(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);

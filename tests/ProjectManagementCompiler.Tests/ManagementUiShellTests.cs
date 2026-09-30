@@ -237,6 +237,24 @@ internal static class ManagementUiShellTests
         TestAssert.Contains(".gantt-context-identity { width: 100%; }", styles, "The stacked mobile Gantt context must stretch its title column instead of sizing to the full unwrapped project name.");
     }
 
+    public static void WorkLayoutKeeps360And1280PixelControlsInsideThePage()
+    {
+        var styles = File.ReadAllText(StylesPath());
+        var app = File.ReadAllText(AppJsPath());
+
+        TestAssert.Contains(".work-workspace {", styles, "Work must use a constrained responsive workspace rather than widen the page.");
+        TestAssert.Contains("min-width: 0", styles, "Work grid children must be allowed to shrink within a 360px viewport.");
+        TestAssert.Contains("@media (max-width: 760px)", styles, "Work needs a narrow layout rule that applies at 360px.");
+        TestAssert.Contains("work-kanban-group-selector", app, "At narrow width, users must reach all Kanban groups without horizontal scrolling.");
+        TestAssert.Contains("work-kanban-count-strip", app, "All narrow Kanban group counts must stay visible without page-level clipping.");
+        TestAssert.Contains("work-inspector[data-inspector-open=\"true\"]", styles, "The narrow open inspector must be styled as a full-screen surface.");
+        TestAssert.Contains("inset: 0", styles, "The narrow inspector must occupy the viewport rather than a clipped workspace column.");
+        TestAssert.Contains("100dvh", styles, "The narrow inspector must size to the visible viewport on mobile browsers.");
+        TestAssert.Contains(".work-list-row", styles, "List rows must retain a readable single-column layout at 360px.");
+        TestAssert.False(styles.Contains("html, body { overflow-x: hidden", StringComparison.Ordinal),
+            "Responsive Work must not hide page overflow globally; fix the Work layout and preserve contained Gantt scrolling.");
+    }
+
     public static void IsolatedVerificationPortRemainsLoopbackOnlyAndIsSharedWithWebGate()
     {
         var program = File.ReadAllText(ProgramPath());
