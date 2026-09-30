@@ -339,6 +339,8 @@ internal static class Program
         ,("WorkListLeadsWithReaderCopyAndKeepsTechnicalEvidenceOutOfDefaultRows", WorkUiRegressionTests.WorkListLeadsWithReaderCopyAndKeepsTechnicalEvidenceOutOfDefaultRows)
         ,("UnifiedWorkKanbanGroupsScopedCanonicalCardsDeterministically", WorkUiRegressionTests.UnifiedWorkKanbanGroupsScopedCanonicalCardsDeterministically)
         ,("WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy", WorkUiRegressionTests.WorkAttentionUsesProjectedConsequencesAndTruthfulEmptyCopy)
+        ,("WorkSearchAndFiltersUseOneSharedTransientPipeline", WorkUiRegressionTests.WorkSearchAndFiltersUseOneSharedTransientPipeline)
+        ,("WorkSearchControlsExposeOnlyApprovedReaderFacingCriteria", WorkUiRegressionTests.WorkSearchControlsExposeOnlyApprovedReaderFacingCriteria)
         ,("AdvancedDisclosureRetainsSpecialistViewsAndTools", ManagementUiShellTests.AdvancedDisclosureRetainsSpecialistViewsAndTools)
         ,("UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools", ManagementUiShellTests.UnloadedWorkspaceShowsSourceIntakeWithoutProjectTools)
         ,("AdvancedGroupingPreservesExistingGanttControls", ManagementUiShellTests.AdvancedGroupingPreservesExistingGanttControls)

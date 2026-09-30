@@ -145,6 +145,61 @@ internal static class WorkUiRegressionTests
         TestAssert.False(groups!.Contains("attention", StringComparison.OrdinalIgnoreCase), "Needs Attention must remain independent from authored-state membership.");
     }
 
+    public static void WorkSearchAndFiltersUseOneSharedTransientPipeline()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var workState = ExtractFunction(app, "function createWorkState()");
+        var filter = ExtractFunction(app, "function filterWorkEntries(");
+        var entry = ExtractFunction(app, "function renderWorkEntry(");
+        var list = ExtractFunction(app, "function renderWorkList(");
+        var kanban = ExtractFunction(app, "function renderWorkKanban(");
+
+        TestAssert.True(workState is not null, "Work must own a transient shared criteria state.");
+        TestAssert.True(filter is not null, "Missing approved Feature 009 behavior: shared Work search and filtering have not been implemented.");
+        TestAssert.True(entry is not null && list is not null && kanban is not null, "List and Kanban must remain consumers of the same Work entry state.");
+
+        Require(workState!, "mode: \"list\"", "The active Work mode must remain in shared in-memory Work state.");
+        Require(workState!, "phaseScope", "Explicit phase scope must remain a shared Work criterion.");
+        Require(workState!, "query", "Search query must remain a shared Work criterion.");
+        Require(workState!, "authoredStateFilter", "Authored-state selection must remain a shared Work criterion.");
+        Require(workState!, "needsAttentionOnly", "Needs Attention selection must remain a shared Work criterion.");
+        Require(workState!, "includeUnrecorded", "Unrecorded selection must remain separate and explicit.");
+        TestAssert.False(workState!.Contains("localStorage", StringComparison.OrdinalIgnoreCase), "Work interaction state must not be persisted to localStorage.");
+
+        Require(entry!, "renderWorkFilters(work)", "One Work-level filter surface must apply regardless of selected mode.");
+        Require(entry!, "filterWorkEntries(work)", "Work attention summary and both views must use the filtered card collection.");
+        Require(list!, "filterWorkEntries(work)", "List must consume the shared Work filtering pipeline.");
+        Require(kanban!, "filterWorkEntries(work)", "Kanban must consume the same Work filtering pipeline as List.");
+        Require(filter!, "workCardScopeEntries(work)", "The shared pipeline must begin from the canonical card collection after explicit phase scope.");
+        Require(filter!, "normalizeWorkSearchValue", "Work search must use its approved normalized matching rule.");
+        Require(filter!, "authoredStateFilter", "Authored-state filtering must use projected effective execution state.");
+        Require(filter!, "needsAttentionOnly", "Needs Attention filtering must use the projected Work attention signal.");
+        Require(filter!, "includeUnrecorded", "The explicit unrecorded criterion must remain distinct from authored state.");
+    }
+
+    public static void WorkSearchControlsExposeOnlyApprovedReaderFacingCriteria()
+    {
+        var app = File.ReadAllText(AppJsPath());
+        var filters = ExtractFunction(app, "function renderWorkFilters(");
+        var normalize = ExtractFunction(app, "function normalizeWorkSearchValue(");
+        var searchMatch = ExtractFunction(app, "function workEntryMatchesQuery(");
+
+        TestAssert.True(filters is not null && normalize is not null && searchMatch is not null,
+            "Work search and filter controls must have explicit, testable presentation and matching seams.");
+
+        foreach (var controlId in new[] { "work-search", "work-authored-state", "work-needs-attention", "work-include-unrecorded" })
+            Require(filters!, controlId, $"The Work filter surface must expose the shared '{controlId}' control.");
+
+        Require(normalize!, "normalize(\"NFD\")", "Search normalization must decompose Vietnamese diacritics before matching.");
+        Require(normalize!, "đĐ", "Search normalization must account for Vietnamese đ/Đ, which NFD does not decompose.");
+        Require(searchMatch!, "card.name", "Search may match the reader-facing Delivery Card name.");
+        Require(searchMatch!, "card.key.id", "Search may match the canonical stable Delivery Card ID.");
+        Require(searchMatch!, "phase.name", "Search may match the reader-facing parent Phase name.");
+        Require(searchMatch!, "workPackage.name", "Search may match the reader-facing parent Work Package name.");
+        foreach (var forbidden in new[] { "sourceReferences", "diagnostics", "analysisMessage", "proposal", "sourcePath" })
+            TestAssert.False(searchMatch!.Contains(forbidden, StringComparison.OrdinalIgnoreCase), $"Work search must not inspect '{forbidden}'.");
+    }
+
     private static string? ExtractFunction(string source, string signature)
     {
         var start = source.IndexOf(signature, StringComparison.Ordinal);
